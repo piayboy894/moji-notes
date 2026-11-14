@@ -38,7 +38,7 @@ public partial class MainWindow : Window
     public MainWindow(WorkspaceViewModel? viewModel = null, bool smoke = false)
     {
         InitializeComponent(); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
-        VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = "●  " + VM.SaveStatus; };
+        VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = VM.SaveStatus; };
         toastTimer.Tick += (_, _) => { ToastBorder.Visibility = Visibility.Collapsed; toastTimer.Stop(); };
         previewTimer.Tick += (_, _) => { previewTimer.Stop(); RefreshPreview(); };
         sessionTimer.Tick += async (_, _) => await SessionTick(); sessionTimer.Start();
@@ -68,7 +68,7 @@ public partial class MainWindow : Window
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null)
-    { VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(230); RefreshShell(); }
+    { VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences.Theme); UpdateStats();
@@ -76,7 +76,7 @@ public partial class MainWindow : Window
         {
             var button = Ui.Button("", () => Navigate(book.Id)); button.Style = (Style)FindResource("NavButton");
             var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
-            row.Children.Add(Ui.Text($"{ModeGlyph(book.Mode)}    {book.Name}", 12)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
+            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForMode(book.Mode), Width = 18, Height = 18, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); button.ContextMenu = menu;
             button.AllowDrop = true; button.DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; BooksPanel.Children.Add(button);
         }
@@ -84,8 +84,24 @@ public partial class MainWindow : Window
         HomeNav.Background = VM.View == "home" ? Ui.Resource("AccentLight") : Brushes.Transparent; AllNav.Background = VM.View == "all" ? Ui.Resource("AccentLight") : Brushes.Transparent; StarNav.Background = VM.View == "star" ? Ui.Resource("AccentLight") : Brushes.Transparent;
         PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else RenderWorkspace();
     }
+    private UIElement NavContent(string kind, string title, int? count = null)
+    {
+        var row = new DockPanel();
+        if (count != null) { var number = Ui.Text(count.Value.ToString(), 11); number.Foreground = Ui.Resource("Sub"); DockPanel.SetDock(number, Dock.Right); row.Children.Add(number); }
+        row.Children.Add(new NativeIcon { Kind = kind, Width = 19, Height = 19, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,14,0) }); row.Children.Add(Ui.Text(title, 13)); return row;
+    }
     private void UpdateStats()
-    { if (VM.State == null) return; AllNav.Content = $"▧    全部记录                 {VM.State.LiveNotes.Count(n => !n.Archived)}"; StarNav.Content = $"☆    我的收藏                 {VM.State.LiveNotes.Count(n => n.Favorite && !n.Archived)}"; TrashNav.Content = $"⌫    回收站                    {VM.State.Notes.Count(n => n.DeletedAt != null && n.PurgedAt == null)}"; CloudStatus.Text = VM.Demo ? "◌   演示空间 · 不保存" : VM.State.Sync.LastSync > 0 ? "☁   已同步 · " + RecordTools.Relative(VM.State.Sync.LastSync) : "☁   本地私人空间"; SyncButton.Content = VM.State.Sync.LastSync > 0 ? "立即同步     ↻" : "连接 GitHub     ↗"; SaveText.Text = VM.Demo ? "●  演示空间" : "●  " + VM.SaveStatus; ProfileName.Text = VM.Demo ? "Moji 的演示空间" : "我的私人空间"; }
+    {
+        if (VM.State == null) return;
+        HomeNav.Content = NavContent("Dashboard", "工作台");
+        AllNav.Content = NavContent("Document", "全部记录", VM.State.LiveNotes.Count(n => !n.Archived));
+        StarNav.Content = NavContent("Star", "我的收藏", VM.State.LiveNotes.Count(n => n.Favorite && !n.Archived));
+        TrashNav.Content = NavContent("Trash", "回收站", VM.State.Notes.Count(n => n.DeletedAt != null && n.PurgedAt == null));
+        CloudStatus.Text = VM.Demo ? "演示空间" : VM.State.Sync.LastSync > 0 ? "已同步 · " + RecordTools.Relative(VM.State.Sync.LastSync) : "本地私人空间";
+        SyncButton.Content = VM.State.Sync.LastSync > 0 ? "立即同步  ↻" : "连接 GitHub  ↗";
+        SaveText.Text = VM.Demo ? "演示模式" : VM.SaveStatus;
+        ProfileName.Text = VM.Demo ? "演示空间" : "我的私人空间";
+    }
     private string ViewTitle() => VM.State?.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Name ?? VM.View switch { "home" => "我的工作台", "star" => "我的收藏", "archive" => "归档记录", "trash" => "回收站", _ => "全部记录" };
     internal static string ModeGlyph(NoteMode mode) => mode switch { NoteMode.Text => "▤", NoteMode.Prompt => "✧", _ => "⚿" };
     internal Note? CurrentNote() => VM.State?.Notes.FirstOrDefault(n => n.Id == VM.SelectedId);
@@ -112,7 +128,7 @@ public partial class MainWindow : Window
     private async void SyncClick(object sender, RoutedEventArgs e) { if (VM.State?.Sync.Token.Length == 0 || VM.Demo) { SettingsDialog("sync"); return; } SyncButton.IsEnabled = false; try { await VM.SyncAsync(); } catch (Exception error) { Toast(error.Message); } finally { SyncButton.IsEnabled = true; } }
     private void ImportClick(object sender, RoutedEventArgs e) => _ = ImportFiles();
     private MenuItem MenuItem(string title, Action action) { var item = new MenuItem { Header = title }; item.Click += (_, _) => action(); return item; }
-    private void ToggleFocus() { focusMode = !focusMode; Shell.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 230); if (Body.Content is Grid grid && grid.ColumnDefinitions.Count > 1) grid.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 285); }
+    private void ToggleFocus() { focusMode = !focusMode; Shell.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 270); if (Body.Content is Grid grid && grid.ColumnDefinitions.Count > 1) grid.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 285); }
 }
 internal sealed class NoteRow(Note note) : INotifyPropertyChanged
 {

@@ -28,13 +28,21 @@ internal static class NativeSmoke
     private static async Task Render(){await Application.Current.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(450);}
     private static void Capture(Window window,string path)
     {
-        // Capture the actual native client area; preserve monitor constraints and include its background.
-        window.UpdateLayout();var root=(FrameworkElement)window.Content;
-        var width=(int)Math.Ceiling(root.ActualWidth);var height=(int)Math.Ceiling(root.ActualHeight);
-        var bitmap=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bitmap.Render(root);
-        var pixel=new byte[4];bitmap.CopyPixels(new Int32Rect(250,80,1,1),pixel,4,0);
-        if(pixel[3]!=255)throw new InvalidOperationException("The native client background was not rendered opaquely.");
-        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(path))encoder.Save(stream);
+        // Render the actual WPF tree offscreen so CI's small monitor does not crop wide layouts.
+        var root=(FrameworkElement)window.Content;
+        var originalWidth=root.Width;var originalHeight=root.Height;
+        window.Content=null;
+        try
+        {
+            System.Windows.Documents.TextElement.SetFontFamily(root, window.FontFamily);
+            System.Windows.Documents.TextElement.SetFontSize(root, window.FontSize);
+            root.Width=1440;root.Height=940;root.Measure(new Size(1440,940));root.Arrange(new Rect(0,0,1440,940));root.UpdateLayout();
+            var bitmap=new RenderTargetBitmap(1440,940,96,96,PixelFormats.Pbgra32);bitmap.Render(root);
+            var pixel=new byte[4];bitmap.CopyPixels(new Int32Rect(300,100,1,1),pixel,4,0);
+            if(pixel[3]!=255)throw new InvalidOperationException("The native client background was not rendered opaquely.");
+            var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(path))encoder.Save(stream);
+        }
+        finally {root.Width=originalWidth;root.Height=originalHeight;window.Content=root;window.UpdateLayout();}
     }
     private static T? Find<T>(DependencyObject root)where T:DependencyObject{if(root is T match)return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=Find<T>(VisualTreeHelper.GetChild(root,i));if(child!=null)return child;}return null;}
 }

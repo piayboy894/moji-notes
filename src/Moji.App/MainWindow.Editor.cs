@@ -35,7 +35,7 @@ public partial class MainWindow
     private void RefreshNoteList()
     {
         if(noteList==null)return;var selected=VM.SelectedId;noteRows.Clear();foreach(var n in VM.Filtered())noteRows.Add(new(n));var row=noteRows.FirstOrDefault(n=>n.Note.Id==selected)??noteRows.FirstOrDefault();
-        if(row!=null){noteList.SelectedItem=row;VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}else{VM.SelectedId="";renderedId="";textEditor=null;preview=null;otpText=null;editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("这里，留给新的记录。",20,"#99A58B"),Ui.Spaced(Ui.Button("+  新建记录",()=>AddNote()),new Thickness(0,25,0,0))),new Thickness(60,100,60,30))};}
+        if(row!=null){noteList.SelectedItem=row;VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}else{VM.SelectedId="";renderedId="";textEditor=null;preview=null;otpText=null;editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("暂无记录",20,"#99A58B"),Ui.Spaced(Ui.Button("+  新建记录",()=>AddNote()),new Thickness(0,25,0,0))),new Thickness(60,100,60,30))};}
     }
     public void RenderEditor(Note note)
     {
@@ -44,7 +44,7 @@ public partial class MainWindow
         var book=VM.State!.Notebooks.First(b=>b.Id==note.NotebookId);var container=new DockPanel{Background=Ui.Resource("Panel")};
         var top=new DockPanel{Margin=new Thickness(27,15,22,15)};var actions=Ui.Row(Ui.Small(note.Favorite?"★":"☆",()=> {VM.EditNote(note.Id,n=>n with{Favorite=!n.Favorite});renderedId="";RenderEditor(CurrentNote()!);},"收藏"),Ui.Small("↶",()=>HistoryDialog(note.Id),"版本历史"),Ui.Small("⛶",ToggleFocus,"专注模式 F11"));
         var more=Ui.Small("···",()=>{});more.ToolTip="更多操作";more.Click+=(_,_)=> {more.ContextMenu=NoteMenu(note.Id);more.ContextMenu.IsOpen=true;};actions.Children.Add(more);DockPanel.SetDock(actions,Dock.Right);top.Children.Add(actions);top.Children.Add(Ui.Text(book.Name+"  /  记录详情",10,book.Color));DockPanel.SetDock(top,Dock.Top);container.Children.Add(top);
-        var heading=new StackPanel{Margin=new Thickness(28,8,28,22)};var meta=new DockPanel();var time=Ui.Text(RecordTools.Relative(note.UpdatedAt)+"编辑",9,"#A2AE96");DockPanel.SetDock(time,Dock.Right);meta.Children.Add(time);meta.Children.Add(Ui.Text(book.Mode==NoteMode.Text?"N O T E":book.Mode==NoteMode.Prompt?"P R O M P T":"V A U L T",9,book.Color));heading.Children.Add(meta);
+        var heading=new StackPanel{Margin=new Thickness(28,8,28,22)};var meta=new DockPanel();var time=Ui.Text(RecordTools.Relative(note.UpdatedAt)+"编辑",9,"#A2AE96");DockPanel.SetDock(time,Dock.Right);meta.Children.Add(time);meta.Children.Add(Ui.Text(book.Mode==NoteMode.Text?"N O T E":book.Mode==NoteMode.Prompt?"P R O M P T":"V A U L T",9,book.Color));
         titleBox=Ui.Input(note.Title,"记录标题");titleBox.FontSize=25;titleBox.FontWeight=FontWeights.SemiBold;titleBox.Background=Brushes.Transparent;titleBox.BorderThickness=new Thickness(0);titleBox.Padding=new Thickness(0,13,0,12);titleBox.TextChanged+=(_,_)=>{if(!loadingEditor)VM.EditNote(note.Id,n=>n with{Title=titleBox.Text});};heading.Children.Add(titleBox);
         var tags=Ui.Input(string.Join("  ",note.Tags),"标签，用空格或逗号分隔，按 Enter 保存");tags.FontSize=10;tags.Foreground=Ui.Resource("Sub");tags.Background=Brushes.Transparent;tags.BorderThickness=new Thickness(0);tags.Padding=new Thickness(0,3,0,3);tags.MinHeight=22;
         void SaveTags(){if(!loadingEditor)VM.EditNote(note.Id,n=>n with{Tags=Regex.Split(tags.Text.Trim(),@"[\s,，;；]+?").Select(t=>t.TrimStart('#')).Where(t=>t.Length>0).Distinct().Take(30).ToList()});}
@@ -72,7 +72,7 @@ public partial class MainWindow
     private void Wrap(string before,string after,string sample){if(textEditor==null)return;var selected=textEditor.SelectedText;var start=textEditor.SelectionStart;textEditor.Document.Replace(start,textEditor.SelectionLength,before+(selected.Length>0?selected:sample)+after);textEditor.Select(start+before.Length,(selected.Length>0?selected:sample).Length);textEditor.Focus();}
     private UIElement CredentialView(Note note)
     {
-        var fields=new StackPanel{Margin=new Thickness(50,25,50,35),MaxWidth=650};fields.Children.Add(Ui.Spaced(Ui.Text("⚿   AES-256-GCM 加密保护",13,"#92A282"),new Thickness(0,0,0,27)));
+        var fields=new StackPanel{Margin=new Thickness(50,25,50,35),MaxWidth=650};
         var user=Ui.Input(note.Username);user.TextChanged+=(_,_)=>{if(!loadingEditor)VM.EditNote(note.Id,n=>n with{Username=user.Text});};fields.Children.Add(Ui.Field("账号 / 邮箱",InputActions(user,Ui.Small("复制",()=>Copy(user.Text)))));
         var pw=new PasswordBox{Password=note.Password};var revealed=Ui.Input(note.Password);revealed.Visibility=Visibility.Collapsed;var pwStack=new Grid();pwStack.Children.Add(pw);pwStack.Children.Add(revealed);bool updating=false;
         pw.PasswordChanged+=(_,_)=>{if(loadingEditor||updating)return;updating=true;revealed.Text=pw.Password;updating=false;VM.EditNote(note.Id,n=>n with{Password=pw.Password});};revealed.TextChanged+=(_,_)=>{if(loadingEditor||updating)return;updating=true;pw.Password=revealed.Text;updating=false;VM.EditNote(note.Id,n=>n with{Password=revealed.Text});};

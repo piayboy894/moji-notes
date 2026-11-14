@@ -23,18 +23,17 @@ import kotlinx.coroutines.launch
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("general" to "通用", "sync" to "同步", "security" to "安全", "data" to "数据", "about" to "更新").forEach { (id, title) -> FilterChip(tab == id, { tab = id; status = "" }, label = { Text(title) }) } }
         when (tab) {
             "general" -> {
-                SectionTitle("让空间更像你", "手机、平板与桌面窗口，自在切换。")
+                SectionTitle("通用设置")
                 Text("外观", style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("light" to "浅色", "dark" to "深色", "system" to "跟随系统").forEach { (id, title) -> FilterChip(w.preferences.theme == id, { vm.preferences { it.copy(theme = id) } }, label = { Text(title) }) } }
                 Text("编辑器字号 · ${w.preferences.fontSize.toInt()}", style = MaterialTheme.typography.labelLarge)
                 Slider(w.preferences.fontSize.toFloat(), { value -> vm.preferences { it.copy(fontSize = value.toInt().toDouble()) } }, valueRange = 11f..28f, steps = 16)
                 SettingRow("显示行号") { Switch(w.preferences.lineNumbers, { checked -> vm.preferences { it.copy(lineNumbers = checked) } }) }
-                Text("布局随窗口宽度变化，旋转与分屏时保留编辑内容。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider(); Text("DeX / 键盘快捷键", style = MaterialTheme.typography.titleMedium)
                 listOf("全局搜索" to "Ctrl K", "新建记录" to "Ctrl N", "查找与替换" to "Ctrl F / H", "保存历史版本" to "Ctrl S", "锁定空间" to "Ctrl Shift L", "撤销 / 重做" to "Ctrl Z / Y").forEach { (label, key) -> Row(Modifier.fillMaxWidth()) { Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium); Text(key, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
             }
             "sync" -> {
-                SectionTitle("你的记录，随你同行", "与 Windows 版使用同一加密云端空间。")
+                SectionTitle("GitHub 同步")
                 Field("数据仓库", repo) { repo = it }; Field("GitHub Token", token, secret = true) { token = it.trim() }
                 Text("仅需数据仓库 Contents 读写权限。Token 不会进入云端数据文件。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Field("同步码（12–128 位字母或数字）", code, secret = true) { code = it.trim() }
@@ -46,7 +45,7 @@ import kotlinx.coroutines.launch
                 TextButton(onClick = { activity.openUrl("https://github.com/settings/personal-access-tokens/new") }) { Text("创建 GitHub 授权"); Icon(Icons.Outlined.OpenInNew, null, Modifier.size(15.dp)) }
             }
             "security" -> {
-                SectionTitle("私密，是记录的底色", "AES-256-GCM · PBKDF2-SHA256 · 310,000 次")
+                SectionTitle("安全与隐私")
                 Text("闲置自动锁定", style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) { listOf(1, 5, 10, 15, 30, 60).forEach { minutes -> FilterChip(w.preferences.autoLockMinutes == minutes, { vm.preferences { it.copy(autoLockMinutes = minutes) } }, label = { Text("$minutes 分钟") }) } }
                 Text("分屏失焦保持可见；进入后台 10 秒后锁定，锁屏立即锁定。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -58,7 +57,7 @@ import kotlinx.coroutines.launch
                 OutlinedButton(onClick = { close(); vm.lock() }) { Icon(Icons.Outlined.Lock, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("立即锁定") }
             }
             "data" -> {
-                SectionTitle("来去自由，记录属于你", "${w.liveBooks.size} 本记事本 · ${w.liveNotes.size} 条记录")
+                SectionTitle("数据管理", "${w.liveBooks.size} 本记事本 · ${w.liveNotes.size} 条记录")
                 DataOption("加密备份", "包含记录、历史版本与设置，用主密码恢复。", Icons.Outlined.Shield, !s.demo, backup)
                 DataOption("Markdown 文本集", "按记事本导出 ZIP，不包含密码库。", Icons.Outlined.FolderZip, true, exportText)
                 DataOption("导入与恢复", "支持 Markdown、TXT 与墨记加密备份。", Icons.Outlined.FileUpload, true, import)
@@ -66,9 +65,8 @@ import kotlinx.coroutines.launch
                 PasswordAudit(w, vm, close)
             }
             else -> {
-                SectionTitle("墨记  M O J I", "Android ${BuildConfig.VERSION_NAME} · Kotlin + Jetpack Compose")
-                Text("原生手机、平板与桌面窗口体验。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(s.update?.let { "发现新版本 ${it.version}" } ?: "保持墨记常新", style = MaterialTheme.typography.titleMedium)
+                SectionTitle("墨记  M O J I", "Android ${BuildConfig.VERSION_NAME}")
+                Text(s.update?.let { "发现新版本 ${it.version}" } ?: "软件更新", style = MaterialTheme.typography.titleMedium)
                 s.updateProgress?.let { progress -> LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth()); Text("正在下载 ${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(onClick = { vm.checkUpdate() }, enabled = !s.updateChecking) { Text(if (s.updateChecking) "正在检查…" else "检查更新") }

@@ -29,43 +29,33 @@ import app.moji.android.data.*
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 600.dp
         val padding = if (compact) 22.dp else 38.dp
-        LazyVerticalGrid(columns = if (compact) GridCells.Fixed(1) else GridCells.Adaptive(210.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyVerticalGrid(columns = if (compact) GridCells.Fixed(2) else GridCells.Adaptive(230.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.fillMaxWidth().padding(top = 9.dp, bottom = if (compact) 18.dp else 28.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(15.dp)) {
-                        Text("A LITTLE SPACE, ALL YOURS", fontSize = 9.sp, letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
-                        Text("每一份记录，\n都有自己的位置。", fontSize = if (compact) 29.sp else 36.sp, lineHeight = if (compact) 43.sp else 54.sp, fontWeight = FontWeight.Medium, modifier = Modifier.testTag("home-title"))
-                        Text("收藏灵感，整理日常。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (!compact) Surface(Modifier.size(132.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f)) { Box(contentAlignment = Alignment.Center) { Text("记", fontSize = 78.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary.copy(alpha = .7f)) } }
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("我的记事本  ${w.liveBooks.size}", fontSize = if (compact) 24.sp else 30.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).testTag("home-title"))
+                    OutlinedButton(onClick = newBook, shape = RoundedCornerShape(11.dp), contentPadding = PaddingValues(11.dp, 8.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Icon(Icons.Outlined.Add, "新建记事本", Modifier.size(17.dp)); if (!compact) { Spacer(Modifier.width(6.dp)); Text("新建记事本") } }
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("我的记事本", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); TextButton(onClick = newBook) { Icon(Icons.Outlined.Add, null, Modifier.size(17.dp)); Text("新建") } } }
-            items(w.liveBooks, key = { it.id }) { book ->
-                val tint = modeColor(book.mode)
-                Surface(Modifier.fillMaxWidth().combinedClickable(onClick = { vm.navigate(book.id) }, onLongClick = { editBook(book) }).testTag("book-${book.mode.name}"), shape = RoundedCornerShape(18.dp), color = tint.copy(alpha = .08f), border = androidx.compose.foundation.BorderStroke(1.dp, tint.copy(alpha = .09f))) {
-                    if (compact) Row(Modifier.padding(19.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                        Surface(shape = RoundedCornerShape(13.dp), color = tint.copy(alpha = .12f)) { Icon(modeIcon(book.mode), null, Modifier.padding(12.dp).size(25.dp), tint = tint) }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) { Text(book.name, style = MaterialTheme.typography.titleMedium); Text("${book.mode.label} · ${w.liveNotes.count { it.notebookId == book.id && !it.archived }} 条记录", style = MaterialTheme.typography.labelSmall, color = tint) }
-                        Tool(Icons.Outlined.MoreHoriz, "编辑记事本 ${book.name}") { editBook(book) }
-                    } else Column(Modifier.padding(23.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Icon(modeIcon(book.mode), null, Modifier.size(31.dp), tint = tint); Spacer(Modifier.weight(1f)); Tool(Icons.Outlined.MoreHoriz, "编辑记事本 ${book.name}") { editBook(book) } }
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(book.name, style = MaterialTheme.typography.titleMedium); Row { Text("${w.liveNotes.count { it.notebookId == book.id && !it.archived }} 条记录", style = MaterialTheme.typography.labelSmall, color = tint); Spacer(Modifier.weight(1f)); Icon(Icons.Outlined.NorthEast, null, Modifier.size(17.dp), tint = tint) } }
+            items(w.liveBooks, key = { it.id }) { book -> NotebookCard(book, w.liveNotes.count { it.notebookId == book.id && !it.archived }, { vm.navigate(book.id) }, { editBook(book) }) }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(Modifier.padding(top = 14.dp)) {
+                    HorizontalDivider(Modifier.padding(bottom = 23.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("最近记录", fontSize = if (compact) 21.sp else 25.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.navigate("all") }) { Text("查看全部"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(17.dp)) }
                     }
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) { OutlinedButton(onClick = templates, modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 14.dp), shape = RoundedCornerShape(14.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(17.dp)); Spacer(Modifier.width(10.dp)); Text("从模板开始，记录新的想法") } }
-            item(span = { GridItemSpan(maxLineSpan) }) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("最近记录", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); TextButton(onClick = { vm.navigate("all") }) { Text("查看全部"); Icon(Icons.Outlined.ChevronRight, null, Modifier.size(17.dp)) } } }
             items(w.liveNotes.filter { !it.archived }.sortedByDescending { it.updatedAt }.take(6), key = { "recent-${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { note ->
                 val book = w.notebooks.first { it.id == note.notebookId }
-                Surface(onClick = { vm.navigate(book.id); vm.select(note.id) }, color = Color.Transparent) { Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                Surface(onClick = { vm.navigate(book.id); vm.select(note.id) }, color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
                     Surface(shape = RoundedCornerShape(10.dp), color = modeColor(book.mode).copy(alpha = .08f)) { Icon(modeIcon(book.mode), null, Modifier.padding(10.dp).size(19.dp), tint = modeColor(book.mode)) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text(note.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge); Text(book.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     if (note.favorite) Icon(Icons.Outlined.Star, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.secondary)
                     Text(Records.relative(note.updatedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) { Text("你的记录，只属于你。", Modifier.padding(vertical = 20.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+
         }
     }
 }
@@ -102,7 +92,7 @@ import app.moji.android.data.*
                     }
                 }
             }
-            if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(Icons.Outlined.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "这里，留给新的记录。", color = MaterialTheme.colorScheme.onSurfaceVariant); if (s.view != "trash" && s.search.isBlank()) TextButton(onClick = { vm.addNote() }) { Text("写下第一条") } } }
+            if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(Icons.Outlined.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant); if (s.view != "trash" && s.search.isBlank()) TextButton(onClick = { vm.addNote() }) { Text("写下第一条") } } }
         }
     }
     if (purge) Confirm("永久删除 ${selected.size} 条记录？", "正文、密码和历史版本会被清除，无法从回收站恢复。", { purge = false }) { vm.purge(selected); selected = emptySet() }
