@@ -14,7 +14,7 @@
 
 ## 下载与启动
 
-从 [Releases](https://github.com/piayboy894/moji-notes/releases/latest) 下载：
+从 [Windows v1.0.1 Release](https://github.com/piayboy894/moji-notes/releases/tag/v1.0.1) 下载当前稳定版：
 
 - 常见 Intel / AMD Windows 电脑：`Moji-Notes-1.0.1-win-x64.exe`。
 - Windows ARM 设备：`Moji-Notes-1.0.1-win-arm64.exe`。

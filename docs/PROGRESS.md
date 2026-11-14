@@ -15,19 +15,21 @@
 
 ## 已完成的验证
 
-- Windows 原生项目本地编译通过，21 项核心测试与发布版 WPF 原生界面测试通过；实际验证编辑、加密落盘、锁定/解锁、密码模式、提示词模式和深色主题。
+- Windows 原生项目本地编译通过，21 项核心测试与 x64 发布版 WPF 原生界面测试通过；实际验证编辑、加密落盘、锁定/解锁、密码模式、提示词模式和深色主题。
 - Android 调试 APK 和原生仪器测试 APK 本地编译通过。
 - Android JVM 核心测试 20 项通过，包括 Windows 实际生成的中文加密数据测试向量、合并/删除冲突、SHA 并发保护、TOTP、密文备份与恢复。
 - Android API 35 模拟器的 2 项原生仪器测试通过，覆盖加密保存/解锁、手机旋转、1600×2560 与 2560×1600 平板、3440×1440 超宽比例、720×1280 窄窗口和失去焦点后保持解锁。
-- 第一轮仪器测试全部通过，但工作流在提取截图时失败：测试运行器卸载应用后删除了应用私有外部目录。已将测试截图保存在独立的 Download 目录，并重新运行完整工作流；最终状态以 Actions 结果为准。
+- 最终 Android 工作流完整通过：调试/未签名正式构建、20 项核心测试、2 项原生仪器测试及 8 张原生截图全部保存；宽屏首页进入记事本、回到编辑器后内容保持不变。
+- Windows ARM64 已交叉编译，尚未在 ARM64 真机实测。
 - 三星真机、实际 DeX 外接显示器和真实双屏设备尚未实测，不将模拟器尺寸测试视为这些设备的实测。
 
 ## 预览与构建
 
 - [新版界面预览](INTERFACE.md)保存到源码仓库，后续不依赖 Actions 附件保留期。
-- [Windows 原生构建与测试](https://github.com/piayboy894/moji-notes/actions/runs/43587556670)已通过，包含独立 EXE、便携 ZIP 和原生截图；没有发布稳定版本。
-- [Android 最新构建与原生测试](https://github.com/piayboy894/moji-notes/actions/runs/43587679777)。调试包和测试报告位于构建附件。
-- Actions 附件按 GitHub 的保留期保存；源码、界面预览和进度说明作为 Git 提交永久保留。
+- [Windows 原生构建与测试](https://github.com/piayboy894/moji-notes/actions/runs/43587865514)已通过，包含独立 EXE、便携 ZIP 和原生截图；没有发布稳定版本。
+- [Android 最新构建与原生测试](https://github.com/piayboy894/moji-notes/actions/runs/43589264457)已通过。
+- 可下载附件：[Windows EXE / 便携 ZIP](https://github.com/piayboy894/moji-notes/actions/runs/43587865514/artifacts/14110932480)、[Android 调试 APK / 未签名正式构建](https://github.com/piayboy894/moji-notes/actions/runs/43589264457/artifacts/14111412393)。
+- Actions 附件按 GitHub 的保留期保存；源码、界面预览和进度说明作为 Git 提交保留。
 
 ## 发布状态
 
