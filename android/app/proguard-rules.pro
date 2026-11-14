@@ -1,0 +1,5 @@
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keep class app.moji.android.data.**$$serializer { *; }
+-keepclassmembers class app.moji.android.data.** { *** Companion; }
+-keep class org.commonmark.** { *; }
+-dontwarn javax.annotation.**

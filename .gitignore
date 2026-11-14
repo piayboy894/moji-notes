@@ -13,3 +13,10 @@ TestResults/
 .env*
 !.env.example
 .vite/
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+*.keystore
+*.p12
+!android/gradle/wrapper/gradle-wrapper.jar
