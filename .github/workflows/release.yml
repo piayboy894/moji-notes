@@ -59,6 +59,10 @@ jobs:
           }
           $checksums | ConvertTo-Json | Set-Content artifacts/release/SHA256SUMS.json -Encoding utf8
           git archive --format=zip --output="artifacts/release/Moji-Notes-$version-source.zip" HEAD
+          Copy-Item artifacts/smoke/01-workspace.png artifacts/release/Moji-Workspace.png
+          Copy-Item artifacts/smoke/02-editor.png artifacts/release/Moji-Editor.png
+          Copy-Item artifacts/smoke/05-dark.png artifacts/release/Moji-Dark.png
+          Copy-Item artifacts/smoke/report.json artifacts/release/native-test-report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

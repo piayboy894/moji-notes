@@ -26,6 +26,12 @@ internal static class NativeSmoke
         catch(Exception error){await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=false,error=error.ToString(),checks}));Application.Current.Shutdown(1);}
     }
     private static async Task Render(){await Application.Current.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(450);}
-    private static void Capture(Window window,string path){window.UpdateLayout();var bitmap=new RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(window);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using var stream=File.Create(path);encoder.Save(stream);}
+    private static void Capture(Window window,string path)
+    {
+        // Render the real native visual tree at desktop size, independent of the CI monitor size.
+        var root=(FrameworkElement)window.Content;root.Width=1440;root.Height=900;root.Measure(new Size(1440,900));root.Arrange(new Rect(0,0,1440,900));root.UpdateLayout();
+        var bitmap=new RenderTargetBitmap(1440,900,96,96,PixelFormats.Pbgra32);bitmap.Render(root);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(path))encoder.Save(stream);
+        root.Width=double.NaN;root.Height=double.NaN;window.InvalidateMeasure();window.UpdateLayout();
+    }
     private static T? Find<T>(DependencyObject root)where T:DependencyObject{if(root is T match)return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=Find<T>(VisualTreeHelper.GetChild(root,i));if(child!=null)return child;}return null;}
 }
