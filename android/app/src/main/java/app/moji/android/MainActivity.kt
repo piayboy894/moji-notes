@@ -60,7 +60,7 @@ class MainActivity : FragmentActivity() {
         val clipboard = getSystemService(ClipboardManager::class.java)
         runCatching { if (clipboard.primaryClip?.getItemAt(0)?.text?.toString() == value) { if (Build.VERSION.SDK_INT >= 28) clipboard.clearPrimaryClip() else clipboard.setPrimaryClip(ClipData.newPlainText("", "")) } }
     }
-    fun secure(enabled: Boolean) { if (enabled && !BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    fun secure(enabled: Boolean) { val wanted = enabled && !BuildConfig.DEBUG; val current = window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0; if (wanted != current) { if (wanted) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) } }
     fun share(title: String, text: String) { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, title); putExtra(Intent.EXTRA_TEXT, text) }, "分享记录")) }
     fun openUrl(value: String) { val uri = Uri.parse(value); if (uri.scheme in listOf("http", "https")) runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }.onFailure { vm.message("没有可打开链接的应用") } else vm.message("请填写 http 或 https 地址") }
     fun installUpdate() { val file = vm.state.value.downloadedApk ?: return; if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))); vm.message("授权后返回墨记，再点击安装更新"); return }; runCatching { startActivity(vm.updater.installIntent(file)) }.onFailure { vm.message("无法打开系统安装程序") } }

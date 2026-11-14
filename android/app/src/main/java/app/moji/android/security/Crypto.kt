@@ -13,7 +13,11 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 @Serializable data class Envelope(val format: String = "moji-encrypted", val version: Int = 1, val salt: String, val iv: String, val data: String, val iterations: Int = 310_000)
-class VaultKey(val bytes: ByteArray, val salt: String, val iterations: Int = 310_000) : AutoCloseable { override fun close() { bytes.fill(0) } }
+class VaultKey(private val bytes: ByteArray, val salt: String, val iterations: Int = 310_000) : AutoCloseable {
+    private var closed = false
+    @Synchronized fun copyBytes(): ByteArray { check(!closed) { "空间已经锁定" }; return bytes.copyOf() }
+    @Synchronized override fun close() { bytes.fill(0); closed = true }
+}
 object Crypto {
     const val ITERATIONS = 310_000
     private val random = SecureRandom()
@@ -31,11 +35,13 @@ object Crypto {
     }
     fun encryptText(plain: String, key: VaultKey): Envelope {
         val bytes = plain.toByteArray(Charsets.UTF_8); val iv = ByteArray(12).also(random::nextBytes)
-        return try { val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key.bytes, "AES"), GCMParameterSpec(128, iv)); Envelope(salt = key.salt, iv = b64(iv), data = b64(cipher.doFinal(bytes)), iterations = key.iterations) } finally { bytes.fill(0) }
+        val material = key.copyBytes()
+        return try { val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(material, "AES"), GCMParameterSpec(128, iv)); Envelope(salt = key.salt, iv = b64(iv), data = b64(cipher.doFinal(bytes)), iterations = key.iterations) } finally { bytes.fill(0); material.fill(0) }
     }
     fun decryptText(e: Envelope, key: VaultKey): String {
         validate(e)
-        val bytes = try { val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key.bytes, "AES"), GCMParameterSpec(128, unb64(e.iv))); cipher.doFinal(unb64(e.data)) } catch (_: java.security.GeneralSecurityException) { throw IllegalArgumentException("密码不正确，或加密文件已损坏") }
+        val material = key.copyBytes()
+        val bytes = try { val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(material, "AES"), GCMParameterSpec(128, unb64(e.iv))); cipher.doFinal(unb64(e.data)) } catch (_: java.security.GeneralSecurityException) { throw IllegalArgumentException("密码不正确，或加密文件已损坏") } finally { material.fill(0) }
         return try { bytes.toString(Charsets.UTF_8) } finally { bytes.fill(0) }
     }
     inline fun <reified T> encrypt(value: T, key: VaultKey) = encryptText(json.encodeToString(value), key)

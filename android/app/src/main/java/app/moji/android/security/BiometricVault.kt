@@ -41,7 +41,7 @@ class BiometricVault(private val context: Context) {
     }
     fun enable(activity: FragmentActivity, vaultKey: VaultKey, done: () -> Unit, failure: (String) -> Unit) {
         try { val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
-            prompt(activity, cipher, "为墨记启用设备解锁", { c -> try { val wrapped = WrappedKey(Crypto.b64(c.iv), Crypto.b64(c.doFinal(vaultKey.bytes)), vaultKey.salt, vaultKey.iterations); file.parentFile?.mkdirs(); file.writeText(json.encodeToString(wrapped)); done() } catch (_: Exception) { failure("设备密钥保存失败") } }, failure)
+            prompt(activity, cipher, "为墨记启用设备解锁", { c -> try { val material = vaultKey.copyBytes(); val encrypted = try { c.doFinal(material) } finally { material.fill(0) }; val wrapped = WrappedKey(Crypto.b64(c.iv), Crypto.b64(encrypted), vaultKey.salt, vaultKey.iterations); file.parentFile?.mkdirs(); file.writeText(json.encodeToString(wrapped)); done() } catch (_: Exception) { failure("设备密钥保存失败") } }, failure)
         } catch (_: Exception) { failure("当前设备无法启用生物识别解锁") }
     }
     fun unlock(activity: FragmentActivity, success: (VaultKey) -> Unit, failure: (String) -> Unit) {

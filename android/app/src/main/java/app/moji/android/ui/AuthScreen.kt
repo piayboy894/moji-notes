@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.moji.android.*
+import app.moji.android.R
 import app.moji.android.security.Envelope
 
 @Composable fun AuthScreen(s: AppState, vm: MojiViewModel, activity: MainActivity, backup: Envelope?, import: () -> Unit) {

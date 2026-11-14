@@ -8,7 +8,7 @@ on:
     paths: ['android/**', '.github/workflows/android.yml']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -28,7 +28,19 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
+      - name: Load publisher signing key when configured
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$MOJI_KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/moji-android-release.p12"
+            chmod 600 "$RUNNER_TEMP/moji-android-release.p12"
+            printf 'MOJI_KEYSTORE_PATH=%s\n' "$RUNNER_TEMP/moji-android-release.p12" >> "$GITHUB_ENV"
+          fi
       - run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon
+        env:
+          MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,3 +75,15 @@ jobs:
             android-ui-screenshots/
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
+      - name: Publish signed Android release
+        if: (startsWith(github.ref, 'refs/tags/android-v') || contains(github.event.head_commit.message, '[android-release]')) && env.MOJI_KEYSTORE_PATH != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          mkdir -p ../artifacts/android-release
+          cp app/build/outputs/apk/release/app-release.apk "../artifacts/android-release/Moji-Notes-Android-$version.apk"
+          cp ../android-ui-screenshots/*.png ../artifacts/android-release/ 2>/dev/null || true
+          git -C .. archive --format=zip --output="artifacts/android-release/Moji-Notes-Android-$version-source.zip" HEAD
+          sha256sum "../artifacts/android-release/Moji-Notes-Android-$version.apk" > ../artifacts/android-release/SHA256SUMS.txt
+          gh release create "android-v$version" ../artifacts/android-release/* --target "$GITHUB_SHA" --title "墨记 Android $version" --notes-file README.md

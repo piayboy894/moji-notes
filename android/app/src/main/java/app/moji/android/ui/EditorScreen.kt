@@ -125,7 +125,22 @@ private class MarkdownTransformation(private val heading: Color, private val var
 }
 @Composable fun MarkdownPreview(content: String, size: Float, modifier: Modifier = Modifier) {
     val context = LocalContext.current; val ink = MaterialTheme.colorScheme.onSurface
-    val markwon = remember(context) { Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(TaskListPlugin.create(context)).usePlugin(StrikethroughPlugin.create()).usePlugin(object : AbstractMarkwonPlugin() { override fun configureConfiguration(builder: MarkwonConfiguration.Builder) { builder.linkResolver { view, link -> val uri = Uri.parse(link); if (uri.scheme in listOf("http", "https")) runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } } }).build() }
+    val markwon = remember(context) {
+        Markwon.builder(context)
+            .usePlugin(TablePlugin.create(context))
+            .usePlugin(TaskListPlugin.create(context))
+            .usePlugin(StrikethroughPlugin.create())
+            .usePlugin(object : AbstractMarkwonPlugin() {
+                override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
+                    builder.linkResolver { view, link ->
+                        val uri = Uri.parse(link)
+                        if (uri.scheme in listOf("http", "https")) {
+                            runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                        }
+                    }
+                }
+            }).build()
+    }
     val images = remember(content) { Regex("!\\[[^]]*]\\((data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+)\\)").findAll(content).mapNotNull { match -> runCatching { val bytes = Crypto.unb64(match.groupValues[1].substringAfter(',')); if (bytes.size > 2_000_000) null else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull() }.toList() }
     Column(modifier.verticalScroll(rememberScrollState()).padding(23.dp, 20.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
         AndroidView(factory = { TextView(it).apply { setTextIsSelectable(true); setPadding(0, 0, 0, 0); setLineSpacing(0f, 1.5f) } }, update = { view -> view.textSize = size; view.setTextColor(android.graphics.Color.argb(255, (ink.red * 255).toInt(), (ink.green * 255).toInt(), (ink.blue * 255).toInt())); markwon.setMarkdown(view, content.replace(Regex("!\\[([^]]*)]\\(data:image/[^)]+\\)"), "[图片：$1]")) }, modifier = Modifier.fillMaxWidth().testTag("markdown-preview"))
