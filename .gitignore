@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+publish/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.moji
+*.mojibak
+*.log
+.env*
+!.env.example

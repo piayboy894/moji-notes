@@ -1,0 +1,1 @@
+<Solution><Folder Name="src"><Project Path="src/Moji.Core/Moji.Core.csproj"/><Project Path="src/Moji.App/Moji.App.csproj"/></Folder><Folder Name="tests"><Project Path="tests/Moji.Tests/Moji.Tests.csproj"/></Folder></Solution>
