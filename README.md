@@ -4,6 +4,14 @@
 
 **原生 Windows 桌面应用：.NET 10 LTS + WPF + AvalonEdit。没有 Electron、Chromium、WebView、网页外壳或后台 Web 服务。**
 
+## 当前开发成果
+
+参考图风格的新界面与原生 Android 客户端已保存在 `main` 分支。当前 Windows `v1.0.1` 稳定下载仍为上一版界面；新版构建保存在 Actions，尚未替换稳定 Release。Android 正式签名和发布暂缓。
+
+- [新版界面预览](docs/INTERFACE.md)
+- [Android 项目与构建方法](android/README.md)
+- [已验证项目与下次继续位置](docs/PROGRESS.md)
+
 ## 下载与启动
 
 从 [Releases](https://github.com/piayboy894/moji-notes/releases/latest) 下载：

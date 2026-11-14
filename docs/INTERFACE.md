@@ -1,0 +1,19 @@
+# 新版界面
+
+保留参考图的暖白、鼠尾草绿与三种笔记本封面，删除首页标语、宣传插画和重复提示。所有界面均由原生控件绘制。
+
+## Windows 工作台
+
+![Windows 浅色工作台](screenshots/windows-home.png)
+
+## Windows 深色
+
+![Windows 深色工作台](screenshots/windows-dark.png)
+
+截图来自实际 WPF 界面测试，展示示例数据。封面纹理、书脊、纸张、绑带和书签由原生绘图实现。
+
+## Android
+
+使用相同的三色笔记本风格。手机双列封面，平板与宽窗口采用列表/编辑分栏；首页最多三列并限制内容宽度。模拟器截图与原生测试报告保存在 Android Actions 的 `Moji-Android-native-UI` 构建附件中。
+
+正式 Android 签名与发布暂停，详见 [进度记录](PROGRESS.md)。
