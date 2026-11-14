@@ -45,6 +45,7 @@ jobs:
             Compress-Archive publish/win-$arch/* artifacts/release/Moji-Notes-$version-win-$arch.zip
           }
           $checksums | ConvertTo-Json | Set-Content artifacts/release/SHA256SUMS.json -Encoding utf8
+          git archive --format=zip --output="artifacts/release/Moji-Notes-$version-source.zip" HEAD
       - uses: actions/upload-artifact@v4
         if: always()
         with:

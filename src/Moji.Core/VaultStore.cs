@@ -9,6 +9,7 @@ public sealed class VaultStore(string directory)
     public bool RecoveredBackup { get; private set; }
     public async Task<EncryptedEnvelope?> ReadAsync()
     {
+        RecoveredBackup = false;
         if (!File.Exists(VaultPath)) return null;
         try { return await ReadEnvelope(VaultPath); }
         catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidDataException or FormatException)
