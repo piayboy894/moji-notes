@@ -5,6 +5,7 @@ using Moji.Core;
 namespace Moji.App;
 public partial class App : Application
 {
+    public static Version CurrentVersion { get { var v = typeof(App).Assembly.GetName().Version!; return new(v.Major, v.Minor, v.Build); } }
     private Mutex? instance;
     protected override async void OnStartup(StartupEventArgs e)
     {

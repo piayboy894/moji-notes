@@ -56,7 +56,7 @@ piayboy894/xuxian-data
 
 软件启动并解锁后自动读取公开仓库的稳定 Releases；也可到「关于与更新」手动检查。**检测和下载不使用任何 Token，不需要用户配置 Secret。** 点击下载后核对 SHA-256；再次点击“重启并更新”，由新的原生 EXE 等待旧进程退出、原子替换程序，并重新启动。数据保存在独立的 LocalAppData 目录，不随 EXE 替换。
 
-发布维护者只需更新 `Moji.App.csproj` 的版本和应用内版本常量，再推送 `v<版本>` 标签。Actions 使用仓库自带 `GITHUB_TOKEN` 构建 x64 / ARM64、运行测试、启动发布版原生界面测试、生成校验值并发布。无需 Tauri 签名密钥或个人 Token。
+发布维护者只需更新 `Moji.App.csproj` 的版本，再推送 `v<版本>` 标签。Actions 使用仓库自带 `GITHUB_TOKEN` 构建 x64 / ARM64、运行测试、启动发布版原生界面测试、生成校验值并发布。无需 Tauri 签名密钥或个人 Token。
 
 SHA-256 用于传输完整性校验，不等同于 Windows Authenticode 发行者签名；发布仓库与 GitHub HTTPS 是更新的信任来源。
 
