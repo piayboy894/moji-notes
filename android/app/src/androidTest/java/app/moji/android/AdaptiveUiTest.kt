@@ -17,9 +17,11 @@ class AdaptiveUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { descriptor -> android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(width: Int, height: Int, density: Int) { shell("wm size ${width}x$height"); shell("wm density $density"); Thread.sleep(1200); compose.waitForIdle() }
-    private fun hideKeyboard() { compose.activityRule.scenario.onActivity { a -> androidx.core.view.WindowCompat.getInsetsController(a.window, a.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; compose.waitForIdle() }
+    private fun hideKeyboard() { compose.activityRule.scenario.onActivity { a -> androidx.core.view.WindowCompat.getInsetsController(a.window, a.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(500); compose.waitForIdle() }
     private fun screenshot(name: String) {
         compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(500) // Wait for the native compositor to present the new Compose frame.
         // UTP uninstalls the app after the suite, so keep CI captures outside its data directory.
         val path = "/sdcard/Download/moji-native-ui/$name.png"
         // UiAutomation executes individual commands, not shell control operators.
@@ -39,24 +41,27 @@ class AdaptiveUiTest {
             resize(1600, 2560, 240); compose.onNodeWithTag("note-content").assertExists(); assertEquals(id, compose.activity.vm.state.value.selectedId); screenshot("03-tablet-portrait")
             resize(2560, 1600, 240); compose.onNodeWithTag("note-list").assertExists(); compose.onNodeWithTag("note-content").assertExists(); screenshot("04-tablet-landscape")
             resize(3440, 1440, 240); compose.onNodeWithTag("note-content").assertExists(); screenshot("05-dex-ultrawide-layout")
-            compose.onNodeWithText("工作台").performClick(); compose.onNodeWithTag("home-title").assertIsDisplayed(); screenshot("06-wide-home")
+            compose.onNode(hasText("工作台") and hasAnyAncestor(hasTestTag("wide-navigation"))).performClick(); compose.onNodeWithTag("home-title").assertIsDisplayed(); screenshot("06-wide-home")
             compose.onNodeWithTag("book-Text").performClick(); compose.onNodeWithText("把生活，写成喜欢的样子").performClick(); compose.onNodeWithTag("note-content").assertTextContains("Rotation and resize", substring = true)
             resize(720, 1280, 320); compose.onNodeWithTag("note-content").assertExists(); assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Rotation and resize")); screenshot("07-narrow-window")
             compose.activityRule.scenario.onActivity { it.onWindowFocusChanged(false) }; Thread.sleep(700); assertNotNull(compose.activity.vm.state.value.workspace)
             compose.activityRule.scenario.onActivity { it.onWindowFocusChanged(true); it.vm.clearSelection(); it.vm.navigate("home") }; compose.onNodeWithTag("home-title").assertExists()
-        } finally { shell("wm size reset"); shell("wm density reset") }
+        } catch (error: Throwable) { runCatching { screenshot("failure-adaptive") }; throw error } finally { shell("wm size reset"); shell("wm density reset") }
     }
+    private fun awaitUnlocked() { compose.waitUntil(30000) { val state = compose.activity.vm.state.value; check(state.error.isBlank()) { state.error }; state.workspace != null } }
     @Test fun encryptedPersistenceAndPasswordModeWorkWithNativeFields() {
+        try {
         compose.waitUntil(10000) { !compose.activity.vm.state.value.loading }
         if (compose.activity.vm.state.value.workspace != null) { compose.activityRule.scenario.onActivity { it.vm.lock() }; compose.waitUntil(10000) { compose.activity.vm.state.value.workspace == null } }
         compose.onNodeWithTag("auth-password").performTextInput("Android-Test-Password-2026")
         if (!compose.activity.vm.state.value.exists) compose.onNodeWithTag("auth-confirm").performTextInput("Android-Test-Password-2026")
-        compose.onNodeWithTag("create-vault").performClick(); compose.waitUntil(15000) { compose.activity.vm.state.value.workspace != null }
+        hideKeyboard(); compose.onNodeWithTag("create-vault").performScrollTo().assertIsEnabled().performClick(); awaitUnlocked()
         compose.onNodeWithTag("book-Password").performClick()
         compose.activityRule.scenario.onActivity { it.vm.addNote() }; compose.onNodeWithTag("account").performTextInput("native-test@example.com")
         compose.onNodeWithTag("credential-password").performTextInput("Private-Test-2026!"); hideKeyboard()
         runBlocking { compose.activity.vm.flush() }; val raw = compose.activity.vm.store.file.readText(); assertFalse(raw.contains("native-test@example.com")); assertFalse(raw.contains("Private-Test-2026!")); screenshot("08-native-password")
         compose.activityRule.scenario.onActivity { it.vm.lock() }; compose.waitUntil(10000) { compose.activity.vm.state.value.workspace == null }; assertNull(compose.activity.vm.sessionKey)
-        compose.onNodeWithTag("auth-password").performTextInput("Android-Test-Password-2026"); compose.onNodeWithTag("create-vault").performClick(); compose.waitUntil(15000) { compose.activity.vm.state.value.workspace != null }; assertTrue(compose.activity.vm.state.value.workspace!!.notes.any { it.username == "native-test@example.com" })
+        compose.onNodeWithTag("auth-password").performTextInput("Android-Test-Password-2026"); hideKeyboard(); compose.onNodeWithTag("create-vault").performScrollTo().assertIsEnabled().performClick(); awaitUnlocked(); assertTrue(compose.activity.vm.state.value.workspace!!.notes.any { it.username == "native-test@example.com" })
+        } catch (error: Throwable) { runCatching { screenshot("failure-persistence") }; throw error }
     }
 }
