@@ -22,7 +22,10 @@ class AdaptiveUiTest {
         compose.waitForIdle()
         // UTP uninstalls the app after the suite, so keep CI captures outside its data directory.
         val path = "/sdcard/Download/moji-native-ui/$name.png"
-        check(shell("mkdir -p /sdcard/Download/moji-native-ui && screencap -p $path && test -s $path && echo captured").contains("captured")) { "Native screenshot unavailable" }
+        // UiAutomation executes individual commands, not shell control operators.
+        shell("mkdir -p /sdcard/Download/moji-native-ui")
+        shell("screencap -p $path")
+        check((shell("stat -c %s $path").trim().toLongOrNull() ?: 0) > 1024) { "Native screenshot unavailable: $name" }
     }
     @Test fun phoneTabletUltrawideAndRotationPreserveNativeEditing() {
         try {
