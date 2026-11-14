@@ -29,7 +29,7 @@ import app.moji.android.data.*
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 600.dp
         val padding = if (compact) 22.dp else 38.dp
-        LazyVerticalGrid(columns = if (compact) GridCells.Fixed(2) else GridCells.Adaptive(230.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        LazyVerticalGrid(modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().align(Alignment.TopCenter), columns = GridCells.Fixed(if (compact) 2 else 3), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("我的记事本  ${w.liveBooks.size}", fontSize = if (compact) 24.sp else 30.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).testTag("home-title"))
