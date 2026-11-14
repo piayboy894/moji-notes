@@ -30,19 +30,25 @@ internal static class NativeSmoke
     {
         // Render the actual WPF tree offscreen so CI's small monitor does not crop wide layouts.
         var root=(FrameworkElement)window.Content;
-        var originalWidth=root.Width;var originalHeight=root.Height;
         window.Content=null;
+        // ContentPresenter must release its child before offscreen layout; otherwise the
+        // live window's old client size is reapplied by WPF during UpdateLayout.
+        window.UpdateLayout();
+        var host=new Border{Width=1440,Height=940,Background=window.Background};
         try
         {
-            System.Windows.Documents.TextElement.SetFontFamily(root, window.FontFamily);
-            System.Windows.Documents.TextElement.SetFontSize(root, window.FontSize);
-            root.Width=1440;root.Height=940;root.Measure(new Size(1440,940));root.Arrange(new Rect(0,0,1440,940));root.UpdateLayout();
-            var bitmap=new RenderTargetBitmap(1440,940,96,96,PixelFormats.Pbgra32);bitmap.Render(root);
-            var pixel=new byte[4];bitmap.CopyPixels(new Int32Rect(300,100,1,1),pixel,4,0);
-            if(pixel[3]!=255)throw new InvalidOperationException("The native client background was not rendered opaquely.");
+            if(VisualTreeHelper.GetParent(root)!=null)throw new InvalidOperationException("The native view was not detached for offscreen layout.");
+            System.Windows.Documents.TextElement.SetFontFamily(host,window.FontFamily);
+            System.Windows.Documents.TextElement.SetFontSize(host,window.FontSize);
+            System.Windows.Documents.TextElement.SetForeground(host,window.Foreground);
+            host.Child=root;root.InvalidateMeasure();host.Measure(new Size(1440,940));host.Arrange(new Rect(0,0,1440,940));host.UpdateLayout();
+            if(Math.Abs(root.ActualWidth-1440)>.1||Math.Abs(root.ActualHeight-940)>.1)throw new InvalidOperationException("The native view did not fill the requested client size.");
+            var bitmap=new RenderTargetBitmap(1440,940,96,96,PixelFormats.Pbgra32);bitmap.Render(host);
+            var pixel=new byte[4];bitmap.CopyPixels(new Int32Rect(1439,939,1,1),pixel,4,0);
+            if(pixel[3]!=255)throw new InvalidOperationException("The native client background was cropped.");
             var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(path))encoder.Save(stream);
         }
-        finally {root.Width=originalWidth;root.Height=originalHeight;window.Content=root;window.UpdateLayout();}
+        finally {host.Child=null;window.Content=root;window.UpdateLayout();}
     }
     private static T? Find<T>(DependencyObject root)where T:DependencyObject{if(root is T match)return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=Find<T>(VisualTreeHelper.GetChild(root,i));if(child!=null)return child;}return null;}
 }
