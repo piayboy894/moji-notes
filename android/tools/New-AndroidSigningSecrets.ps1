@@ -1,3 +1,4 @@
+& {
 # Run in Windows PowerShell as your normal user. No administrator rights or JDK required.
 $ErrorActionPreference = 'Stop'
 $signingDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Moji-Android-Signing'
@@ -38,7 +39,7 @@ Write-Host '   Secret: paste the clipboard value.'
 Write-Host '   Also save this password in your password manager.'
 Read-Host 'After saving the second Secret and backing up its password, press Enter'
 
-Set-Clipboard -Value ''
+Set-Clipboard -Value ' '
 $keyBase64 = $null
 $signingPassword = $null
 Write-Host ''
@@ -46,3 +47,5 @@ Write-Host ('Keep this private signing backup: ' + $keystoreFile) -ForegroundCol
 Write-Host 'password.dpapi can recover the password only under this Windows user profile.'
 Write-Host 'Do not upload these files to the source repository or send the values in chat.'
 Write-Host 'The same signing key must be retained for future APK updates.'
+
+}

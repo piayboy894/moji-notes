@@ -1,3 +1,5 @@
+import java.security.KeyStore
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,7 +23,7 @@ android {
             storeFile = file(System.getenv("MOJI_KEYSTORE_PATH"))
             storePassword = System.getenv("MOJI_KEYSTORE_PASSWORD")
             val password = System.getenv("MOJI_KEYSTORE_PASSWORD").toCharArray()
-            val archive = java.security.KeyStore.getInstance("PKCS12").apply { file(System.getenv("MOJI_KEYSTORE_PATH")).inputStream().use { load(it, password) } }
+            val archive = KeyStore.getInstance("PKCS12").apply { file(System.getenv("MOJI_KEYSTORE_PATH")).inputStream().use { load(it, password) } }
             keyAlias = archive.aliases().toList().first { archive.isKeyEntry(it) }
             password.fill('\u0000')
             keyPassword = System.getenv("MOJI_KEYSTORE_PASSWORD")
