@@ -41,6 +41,15 @@ class InlineLabelsTest {
         assertEquals("A replacement B \uFFFC C",state.annotatedString.text)
         assertEquals(1,Regex("moji-variable:one").findAll(state.toHtml()).count())
     }
+    @Test fun literalPunctuationSurvivesTypingSavingAndReopening() {
+        val literal="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115 *literal* <example> &amp; \\path \\_x |value| {{plain}}"
+        val state=RichTextState()
+        literal.forEach{state.addTextAfterSelection(it.toString())}
+        assertEquals(literal,state.annotatedString.text)
+        val saved=app.moji.android.data.RichMarkdown.fromHtml(state.toHtml())
+        val reopened=RichTextState().apply{setMarkdown(saved)}
+        assertEquals(literal,reopened.annotatedString.text)
+    }
     @Test fun unregisteredLiteralTextKeepsIdentityMapping() {
         val text=AnnotatedString("{{not a variable}}")
         val display=renderInlineLabels(text,emptyMap())

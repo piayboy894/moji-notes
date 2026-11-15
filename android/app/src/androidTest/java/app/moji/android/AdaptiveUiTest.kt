@@ -130,6 +130,18 @@ class AdaptiveUiTest {
         runBlocking{compose.activity.vm.replaceData(payload)}
         assertEquals("Leaf",current().icon);assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);screenshot("13-custom-notebook-home")
     }
+    @Test fun physicalKeyboardBurstPersistsEveryCharacter() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
+        val marker="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115"
+        compose.onNodeWithTag("note-content").performClick()
+        shell("input text $marker")
+        compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
+        runBlocking{compose.activity.vm.flush()}
+        val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
+        compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
+        compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)}
+        compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
+    }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {
         ready(); compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
         compose.onNodeWithContentDescription("打开导航").performClick(); compose.onNodeWithContentDescription("偏好设置").performClick()

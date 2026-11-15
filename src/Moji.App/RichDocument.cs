@@ -36,7 +36,7 @@ internal static class RichDocument
             }
         }
     }
-    public static string Escape(string text) => Regex.Replace(text.Replace("\\","\\\\"), @"([`*_\[\]#~>!+\-.|])", @"\$1");
+    public static string Escape(string text) => Regex.Replace(text.Replace("\\","\\\\"), @"([`*_\[\]#~<>&!+\-.|])", @"\$1");
     private static string InlineText(InlineCollection inlines, bool bold=false, bool italic=false, bool strike=false)
     {
         var output=new StringBuilder();

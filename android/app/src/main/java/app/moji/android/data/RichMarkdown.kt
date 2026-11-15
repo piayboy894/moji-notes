@@ -5,7 +5,7 @@ import org.jsoup.nodes.*
 
 // Export native styles through HTML instead of losing literal symbols or embedded images.
 object RichMarkdown {
-    fun escape(text:String)=text.replace("\\","\\\\").replace(Regex("([`*_\\[\\]#~>!+\\-.|])"),"\\\\$1")
+    fun escape(text:String)=text.replace("\\","\\\\").replace(Regex("([`*_\\[\\]#~<>&!+\\-.|])"),"\\\\$1")
     fun fromHtml(html:String):String=children(Jsoup.parseBodyFragment(html).body()).trimEnd()
     private fun children(node:Node,heading:Boolean=false):String=node.childNodes().joinToString(""){render(it,heading)}
     private fun render(node:Node,heading:Boolean=false):String {

@@ -69,7 +69,7 @@ try:
     adb("shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", "0")
     adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(description="新建记录"))
-    enter("note-content", MARKER); time.sleep(1.5)
+    enter("note-content", MARKER); wait_node(resource="note-content", contains=MARKER); time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="未命名记录"))
@@ -109,6 +109,11 @@ try:
 except Exception as error:
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps({"success": False, "error": str(error), "checks": checks}, indent=2))
+    try:
+        capture=subprocess.run(["adb","exec-out","screencap","-p"],stdout=subprocess.PIPE,check=True,timeout=15)
+        (REPORT.parent/"failure-screen.png").write_bytes(capture.stdout)
+    except Exception:
+        pass
     for name, command in [
         ("failure-window.xml", ("shell", "cat", "/sdcard/moji-release-window.xml")),
         ("failure-runtime.txt", ("logcat", "-d", "-v", "threadtime", "-s", "AndroidRuntime")),

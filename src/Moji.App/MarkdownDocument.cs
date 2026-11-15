@@ -56,6 +56,7 @@ public static class MarkdownDocument
         {
             switch (inline)
             {
+                case HtmlEntityInline entity: target.Add(new Run(entity.Transcoded.ToString())); break;
                 case LiteralInline literal: target.Add(new Run(literal.Content.ToString())); break;
                 case LineBreakInline: target.Add(new LineBreak()); break;
                 case CodeInline code: target.Add(new Run(code.Content) { Tag = "code", FontFamily = new FontFamily("Consolas"), Background = Ui.Resource("Soft") }); break;

@@ -11,7 +11,7 @@ public static partial class RecordTools
     public static bool Matches(Note note, string search, NoteMode mode)
     { if (string.IsNullOrWhiteSpace(search)) return true; return string.Join('\n', note.Title, note.Username, note.Url, mode == NoteMode.Password ? "" : Plain(PromptVariables.Display(note))).Contains(search, StringComparison.OrdinalIgnoreCase); }
     private static readonly MarkdownPipeline TextPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
-    public static string Escape(string text) => Regex.Replace(text.Replace("\\","\\\\"), @"([`*_\[\]#~>!+\-.|])", @"\$1");
+    public static string Escape(string text) => Regex.Replace(text.Replace("\\","\\\\"), @"([`*_\[\]#~<>&!+\-.|])", @"\$1");
     public static string Plain(string content) => Regex.Replace(Markdown.ToPlainText(Regex.Replace(content, @"!\[[^\]]*\]\([^)]*\)", "图片"), TextPipeline), @"\s+", " ").Trim();
     public static string ModeName(NoteMode mode) => mode switch { NoteMode.Text => "普通文本", NoteMode.Prompt => "提示词", _ => "账号密码" };
     public static string Relative(long time)

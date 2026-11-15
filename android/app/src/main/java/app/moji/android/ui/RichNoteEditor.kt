@@ -59,7 +59,7 @@ private class Piece(val block:RichBlock) {
     var lastSaved by remember(note.id){mutableStateOf(note.content)}
     var variableDialog by remember{mutableStateOf(false)};var linkDialog by remember{mutableStateOf(false)};var findDialog by remember{mutableStateOf(false)};var tableDialog by remember{mutableStateOf(false)};var removePiece by remember{mutableStateOf<Piece?>(null)}
     fun publish(){val value=RichBlocks.serialize(pieces.map{it.snapshot()});if(value!=lastSaved){lastSaved=value;vm.content(note.id,value)}}
-    LaunchedEffect(note.content){if(note.content!=lastSaved){pieces.clear();pieces.addAll(RichBlocks.parse(note.content).map(::Piece));active=pieces.firstOrNull()?.cell;lastSaved=note.content}}
+    LaunchedEffect(note.content){val current=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?.content?:return@LaunchedEffect;if(current!=lastSaved){pieces.clear();pieces.addAll(RichBlocks.parse(current).map(::Piece));active=pieces.firstOrNull()?.cell;lastSaved=current}}
     fun insertBlock(block:RichBlock){
         val index=pieces.indexOfFirst{p->p.cells().any{it===active}}.let{if(it<0)pieces.lastIndex else it}
         val current=pieces.getOrNull(index);val inserted=Piece(block)

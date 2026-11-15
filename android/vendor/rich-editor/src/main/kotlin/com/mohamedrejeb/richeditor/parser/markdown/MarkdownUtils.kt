@@ -19,7 +19,7 @@ internal fun encodeMarkdownToRichText(
     onHtmlTag: (tag: String) -> Unit,
     onHtmlBlock: (html: String) -> Unit,
 ) {
-    val markdownText = correctMarkdownText(markdown)
+    val markdownText = markdown // Serialized markup is already valid; preprocessing can change escaped literal symbols.
 
     val parser = MarkdownParser(GFMFlavourDescriptor())
     val tree = parser.buildMarkdownTreeFromString(markdownText)
@@ -195,7 +195,7 @@ private fun encodeMarkdownNodeToRichText(
     onHtmlBlock: (html: String) -> Unit,
 ) {
     when (node.type) {
-        MarkdownTokenTypes.TEXT -> onText(node.getTextInNode(markdown).toString())
+        MarkdownTokenTypes.TEXT -> onText(decodeEscapes(node.getTextInNode(markdown).toString()))
         MarkdownTokenTypes.WHITE_SPACE -> onText(" ")
         MarkdownTokenTypes.SINGLE_QUOTE -> onText("'")
         MarkdownTokenTypes.DOUBLE_QUOTE -> onText("\"")
@@ -263,7 +263,7 @@ private fun encodeMarkdownNodeToRichText(
                 ?.drop(1)
                 ?.dropLast(1)
                 ?.toString()
-            onText(text ?: "")
+            onText(decodeEscapes(text ?: ""))
             onCloseNode(node)
         }
 
@@ -291,4 +291,9 @@ private fun encodeMarkdownNodeToRichText(
             onCloseNode(node)
         }
     }
+}
+private fun decodeEscapes(text:String):String {
+    val result=StringBuilder();var index=0
+    while(index<text.length){val c=text[index];if(c=='\\'&&index+1<text.length&&text[index+1] in "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"){index++;result.append(text[index])}else result.append(c);index++}
+    return result.toString()
 }
