@@ -45,7 +45,7 @@ private class RichCell(val original:String,plain:Boolean=false) {
     fun markdown():String {val value=RichMarkdown.fromHtml(state.toHtml());return if(value==initial)original else value}
 }
 private class Piece(val block:RichBlock) {
-    val key=uid(); val cell=RichCell(block.content,block.kind=="code")
+    val key=uid(); val cell by lazy { RichCell(block.content,block.kind=="code") }
     val rows=block.rows.map{row->row.map{RichCell(it)}}.toMutableStateList()
     var checked by mutableStateOf(block.checked)
     fun snapshot()=block.copy(content=if(block.kind=="code")cell.state.annotatedString.text else if(block.kind in listOf("image","rule"))block.content else cell.markdown(),rows=rows.map{row->row.map{it.markdown()}},checked=checked)
@@ -55,11 +55,11 @@ private class Piece(val block:RichBlock) {
 @Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier,usePrompt:()->Unit) {
     val context=LocalContext.current;val scope=rememberCoroutineScope();val workspace=vm.state.collectAsState().value.workspace?:return
     val pieces=remember(note.id){RichBlocks.parse(note.content).map(::Piece).toMutableStateList()}
-    var active by remember(note.id){mutableStateOf(pieces.firstOrNull()?.cell)}
+    var active by remember(note.id){mutableStateOf(pieces.firstNotNullOfOrNull{it.cells().firstOrNull()})}
     var lastSaved by remember(note.id){mutableStateOf(note.content)}
     var variableDialog by remember{mutableStateOf(false)};var linkDialog by remember{mutableStateOf(false)};var findDialog by remember{mutableStateOf(false)};var tableDialog by remember{mutableStateOf(false)};var removePiece by remember{mutableStateOf<Piece?>(null)}
     fun publish(){val value=RichBlocks.serialize(pieces.map{it.snapshot()});if(value!=lastSaved){lastSaved=value;vm.content(note.id,value)}}
-    LaunchedEffect(note.content){val current=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?.content?:return@LaunchedEffect;if(current!=lastSaved){pieces.clear();pieces.addAll(RichBlocks.parse(current).map(::Piece));active=pieces.firstOrNull()?.cell;lastSaved=current}}
+    LaunchedEffect(note.content){val current=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?.content?:return@LaunchedEffect;if(current!=lastSaved){pieces.clear();pieces.addAll(RichBlocks.parse(current).map(::Piece));active=pieces.firstNotNullOfOrNull{it.cells().firstOrNull()};lastSaved=current}}
     fun insertBlock(block:RichBlock){
         val index=pieces.indexOfFirst{p->p.cells().any{it===active}}.let{if(it<0)pieces.lastIndex else it}
         val current=pieces.getOrNull(index);val inserted=Piece(block)
