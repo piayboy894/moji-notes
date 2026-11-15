@@ -1,11 +1,17 @@
-name: Verify published Android editor
+name: Inspect signed Android editor
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build workflow containing the signed APK
+        type: string
+        required: true
 permissions:
   contents: read
+  actions: read
 jobs:
   reproduce:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -16,9 +22,13 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: Moji-Android-build
+          path: android/app/build
       - run: |
-          mkdir -p android/app/build/outputs/apk/release
-          curl -fsSL https://github.com/piayboy894/moji-notes/releases/download/android-v1.1.0/Moji-Notes-Android-1.1.0.apk -o android/app/build/outputs/apk/release/app-release.apk
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
@@ -28,12 +38,12 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           working-directory: android
-          script: python3 tools/release-editor-smoke.py
+          script: python3 ../tools/probe-android-editor.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: published-editor-results
-          path: android/app/build/outputs/editor-smoke/
+          name: signed-editor-probe
+          path: android/app/build/outputs/editor-probe/
