@@ -11,10 +11,29 @@ def capture(name):
     REPORT.parent.mkdir(parents=True,exist_ok=True)
     (REPORT.parent/(name+'.png')).write_bytes(subprocess.check_output(['adb','exec-out','screencap','-p']))
 def select_picker_file(name):
+    # Recents is an index, not a directory listing. Browse the actual shared
+    # Pictures directory so the test does not depend on gallery indexing.
+    model=adb('shell','getprop','ro.product.model').strip().lower()
+    def storage_root(root):
+        for node in root.iter('node'):
+            label=(node.get('text') or node.get('content-desc','')).strip().lower()
+            if label and (label in ('internal storage','internal shared storage') or model==label or label.startswith('sdk_') or label.startswith('pixel ')):return node
+    tap(wait_node(description='Show roots'))
+    root=hierarchy();storage=storage_root(root)
+    if storage is None:
+        adb('shell','input','keyevent','KEYCODE_BACK');tap(wait_node(description='More options'))
+        menu=hierarchy()
+        show=next((n for n in menu.iter('node') if (n.get('text') or '').lower()=='show internal storage'),None)
+        if show is not None:tap(show)
+        else:adb('shell','input','keyevent','KEYCODE_BACK')
+        tap(wait_node(description='Show roots'));root=hierarchy();storage=storage_root(root)
+    if storage is None:raise RuntimeError('Shared storage root not found: '+str([n.get('text') for n in root.iter('node') if n.get('text')]))
+    tap(storage);tap(wait_node(text='Pictures'))
     until=time.monotonic()+45
     while time.monotonic()<until:
         for n in hierarchy().iter('node'):
-            if name not in n.get('text','') and name not in n.get('content-desc',''):continue
+            label=n.get('text','')+' '+n.get('content-desc','')
+            if name not in label and name.rsplit('.',1)[0] not in label:continue
             tap(n)
             # DocumentsUI may require confirmation when multiple files are allowed.
             for button in hierarchy().iter('node'):
