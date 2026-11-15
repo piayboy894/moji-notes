@@ -69,8 +69,22 @@ def launch():
 def wait_editor(contains=None,timeout=45):
     until=time.monotonic()+timeout
     while time.monotonic()<until:
-        for n in hierarchy().iter('node'):
-            if n.get('content-desc')=='笔记正文' or n.get('resource-id','').endswith('note-content'):
-                if contains is None or contains in n.get('text','') or contains in ''.join(c.get('text','') for c in n.iter('node')):return n
+        root=hierarchy()
+        candidates=[]
+        for web in root.iter('node'):
+            if web.get('class')=='android.webkit.WebView':candidates.extend(n for n in web.iter('node') if n.get('class')=='android.widget.EditText')
+        candidates.extend(n for n in root.iter('node') if n.get('content-desc')=='笔记正文' or n.get('resource-id','').endswith('note-content'))
+        for n in candidates:
+            if contains is None or contains in n.get('text','') or contains in ''.join(c.get('text','') for c in n.iter('node')):return n
         time.sleep(.5)
     raise RuntimeError('Shared editor is not ready: '+str(contains))
+
+def wait_embedded_image(name,timeout=45):
+    until=time.monotonic()+timeout
+    while time.monotonic()<until:
+        for web in hierarchy().iter('node'):
+            if web.get('class')!='android.webkit.WebView':continue
+            for node in web.iter('node'):
+                if name in node.get('content-desc','') or node.get('text')==name:return node
+        time.sleep(.5)
+    raise RuntimeError('Embedded image is not visible: '+name)

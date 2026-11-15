@@ -82,7 +82,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         </TooltipTrigger>
         <TooltipContent>
           {tooltip}
-          <ShortcutDisplay shortcuts={shortcuts} />
         </TooltipContent>
       </Tooltip>
     )

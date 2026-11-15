@@ -21,8 +21,8 @@ test('variables are explicit atomic nodes, literal braces stay text, undo surviv
 })
 test('images upload locally, display and persist after reopening with no external request',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));const remote:string[]=[];page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1')&&!r.url().startsWith('data:')&&!r.url().startsWith('blob:'))remote.push(r.url())});
- await page.getByRole('textbox',{name:'笔记正文'}).click();await page.getByRole('button',{name:'插入图片',exact:true}).click();
- await page.locator('input[type=file]').setInputFiles({name:'image.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuoAAAAASUVORK5CYII=','base64')});
+ await page.getByRole('textbox',{name:'笔记正文'}).click();const picking=page.waitForEvent('filechooser');await page.getByRole('button',{name:'插入图片',exact:true}).click();
+ await (await picking).setFiles({name:'image.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuoAAAAASUVORK5CYII=','base64')});
  const image=page.locator('.tiptap img');await expect(image).toHaveCount(1);await expect(image).toHaveAttribute('src',/^data:image/);expect(await image.evaluate((i:HTMLImageElement)=>i.complete&&i.naturalWidth>0)).toBe(true);
  const saved=await js(page,'window.MojiEditor.snapshot()');await load(page,saved.content);await expect(image).toHaveCount(1);expect(errors).toEqual([]);expect(remote).toEqual([])
 })
@@ -41,3 +41,12 @@ test('old archive text stays literal, composition commits Chinese without creati
 })
 
 test('toolbar stays visible after loading, scroll and window resize',async({page})=>{const bar=page.getByRole('toolbar');await expect(bar).toBeInViewport();await js(page,"window.MojiEditor.editor.commands.insertContent('<p>正文</p>'.repeat(100))");await js(page,"window.MojiEditor.editor.chain().focus('end').run()");await expect(bar).toBeInViewport();await page.setViewportSize({width:360,height:420});await expect(bar).toBeInViewport()})
+test('official toolbar toggles lists, quotation, code and alignment back to ordinary text',async({page})=>{
+ const body=page.getByRole('textbox',{name:'笔记正文'});await body.click();await page.keyboard.insertText('Toolbar text');
+ for(const label of ['引用','代码块']){await page.getByRole('button',{name:label,exact:true}).click();await page.getByRole('button',{name:label,exact:true}).click();expect(await html(page)).not.toContain(label==='引用'?'<blockquote>':'<pre>')}
+ for(const label of ['项目列表','编号列表','待办事项']){await page.getByRole('button',{name:'列表',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.getByRole('button',{name:'列表',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();expect(await html(page)).not.toMatch(/<(ul|ol)/)}
+ await page.getByRole('button',{name:'居中',exact:true}).click();expect(await html(page)).toContain('text-align: center');await page.getByRole('button',{name:'左对齐',exact:true}).click();
+ await body.press('Control+a');for(const label of ['加粗','斜体','下划线','删除线'])await page.getByRole('button',{name:label,exact:true}).click();const text=await html(page);for(const tag of ['strong','em','u','s'])expect(text).toContain('<'+tag+'>');
+})
+
+test('canceling image selection leaves the document unchanged',async({page})=>{await page.getByRole('textbox',{name:'笔记正文'}).click();await page.keyboard.insertText('保留正文');const before=await html(page);const picking=page.waitForEvent('filechooser');await page.getByRole('button',{name:'插入图片',exact:true}).click();await (await picking).setFiles([]);expect(await html(page)).toBe(before)})

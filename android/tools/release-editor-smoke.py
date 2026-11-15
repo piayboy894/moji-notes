@@ -18,14 +18,14 @@ try:
     tap(wait_node(description='新建记录'));tap(wait_editor());tool('引用');adb('shell','input','text','Quote');adb('shell','input','keyevent','KEYCODE_ENTER','KEYCODE_ENTER');adb('shell','input','text','Normal')
     wait_editor(contains='Normal');checks.append('signed shared editor quote inserts, exits with Enter and accepts normal text');capture('01-quote')
     tap(wait_node(text='插入变量'));enter('variable-name','Audience');tap(wait_node(text='插入'));wait_editor(contains='Audience');checks.append('native variable dialog inserts an atomic variable into the signed WebView');capture('02-variable')
-    tool('插入图片');tap(wait_node(contains='选择图片'));adb('shell','input','keyevent','KEYCODE_BACK');wait_editor(contains='Audience');checks.append('canceling system image selection preserves the document')
+    tool('插入图片');adb('shell','input','keyevent','KEYCODE_BACK');wait_editor(contains='Audience');checks.append('canceling system image selection preserves the document')
     import struct,zlib,random
     def chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
     raw=b''.join(b'\x00'+random.Random(row).randbytes(2000*3) for row in range(1200))
     picture=REPORT.parent/'Moji-Editor-Test.png';picture.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>2I5B',2000,1200,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
     adb('push',str(picture),'/sdcard/Download/Moji-Editor-Test.png');adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file:///sdcard/Download/Moji-Editor-Test.png')
-    tap(wait_node(contains='选择图片'));tap(wait_node(description_contains='Moji-Editor-Test.png,'));wait_node(description='Moji-Editor-Test.png');checks.append('real system image picker embeds and displays a large image offline');capture('03-image')
-    adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Audience');wait_node(description='Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart')
+    tool('插入图片');tap(wait_node(description_contains='Moji-Editor-Test.png'));wait_embedded_image('Moji-Editor-Test.png');checks.append('real system image picker embeds and displays a large image offline');capture('03-image')
+    adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Audience');wait_embedded_image('Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart')
     REPORT.write_text(json.dumps({'success':True,'framework':'Compose / Android WebView / Tiptap 3.34.0','checks':checks},indent=2))
 except Exception as error:
     REPORT.parent.mkdir(parents=True,exist_ok=True);REPORT.write_text(json.dumps({'success':False,'error':str(error),'checks':checks},indent=2));capture('failure-screen')

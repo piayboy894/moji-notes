@@ -11,10 +11,12 @@ import { useIsMobile } from "@/hooks/use-mobile"
 // --- Lib ---
 import {
   isExtensionAvailable,
+  handleImageUpload,
   isNodeTypeSelected,
 } from "@/lib/tiptap-utils"
 
 // --- Icons ---
+import {reportImageError} from "@/native"
 import { ImagePlusIcon } from "@/components/tiptap-icons/image-plus-icon"
 
 export const IMAGE_UPLOAD_SHORTCUT_KEY = "mod+shift+i"
@@ -67,17 +69,20 @@ export function insertImage(editor: Editor | null): boolean {
   if (!editor || !editor.isEditable) return false
   if (!canInsertImage(editor)) return false
 
-  try {
-    return editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: "imageUpload",
-      })
-      .run()
-  } catch {
-    return false
+  document.getElementById("moji-image-file")?.remove()
+  const input=document.createElement("input")
+  input.id="moji-image-file";input.type="file";input.accept="image/*";input.multiple=true;input.style.display="none"
+  input.addEventListener("cancel",()=>input.remove(),{once:true})
+  input.onchange=async()=>{
+    const files=Array.from(input.files||[]).slice(0,3);input.remove()
+    if(!files.length)return
+    try{
+      const nodes=await Promise.all(files.map(async file=>({type:"image",attrs:{src:await handleImageUpload(file),alt:file.name,title:file.name}})))
+      if(!editor.isDestroyed)editor.chain().focus().insertContent(nodes).run()
+    }catch{reportImageError()}
   }
+  document.body.append(input);input.click();return true
+
 }
 
 /**

@@ -16,14 +16,18 @@ adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
 # Retain captures even if a native assertion fails before the emulator shuts down.
 ./gradlew :app:connectedDebugAndroidTest --no-daemon
 moji_test_status=$?
-adb pull /sdcard/Download/moji-native-ui ../android-ui-screenshots
-moji_capture_status=$?
+moji_capture_status=1
+for moji_attempt in 1 2 3; do
+  adb wait-for-device
+  if adb pull /sdcard/Download/moji-native-ui ../android-ui-screenshots; then moji_capture_status=0; break; fi
+done
 
 # The signed APK checks are independent of the instrumentation package. Always
 # collect both results, so a failing harness cannot hide a production regression.
 moji_install_status=0
 moji_editor_status=0
 if [ -n "${MOJI_KEYSTORE_PATH:-}" ]; then
+  adb wait-for-device
   python3 tools/release-install-smoke.py
   moji_install_status=$?
   python3 tools/release-editor-smoke.py
