@@ -1,59 +1,41 @@
-# Windows 与 Android 原生架构
-
-墨记由两个原生客户端组成，共用数据格式、加密协议和 GitHub 存档目录。Windows 10/11 使用 .NET 10 LTS、WPF 与 AvalonEdit；Android 8.0 及以上使用 Kotlin、Jetpack Compose 和 Android 系统接口。两端均离线运行，Markdown 预览使用原生视图。
+# 原生架构
 
 | 层次 | Windows | Android |
 | --- | --- | --- |
-| 界面 | WPF、AvalonEdit、FlowDocument | Compose、BasicTextField、Markwon TextView |
-| 会话状态 | WorkspaceViewModel | MojiViewModel、StateFlow、协程 |
-| 数据与加密 | Moji.Core、AES-GCM | Kotlin 数据层、AES-GCM |
-| 系统集成 | 文件对话框、剪贴板、打印、锁屏事件 | SAF、BiometricPrompt、分享、WindowManager、安装器 |
-| 发布 | 自包含 x64/ARM64 EXE、ZIP | 固定发布密钥签名 APK |
+| 界面 | .NET 10、WPF | Kotlin、Jetpack Compose |
+| 正文 | RichTextBox、FlowDocument | 原生 RichTextState、Compose 文本与结构控件 |
+| 状态 | WorkspaceViewModel、不可变记录 | MojiViewModel、StateFlow、协程 |
+| 本地 | 原子 JSON 文件与上一份备份 | 原子 JSON 文件与上一份备份 |
+| 发布 | 自包含 x64 / ARM64 EXE | 固定证书 APK |
 
-共用协议通过实际 Windows 密文测试向量验证，原生界面分别适配平台。维护时需要同步审查两个客户端的数据格式与存档协议；这是保留各自系统交互能力的成本。
+两端共用项目数据与手动云存档协议，UI 遵循各自系统输入、选择、剪贴板、文件和窗口机制。无浏览器运行时。
 
-## 分层
+## 正文与变量
 
-`Moji.Core` 不依赖 WPF，处理不可变记录、版本、AES-GCM、密钥生命周期、原子存储、TOTP、搜索、模板、存档和更新。`Moji.App` 的 `WorkspaceViewModel` 管理会话、异步存储与状态；视图分为工作台、编辑器、账户字段和模态操作。AvalonEdit 提供原生文本缓冲、选区、撤销与查找；Markdig 只解析 Markdown AST，由 `MarkdownDocument` 生成原生 FlowDocument，不生成网页。
+只有一个可编辑的所见即所得正文。Markdown 是兼容旧数据和跨端交换的内部格式，不是用户编辑模式。Windows 使用 Markdig AST 构造 FlowDocument；Android 使用本地维护的 Compose Rich Editor，任务、表格、图片等结构以原生控件编辑。库版本固定并随源代码包含，局部修改记录在 vendor README。
 
-Android 的 `MojiViewModel` 负责解锁会话、记录操作、防抖保存与存档；`VaultStore` 只保存密文；`CloudSaveService` 负责 Contents API 的条件写入。Compose 按窗口约束选择导航、列表与编辑面板；Markwon 解析后输出原生 TextView，不执行 HTML。AndroidKeyStore 仅保存设备验证所需的包装密钥，不替代空间主密码。
+普通输入保存时转义，避免重开后将用户文字解释成格式命令。Android 已关闭库的隐式列表识别。待办状态、表格结构、样式修改均保存并参与撤销重做。表格内部使用单元格富文本状态，支持键盘 Tab 导航。
+
+变量是有 ID 的独立内联对象。记录及历史保存 `variables` 元数据，正文中的内部 `moji-variable:` 引用仅在 ID 已登记时有效。手打 `{{...}}` 不触发变量。替换采用一次匹配，不递归解释用户填写的内容；复制输出可见正文，不暴露格式代码或内部 ID。
 
 ## 状态与持久化
 
-UI 修改产生新的 Workspace / Note 记录。350 ms 防抖写入经过单写者信号量，序列化后加密。临时文件刷盘后使用 File.Replace 原子替换，同时保留上一份密文。锁定、关闭与更新先等待保存完成；保存失败时保留窗口与数据供备份。
+编辑产生新的 Workspace / Note，经防抖和单写者队列落盘。临时文件刷盘后原子替换 `workspace.json`，保留上一份 `.bak`。关闭和更新先等待保存完成。新装仅创建三个空记事本。
 
-密钥只在解锁会话保留，以不可重新导出的字节数组包装；锁定时清零。设备上只存密文，演示空间不落盘。每次加密使用新的 nonce。
+本地不使用主密码或加密密钥，也没有闲置、失焦、后台锁定。检测到旧 `vault.moji` 且没有新 JSON 时，要求一次旧密码，验证并写入新存储后才进入工作台；不能解密时不会覆盖旧数据。旧标签字段仅为兼容备份保留，界面及搜索不使用。
 
-## 全局手动云存档
+## 云存档
 
-本机仍以 350 ms 防抖自动加密保存。用户在全局窗口选择新建、覆盖、读取或删除，存档包含整套 notebooks / notes（含密码、标签、收藏、归档、回收站和历史），不受当前选中的记事本或记录影响。后台没有云同步任务，也没有合并算法或方向判断。
+用户管理整套数据的具名快照：新建、覆盖、读取、删除。没有自动云任务或合并。捕获范围为 notebooks / notes，读取保留当前设备设置和 GitHub 连接。
 
-`GameSaves.Capture` 仅输出项目数据，不带本机授权和设备偏好；`GameSaves.Apply` 用存档整体替换项目数据，保留本机主密码、设备偏好和连接。读取前确认，验证完成后先原子写入密文，再切换内存状态。加密备份恢复同样采用明确的整库读取。
+数据仓库默认空。`moji-notes/<hash40>/index.moji` 与 `<uuid>.moji` 分别保存加密目录和整套数据。AES-GCM 与 PBKDF2 协议沿用旧版；Token 不进入云文件。一次 Git 提交更新目录和数据，使用既有树作为 base tree，保留其他路径；引用仅快进，并发变化时停止，要求用户刷新后重新操作。
 
-私有数据仓库的 `moji-notes/<hash40>/index.moji` 保存加密的名称、时间、数量和 blob SHA，`<uuid>.moji` 保存加密的完整数据。使用既有仓库树作为 base_tree，一次 Git 提交更新目录和数据；引用只允许快进，并发变化时停止等待用户刷新，绝不强制覆盖、重试或合并。其他软件的目录不参与改写。旧版单文件作为虚拟的「旧版存档」由用户明确选择读取、覆盖或删除。
+## 窗口与更新
 
-最多 500 份具名存档。列表只在点击刷新时请求；读取按选中条目的不可变 blob SHA 取得所预览的那一份。每次新建或覆盖使用新 nonce 和派生盐，名称与目录同样加密。
+Android 按窗口宽高 dp 布局，窄窗口单页、宽窗口列表加正文、大窗口侧栏。没有代码/预览双栏。支持旋转、软键盘、鼠标、硬件键盘及竖向分隔铰链；可调整 Activity 配合三星多窗口配置。
 
-## 安卓窗口与输入
+Windows 和 Android 分别匹配自己的公开 Release 资产。Windows 检查 SHA-256 后由新 EXE 替换旧程序；Android 核对摘要、包名、版本和当前证书后启动系统安装器。两端数据与程序分开存储。
 
-单 Activity 允许调整尺寸与旋转；布局按当前窗口 dp 尺寸决定，手机单页编辑，宽窗口双栏，宽且足够高的窗口增加侧边导航。超宽首页限制内容宽度与列数。WindowManager 的竖向分隔铰链可作为分栏间隔。
+## 验证
 
-三星多窗口与 DeX 使用标准可调整窗口配置、硬件键盘快捷键和鼠标交互。单纯失去焦点不锁定，进入后台或系统锁屏按策略锁定。实际三星设备、外接显示器和特殊固件仍需真机验证，已验证范围见 [PROGRESS](PROGRESS.md)。
-
-## 更新
-
-UpdateService 只读取指定公开项目的稳定 Releases，过滤架构与固定文件名，不读取数据同步授权。EXE 和 SHA256SUMS.json 都限定到该项目的 GitHub release 下载路径。完整下载、长度和 SHA-256 检查通过后才允许启动更新。
-
-新的自包含 EXE 以 `--apply-update` 模式运行，等待旧进程退出、保存上一版本、替换程序并重新启动。没有 PowerShell 脚本、运行时远程代码或静默提权。目录不可写时保留已下载文件并显示手动替换路径。
-
-SHA 校验不替代发行者身份签名；Authenticode 可在正式对外发行时接入。当前信任边界是发布仓库控制权与 GitHub HTTPS。
-
-Android 更新只匹配 `android-v*` Release 与固定 APK 文件名，校验 GitHub 提供的 SHA-256、APK 包名、版本及与当前安装一致的签名证书，再交给系统安装器。设备安装授权由 Android 负责；未配置固定发布签名密钥时不发布正式 APK。Windows 与 Android 的版本标签和资产过滤分开。
-
-## 选择与边界
-
-WPF 提供成熟 Windows 控件、可访问性、字体渲染、系统剪贴板与打印支持，适合 Windows 优先的文本工具。自包含发行换来较大的文件体积，但终端用户不必安装 .NET。Android 使用系统生命周期、输入法、生物验证、分享与多窗口接口。两端无需后台服务；GitHub 存储加密快照，适合个人文本资料，不作为实时多人协作文档服务。
-
-原生 Markdown 支持常见标题、强调、列表、清单、代码、引用、表格、链接及内嵌图片；HTML 按文字展示。当前未实现富文本所见即所得和实时多人共同编辑；Markdown 是文本的标准存储格式。
-
-测试包括两端核心测试、Windows 发布版 WPF 进程启动与编辑、Android 模拟器原生仪器测试、跨语言密文、加密持久化、锁定解锁、窗口旋转与多尺寸布局。截图直接来自 WPF 或 Android 原生渲染。
+核心测试覆盖数据持久化、旧数据兼容、云存档协议、搜索、快捷键和变量。WPF 发布程序执行原生控件操作并生成截图；Android 仪器测试覆盖多尺寸、格式、待办、表格、变量、密码编辑和快捷键。正式 APK 另做新装、重装、从公开旧版覆盖升级与数据迁移测试。实际三星 DeX、外接显示器和 Windows ARM64 运行仍需对应硬件验证。

@@ -5,3 +5,6 @@ dependencyResolutionManagement {
 }
 rootProject.name = "MojiAndroid"
 include(":app")
+
+include(":rich-editor")
+project(":rich-editor").projectDir = file("vendor/rich-editor")

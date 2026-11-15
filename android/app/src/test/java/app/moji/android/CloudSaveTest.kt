@@ -12,18 +12,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudSaveTest {
-    private fun state() = Seed.create().copy(sync = SyncSettings(token = "fake-private-token", code = "ManualSaveCode2026"))
+    private fun state() = TestWorkspace.create().copy(sync = SyncSettings(repository = "test-owner/xuxian-data", token = "fake-private-token", code = "ManualSaveCode2026"))
     @Test fun loadingReplacesAllProjectsWithoutMergingAndKeepsDevicePreferences() {
-        val local = state().copy(preferences = Preferences(theme = "dark", autoSync = true)); val source = Seed.create(true)
+        val local = state().copy(preferences = Preferences(theme = "dark", autoSync = true)); val source = TestWorkspace.create()
         val loaded = GameSaves.apply(local, GameSaves.capture(source)); assertEquals(source.notebooks.map { it.id }, loaded.notebooks.map { it.id }); assertEquals(source.notes.map { it.id }, loaded.notes.map { it.id }); assertTrue(loaded.notes.none { n -> local.notes.any { it.id == n.id } }); assertEquals(local.sync, loaded.sync); assertEquals("dark", loaded.preferences.theme); assertFalse(loaded.preferences.autoSync)
     }
     @Test fun fullSaveIncludesTrashArchiveAndHistoryAcrossAllModes() {
         val original = state(); val source = original.changeNote(original.notes[0].id, true) { it.copy(content = "save-data", archived = true, deletedAt = now()) }
         val payload = GameSaves.capture(source); val restored = GameSaves.apply(Workspace(), payload)
-        assertEquals(source.notes.size, restored.notes.size); assertNotNull(restored.notes[0].deletedAt); assertTrue(restored.notes[0].archived); assertTrue(restored.notes[0].history.isNotEmpty()); assertEquals(2, restored.notes.map { it.notebookId }.distinct().size)
+        assertEquals(source.notes.size, restored.notes.size); assertNotNull(restored.notes[0].deletedAt); assertTrue(restored.notes[0].archived); assertTrue(restored.notes[0].history.isNotEmpty()); assertEquals(3, restored.notes.map { it.notebookId }.distinct().size)
         val text = json.encodeToString(payload); assertFalse(text.contains("fake-private-token")); assertFalse(text.contains("preferences"))
     }
-    @Test fun invalidLoadDoesNotProduceAPartialWorkspace() { val local = state(); assertThrows(IllegalArgumentException::class.java) { GameSaves.apply(local, SyncPayload(1, "bad", emptyList(), local.notes)) }; assertEquals(2, local.notes.size) }
+    @Test fun invalidLoadDoesNotProduceAPartialWorkspace() { val local = state(); assertThrows(IllegalArgumentException::class.java) { GameSaves.apply(local, SyncPayload(1, "bad", emptyList(), local.notes)) }; assertEquals(3, local.notes.size) }
     @Test fun windowsGeneratedGlobalCatalogAndFullDataDecryptOnAndroid() {
         val fixture = json.parseToJsonElement(javaClass.getResource("/windows-save-catalog-v1.json")!!.readText()).jsonObject; val password = fixture.getValue("password").jsonPrimitive.content
         fun envelope(field: String) = json.decodeFromJsonElement<Envelope>(fixture.getValue(field))

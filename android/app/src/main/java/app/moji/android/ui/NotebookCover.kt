@@ -3,8 +3,6 @@ package app.moji.android.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,7 +59,7 @@ import app.moji.android.data.NoteMode
             Spacer(Modifier.height(if (small) 5.dp else 10.dp))
             Text("${count.toString().padStart(2, '0')} 条记录", fontSize = if (small) 11.sp else 14.sp, color = Color(0xFF53604C))
             Spacer(Modifier.height(if (small) 10.dp else 24.dp))
-            Icon(Icons.Outlined.ArrowForward, null, Modifier.size(if (small) 18.dp else 24.dp), tint = Color(0xFF57654F))
+            Icon(MojiIcons.ArrowForward, null, Modifier.size(if (small) 18.dp else 24.dp), tint = Color(0xFF57654F))
         }
     }
 }

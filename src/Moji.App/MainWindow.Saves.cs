@@ -26,12 +26,12 @@ public partial class MainWindow
         header.Children.Add(actions);
         var status = Ui.Text("", 11); status.TextWrapping = TextWrapping.Wrap; status.Margin = new Thickness(0,0,0,12); header.Children.Add(status);
         var grid = new Grid(); panel.Children.Add(grid); var list = new ListBox { Margin = new Thickness(-5,0,-5,0) }; grid.Children.Add(list);
-        var empty = Ui.Text(VM.Demo ? "解锁本机空间后管理云存档" : "点击刷新读取云存档", 13); empty.HorizontalAlignment = HorizontalAlignment.Center; empty.VerticalAlignment = VerticalAlignment.Center; empty.Foreground = Ui.Resource("Sub"); grid.Children.Add(empty);
+        var empty = Ui.Text("点击刷新读取云存档", 13); empty.HorizontalAlignment = HorizontalAlignment.Center; empty.VerticalAlignment = VerticalAlignment.Center; empty.Foreground = Ui.Resource("Sub"); grid.Children.Add(empty);
         void Enable()
         {
-            create.IsEnabled = catalog != null && !busy && !VM.Demo;
-            overwrite.IsEnabled = read.IsEnabled = delete.IsEnabled = selected != null && !busy && !VM.Demo;
-            refresh.IsEnabled = !busy && !VM.Demo; settings.IsEnabled = list.IsEnabled = !busy;
+            create.IsEnabled = catalog != null && !busy;
+            overwrite.IsEnabled = read.IsEnabled = delete.IsEnabled = selected != null && !busy;
+            refresh.IsEnabled = !busy; settings.IsEnabled = list.IsEnabled = !busy;
         }
         void Render(string? keep = null)
         {

@@ -12,6 +12,11 @@ internal static class Ui
     { var button = new Button { Content = text, Style = (Style)Application.Current.FindResource(primary ? "PrimaryButton" : typeof(Button)), ToolTip = tip }; button.Click += (_, _) => action(); return button; }
     public static Button Small(string text, Action action, string? tip = null)
     { var b = Button(text, action, false, tip); b.Padding = new Thickness(9,6,9,6); b.FontSize = 11; b.Margin = new Thickness(2,0,2,0); return b; }
+    public static Button Icon(string kind, Action action, string label)
+    {
+        var button = Button("",action,false,label); button.Content = new NativeIcon { Kind=kind, Width=22, Height=22 }; button.MinWidth=40; button.MinHeight=40; button.Padding=new Thickness(8); button.Margin=new Thickness(2);
+        System.Windows.Automation.AutomationProperties.SetName(button,label); return button;
+    }
     public static StackPanel Stack(params UIElement[] children) { var panel = new StackPanel(); foreach (var child in children) panel.Children.Add(child); return panel; }
     public static StackPanel Row(params UIElement[] children) { var panel = Stack(children); panel.Orientation = Orientation.Horizontal; return panel; }
     public static Border Card(UIElement content, string? background = null, double radius = 9) => new() { Child = content, Background = background == null ? Resource("Panel") : Brush(background), BorderBrush = Resource("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(radius) };

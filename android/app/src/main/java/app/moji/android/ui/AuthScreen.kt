@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,28 +18,20 @@ import app.moji.android.*
 import app.moji.android.R
 import app.moji.android.security.Envelope
 
-@Composable fun AuthScreen(s: AppState, vm: MojiViewModel, activity: MainActivity, backup: Envelope?, import: () -> Unit) {
-    var password by remember { mutableStateOf("") }; var confirmation by remember { mutableStateOf("") }
-    val existing = s.exists || backup != null
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = false
-        Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Column(Modifier.widthIn(max = 440.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(if (wide) 40.dp else 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Brand(); Spacer(Modifier.height(18.dp))
-                    Text(if (existing) "解锁墨记" else "创建空间", style = MaterialTheme.typography.titleLarge)
-                    Field(if (existing) "主密码" else "设置主密码（至少 10 位）", password, Modifier.testTag("auth-password"), secret = true) { password = it }
-                    if (!existing) Field("确认主密码", confirmation, Modifier.testTag("auth-confirm"), secret = true) { confirmation = it }
-                    if (s.error.isNotBlank()) Text(s.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                    Button(onClick = { vm.authenticate(password, confirmation, backup) }, enabled = !s.busy && !s.loading && password.isNotBlank() && (s.error != "本地数据无法读取，请恢复备份" || backup != null), modifier = Modifier.fillMaxWidth().height(50.dp).testTag("create-vault"), shape = RoundedCornerShape(13.dp)) { if (s.busy || s.loading) CircularProgressIndicator(Modifier.size(21.dp), strokeWidth = 2.dp) else { Text(if (existing) "解锁空间" else "创建空间"); Spacer(Modifier.weight(1f)); Icon(Icons.Outlined.ArrowForward, null) } }
-                    if (existing && s.biometricEnabled && backup == null) OutlinedButton(onClick = { vm.biometric.unlock(activity, vm::biometricUnlock, vm::message) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Fingerprint, null); Spacer(Modifier.width(8.dp)); Text("使用设备验证解锁") }
-                    Text("请妥善保管主密码", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    TextButton(onClick = vm::demo, modifier = Modifier.testTag("demo")) { Text("查看演示"); Spacer(Modifier.width(8.dp)); Icon(Icons.Outlined.NorthEast, null, Modifier.size(16.dp)) }
-                    TextButton(onClick = import) { Icon(Icons.Outlined.FileUpload, null, Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text("恢复备份") }
-                }
-            }
+@Composable fun StartupScreen(s: AppState, vm: MojiViewModel) {
+    var password by remember { mutableStateOf("") }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 400.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Brand()
+            if (s.loading) CircularProgressIndicator(Modifier.size(24.dp))
+            else if (s.needsMigration) {
+                Text("迁移旧版数据", style = MaterialTheme.typography.titleLarge)
+                Text("输入一次旧密码，以后直接进入。", style = MaterialTheme.typography.bodyMedium)
+                Field("旧密码", password, Modifier.testTag("migration-password"), secret = true) { password = it }
+                Button(onClick = { vm.migrate(password) }, enabled = !s.busy && password.isNotBlank(), modifier = Modifier.testTag("migrate")) { Text("迁移并打开") }
+            } else OutlinedButton(onClick = { vm.openLocal() }) { Text("重试") }
+            if (s.error.isNotBlank()) Text(s.error, color = MaterialTheme.colorScheme.error)
         }
     }
 }
-@Composable fun Brand() { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { Image(painterResource(R.drawable.moji_icon), null, Modifier.size(39.dp)); Text("墨记", fontSize = 24.sp, fontWeight = FontWeight.SemiBold); Text("M O J I", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+@Composable fun Brand() { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { Image(painterResource(R.drawable.moji_icon), null, Modifier.size(39.dp)); Text("墨记", fontSize = 24.sp, fontWeight = FontWeight.SemiBold) } }

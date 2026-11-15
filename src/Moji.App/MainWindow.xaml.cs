@@ -7,7 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using ICSharpCode.AvalonEdit;
+using System.Windows.Documents;
 using Moji.Core;
 using Microsoft.Win32;
 
@@ -17,18 +17,16 @@ public partial class MainWindow : Window
     public WorkspaceViewModel VM { get; }
     private readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(4) };
     private readonly DispatcherTimer sessionTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly DispatcherTimer previewTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
-    private long lastInput = Clock.Now;
-    private bool locking, closing, loadingEditor, focusMode;
+    private bool closing, loadingEditor, focusMode;
     private ListBox? noteList;
     private readonly ObservableCollection<NoteRow> noteRows = [];
     private ContentControl? editorHost;
-    private TextEditor? textEditor;
-    private RichTextBox? preview;
+    private RichTextBox? textEditor;
     private TextBox? titleBox;
     private TextBlock? editorStatus;
     private TextBlock? otpText;
     private string renderedId = "";
+    private string editingCredentialId = "";
     private string clipboardSecret = "";
     private long clipboardAt;
     private UpdatePackage? availableUpdate;
@@ -39,34 +37,26 @@ public partial class MainWindow : Window
         InitializeComponent(); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
         VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = VM.SaveStatus; };
         toastTimer.Tick += (_, _) => { ToastBorder.Visibility = Visibility.Collapsed; toastTimer.Stop(); };
-        previewTimer.Tick += (_, _) => { previewTimer.Stop(); RefreshPreview(); };
-        sessionTimer.Tick += async (_, _) => await SessionTick(); sessionTimer.Start();
-        InputManager.Current.PreProcessInput += InputReceived;
-        SystemEvents.SessionSwitch += SessionSwitch; SystemEvents.PowerModeChanged += PowerModeChanged;
+        sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Loaded += async (_, _) => { if (smoke) return; await ShowAuthAsync(); };
+        Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
-    private void InputReceived(object sender, PreProcessInputEventArgs e) { if (e.StagingItem.Input is KeyEventArgs or MouseButtonEventArgs or MouseWheelEventArgs) lastInput = Clock.Now; }
-    private void SessionSwitch(object sender, SessionSwitchEventArgs e) { if (e.Reason == SessionSwitchReason.SessionLock) Dispatcher.InvokeAsync(async () => await LockWorkspace()); }
-    private void PowerModeChanged(object sender, PowerModeChangedEventArgs e) { if (e.Mode == PowerModes.Suspend) Dispatcher.InvokeAsync(async () => await LockWorkspace()); }
-    private async Task SessionTick()
+    private void SessionTick()
     {
-        if (!VM.IsUnlocked || locking) return;
-        if (Clock.Now - lastInput >= VM.State!.Preferences.AutoLockMinutes * 60_000) { await LockWorkspace(); return; }
+        if (!VM.IsUnlocked) return;
         if (!string.IsNullOrEmpty(clipboardSecret) && Clock.Now - clipboardAt >= 30000) ClearSecretClipboard();
         var note = CurrentNote();
         if (otpText != null && note?.Otp.Length > 0) { try { otpText.Text = RecordTools.Totp(note.Otp) + $"    {30 - DateTimeOffset.Now.ToUnixTimeSeconds() % 30}s"; } catch { otpText.Text = "密钥格式不正确"; } }
     }
     private void DataChanged(string kind)
     {
-        if (kind == "lock") { Shell.Visibility = Visibility.Collapsed; AuthHost.Visibility = Visibility.Visible; Body.Content = null; noteRows.Clear(); textEditor = null; preview = null; titleBox = null; otpText = null; renderedId = ""; foreach (var window in OwnedWindows.Cast<Window>().ToList()) window.Close(); Ui.Theme("light"); _ = ShowAuthAsync(); return; }
-        if (kind == "unlock")
-        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; lastInput = Clock.Now; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked && !VM.Demo) await CheckUpdates(false); }; timer.Start(); return; }
+        if (kind == "open")
+        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }
         RefreshShell();
     }
-    public void Navigate(string view, string? selected = null)
-    { VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    public void Navigate(string view, string? selected = null, bool editCredential = false)
+    { editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences.Theme); UpdateStats();
@@ -74,11 +64,10 @@ public partial class MainWindow : Window
         {
             var button = Ui.Button("", () => Navigate(book.Id)); button.Style = (Style)FindResource("NavButton");
             var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
-            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForMode(book.Mode), Width = 18, Height = 18, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
+            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForMode(book.Mode), Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); button.ContextMenu = menu;
             button.AllowDrop = true; button.DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; BooksPanel.Children.Add(button);
         }
-        TagsPanel.Children.Clear(); foreach (var tag in VM.State.LiveNotes.SelectMany(n => n.Tags).Distinct().Order().Take(22)) { var b = Ui.Small("# " + tag, () => { Navigate("all"); VM.Search = "#" + tag; RenderWorkspace(); }); b.Margin = new Thickness(3); b.FontSize = 10; b.Padding = new Thickness(7,4,7,4); b.Foreground = Ui.Resource("Sub"); TagsPanel.Children.Add(b); }
         HomeNav.Background = VM.View == "home" ? Ui.Resource("AccentLight") : Brushes.Transparent; AllNav.Background = VM.View == "all" ? Ui.Resource("AccentLight") : Brushes.Transparent; StarNav.Background = VM.View == "star" ? Ui.Resource("AccentLight") : Brushes.Transparent;
         PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else RenderWorkspace();
     }
@@ -86,7 +75,7 @@ public partial class MainWindow : Window
     {
         var row = new DockPanel();
         if (count != null) { var number = Ui.Text(count.Value.ToString(), 11); number.Foreground = Ui.Resource("Sub"); DockPanel.SetDock(number, Dock.Right); row.Children.Add(number); }
-        row.Children.Add(new NativeIcon { Kind = kind, Width = 19, Height = 19, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,14,0) }); row.Children.Add(Ui.Text(title, 13)); return row;
+        row.Children.Add(new NativeIcon { Kind = kind, Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,14,0) }); row.Children.Add(Ui.Text(title, 13)); return row;
     }
     private void UpdateStats()
     {
@@ -95,24 +84,35 @@ public partial class MainWindow : Window
         AllNav.Content = NavContent("Document", "全部记录", VM.State.LiveNotes.Count(n => !n.Archived));
         StarNav.Content = NavContent("Star", "我的收藏", VM.State.LiveNotes.Count(n => n.Favorite && !n.Archived));
         TrashNav.Content = NavContent("Trash", "回收站", VM.State.Notes.Count(n => n.DeletedAt != null && n.PurgedAt == null));
-        CloudStatus.Text = VM.Demo ? "演示空间" : "本机自动保存";
         SyncButton.Content = "云存档  ↗";
-        SaveText.Text = VM.Demo ? "演示模式" : VM.SaveStatus;
-        ProfileName.Text = VM.Demo ? "演示空间" : "我的私人空间";
+        SaveText.Text = VM.SaveStatus;
     }
-    private string ViewTitle() => VM.State?.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Name ?? VM.View switch { "home" => "我的工作台", "star" => "我的收藏", "archive" => "归档记录", "trash" => "回收站", _ => "全部记录" };
-    internal static string ModeGlyph(NoteMode mode) => mode switch { NoteMode.Text => "▤", NoteMode.Prompt => "✧", _ => "⚿" };
+    private string ViewTitle() => VM.State?.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Name ?? VM.View switch { "home" => "工作台", "star" => "我的收藏", "archive" => "归档记录", "trash" => "回收站", _ => "全部记录" };
     internal Note? CurrentNote() => VM.State?.Notes.FirstOrDefault(n => n.Id == VM.SelectedId);
     public void Toast(string message) { ToastText.Text = message; ToastBorder.Visibility = Visibility.Visible; toastTimer.Stop(); toastTimer.Start(); }
     public void Copy(string value, bool secret = false)
     { try { Clipboard.SetText(value); if (secret) { clipboardSecret = value; clipboardAt = Clock.Now; } Toast(secret ? "已复制，30 秒后清除剪贴板" : "已复制"); } catch { Toast("复制失败，剪贴板正被其他应用使用"); } }
     private void ClearSecretClipboard() { try { if (Clipboard.ContainsText() && Clipboard.GetText() == clipboardSecret) Clipboard.Clear(); } catch { } clipboardSecret = ""; }
-    private async Task LockWorkspace()
-    { if (!VM.IsUnlocked || locking) return; locking = true; IsEnabled = false; try { await VM.LockAsync(); ClearSecretClipboard(); } catch (Exception e) { Toast("锁定前保存失败：" + e.Message); } finally { IsEnabled = true; locking = false; } }
     private async void ClosingHandler(object? sender, CancelEventArgs e)
-    { if (closing) return; e.Cancel = true; IsEnabled = false; try { await VM.SaveAsync(); closing = true; ClearSecretClipboard(); sessionTimer.Stop(); previewTimer.Stop(); InputManager.Current.PreProcessInput -= InputReceived; SystemEvents.SessionSwitch -= SessionSwitch; SystemEvents.PowerModeChanged -= PowerModeChanged; VM.Dispose(); Close(); } catch (Exception error) { IsEnabled = true; Toast("保存失败，程序已保留打开。" + error.Message); } }
+    { if (closing) return; e.Cancel = true; IsEnabled = false; try { await VM.SaveAsync(); closing = true; ClearSecretClipboard(); sessionTimer.Stop(); VM.Dispose(); Close(); } catch (Exception error) { IsEnabled = true; Toast("保存失败，程序已保留打开。" + error.Message); } }
     private void KeyDownHandler(object sender, KeyEventArgs e)
-    { if (!VM.IsUnlocked) return; var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control); if (ctrl && e.Key == Key.K) { e.Handled = true; SearchDialog(); } else if (ctrl && e.Key == Key.N) { e.Handled = true; AddNote(); } else if (ctrl && e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; _ = LockWorkspace(); } else if (ctrl && e.Key == Key.S && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; ShowCloudSaves(); } else if (ctrl && e.Key == Key.S) { e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } } else if (e.Key == Key.F11) { e.Handled = true; ToggleFocus(); } else if (e.Key == Key.Escape && focusMode) { ToggleFocus(); } }
+    {
+        if (!VM.IsUnlocked || e.IsRepeat) return;
+        var action = Shortcuts.Resolve(VM.State!.Preferences, KeyChord(e));
+        switch (action) {
+            case "search": e.Handled = true; SearchDialog(); break;
+            case "new": e.Handled = true; AddNote(); break;
+            case "cloud": e.Handled = true; ShowCloudSaves(); break;
+            case "save": e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } break;
+            case "focus": e.Handled = true; ToggleFocus(); break;
+            case "find": case "replace": if (textEditor != null) { e.Handled = true; FindReplaceDialog(); } break;
+            case "undo": if (textEditor?.IsKeyboardFocusWithin == true) { e.Handled = true; RichUndo(); } break;
+            case "redo": if (textEditor?.IsKeyboardFocusWithin == true) { e.Handled = true; RichUndo(true); } break;
+            case "bold": if (textEditor?.IsKeyboardFocusWithin == true) { e.Handled = true; EditingCommands.ToggleBold.Execute(null,textEditor); } break;
+        }
+        if (!e.Handled && textEditor?.IsKeyboardFocusWithin == true && Shortcuts.Actions.Any(a => a.Default == KeyChord(e) && Shortcuts.Binding(VM.State.Preferences,a.Id) != a.Default)) e.Handled = true;
+        if (e.Key == Key.Escape && focusMode) { e.Handled = true; ToggleFocus(); }
+    }
     private void HomeClick(object sender, RoutedEventArgs e) => Navigate("home");
     private void AllClick(object sender, RoutedEventArgs e) => Navigate("all");
     private void StarClick(object sender, RoutedEventArgs e) => Navigate("star");
@@ -120,9 +120,8 @@ public partial class MainWindow : Window
     private void TrashClick(object sender, RoutedEventArgs e) => Navigate("trash");
     private void SearchClick(object sender, RoutedEventArgs e) => SearchDialog();
     private void NewNotebookClick(object sender, RoutedEventArgs e) => NotebookDialog();
-    private void NewNoteClick(object sender, RoutedEventArgs e) { if (VM.View == "home") TemplateDialog(); else AddNote(); }
+    private void NewNoteClick(object sender, RoutedEventArgs e) => AddNote();
     private void SettingsClick(object sender, RoutedEventArgs e) => SettingsDialog();
-    private void LockClick(object sender, RoutedEventArgs e) => _ = LockWorkspace();
     private void SyncClick(object sender, RoutedEventArgs e) => ShowCloudSaves();
     private void ImportClick(object sender, RoutedEventArgs e) => _ = ImportFiles();
     private MenuItem MenuItem(string title, Action action) { var item = new MenuItem { Header = title }; item.Click += (_, _) => action(); return item; }
@@ -131,9 +130,9 @@ public partial class MainWindow : Window
 internal sealed class NoteRow(Note note) : INotifyPropertyChanged
 {
     public Note Note { get; private set; } = note;
-    public string Title => (Note.Pinned ? "⌖  " : "") + (Note.Favorite ? "☆  " : "") + Note.Title;
-    public string Snippet => (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordTools.Plain(Note.Content)).Truncate(82);
-    public string Meta => RecordTools.Relative(Note.UpdatedAt) + (Note.Tags.Count > 0 ? "     #" + Note.Tags[0] : "");
+    public string Title => Note.Title;
+    public string Snippet => (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordTools.Plain(PromptVariables.Display(Note))).Truncate(82);
+    public string Meta => RecordTools.Relative(Note.UpdatedAt);
     public event PropertyChangedEventHandler? PropertyChanged;
     public void Replace(Note value) { Note = value; PropertyChanged?.Invoke(this, new(null)); }
 }

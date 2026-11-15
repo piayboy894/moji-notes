@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,11 +33,11 @@ import java.util.Locale
     PanelDialog("云存档", { if (!busy) close() }, width = 820) {
         Row(Modifier.fillMaxWidth().testTag("global-saves"), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text("全部记事本", style = MaterialTheme.typography.titleMedium); Text("${workspace.liveBooks.size} 本 · ${workspace.liveNotes.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Tool(Icons.Outlined.Settings, "存档连接设置", !busy, settings)
-            Tool(Icons.Outlined.Refresh, "刷新存档列表", !busy && !s.demo) { operate { catalog = vm.listCloudSaves(); selectedId = null; status = "已刷新" } }
+            Tool(MojiIcons.Settings, "存档连接设置", !busy, settings)
+            Tool(MojiIcons.Refresh, "刷新存档列表", !busy) { operate { catalog = vm.listCloudSaves(); selectedId = null; status = "已刷新" } }
         }
         BoxWithConstraints {
-            val ready = catalog != null && !busy && !s.demo
+            val ready = catalog != null && !busy
             val actions: @Composable RowScope.(Boolean) -> Unit = { first ->
                 if (first) {
                     OutlinedButton(onClick = { overwrite = false; name = "存档 " + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date()); naming = true }, enabled = ready, modifier = Modifier.weight(1f).testTag("save-create")) { Text("新建存档") }
@@ -54,13 +52,13 @@ import java.util.Locale
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.labelSmall, color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-        if (catalog == null) Box(Modifier.fillMaxWidth().padding(vertical = 35.dp), contentAlignment = Alignment.Center) { Text(if (s.demo) "解锁本机空间后管理云存档" else "点击刷新读取云存档", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (catalog == null) Box(Modifier.fillMaxWidth().padding(vertical = 35.dp), contentAlignment = Alignment.Center) { Text("点击刷新读取云存档", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         else if (catalog!!.entries.isEmpty()) Box(Modifier.fillMaxWidth().padding(vertical = 35.dp), contentAlignment = Alignment.Center) { Text("还没有云存档", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         else LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp).testTag("save-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(catalog!!.entries, key = { it.id }) { entry ->
                 Surface(onClick = { if (!busy) selectedId = entry.id }, shape = RoundedCornerShape(13.dp), color = if (selectedId == entry.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().testTag("cloud-save-${entry.id}")) {
                     Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Icon(Icons.Outlined.Save, null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(MojiIcons.Save, null, tint = MaterialTheme.colorScheme.primary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${entry.bookCount} 本 · ${entry.noteCount} 条 · ${entry.platform}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

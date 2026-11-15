@@ -6,7 +6,7 @@ using Moji.Core;
 if(args.Length==2&&args[0]=="fixture")
 {
     const string password="Interop-Save-Code-2026";
-    var workspace=Seed.Create(true);var first=workspace.Notes[0];workspace=workspace.ChangeNote(first.Id,n=>n with{Content="跨设备全局存档 · café · 文本",Archived=true},true);
+    var workspace=CreateTestWorkspace();var first=workspace.Notes[0];workspace=workspace.ChangeNote(first.Id,n=>n with{Content="跨设备全局存档 · café · 文本",Archived=true},true);
     var index=new SaveIndex("moji-saves",1,[new(new string('a',32),"中文存档 · 手机与平板",1794700000000,3,workspace.LiveNotes.Count(),new string('b',40),"Windows")]);
     using var key=CryptoService.NewKey(password);
     var value=new{password,indexEnvelope=CryptoService.Encrypt(index,key),dataEnvelope=CryptoService.Encrypt(GameSaves.Capture(workspace),key),expectedName=index.Entries[0].Name,expectedContent=workspace.Notes[0].Content,expectedNotes=workspace.Notes.Count};
@@ -23,7 +23,7 @@ if(args.Length==1&&args[0]=="cloud-smoke")
     var before=await OtherFiles();var service=new CloudSaveService();var catalog=await service.ListAsync(config);if(catalog.Entries.Count!=0)throw new Exception("Test namespace must be empty");
     try
     {
-        var workspace=Seed.Create(true) with{Sync=config};catalog=await service.WriteAsync(config,catalog,workspace,"Moji isolated test");var entry=catalog.Entries.Single();
+        var workspace=CreateTestWorkspace() with{Sync=config};catalog=await service.WriteAsync(config,catalog,workspace,"Moji isolated test");var entry=catalog.Entries.Single();
         var loaded=await service.ReadAsync(config,catalog,entry);if(loaded.Notes.Count!=workspace.Notes.Count)throw new Exception("Incomplete global snapshot");
         workspace=workspace.ChangeNote(workspace.Notes[0].Id,n=>n with{Content="ISOLATED_MANUAL_SAVE_TEST"},true);
         catalog=await service.WriteAsync(config,catalog,workspace,"Moji isolated overwrite",entry);
@@ -42,3 +42,5 @@ if(args.Length==1&&args[0]=="cloud-smoke")
     return;
 }
 throw new ArgumentException("Use fixture <output> or cloud-smoke with isolated test authorization.");
+
+static Workspace CreateTestWorkspace() { var w = Seed.Create(); return w with { Notes = w.Notebooks.Select(b => NoteCreation.InNotebook(w,b.Id) with { Content = "isolated-test" }).ToList() }; }

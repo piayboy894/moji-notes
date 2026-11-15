@@ -8,11 +8,11 @@ using Xunit;
 namespace Moji.Tests;
 public class CloudSaveTests
 {
-    private static Workspace State() => Seed.Create() with { Sync = new() { Token = "fake-private-token", Code = "ManualSaveCode2026" } };
+    private static Workspace State() => TestWorkspace.Create() with { Sync = new() { Repository = "test-owner/xuxian-data", Token = "fake-private-token", Code = "ManualSaveCode2026" } };
     [Fact] public void LoadingReplacesEveryProjectWithoutMergingAndKeepsDeviceSettings()
     {
         var local = State() with { Preferences = new() { Theme = "dark", AutoSync = true } };
-        var source = Seed.Create(true);
+        var source = TestWorkspace.Create();
         var loaded = GameSaves.Apply(local, GameSaves.Capture(source));
         Assert.Equal(source.Notebooks.Select(b=>b.Id), loaded.Notebooks.Select(b=>b.Id));
         Assert.Equal(source.Notes.Select(n=>n.Id), loaded.Notes.Select(n=>n.Id));
@@ -25,11 +25,11 @@ public class CloudSaveTests
         state = state with { Notes = state.Notes.Select(n=>n.Id==note.Id ? n.Apply(n with { DeletedAt = Clock.Now, Archived = true, Content = "saved-content" }, true) : n).ToList() };
         var save = GameSaves.Capture(state); Assert.Equal(state.Notes.Count, save.Notes.Count);
         var recovered = GameSaves.Apply(new(), save); Assert.NotNull(recovered.Notes[0].DeletedAt); Assert.True(recovered.Notes[0].Archived); Assert.NotEmpty(recovered.Notes[0].History);
-        Assert.Equal(2, recovered.Notes.Select(n=>n.NotebookId).Distinct().Count());
+        Assert.Equal(3, recovered.Notes.Select(n=>n.NotebookId).Distinct().Count());
         var encoded = Json.Serialize(save); Assert.DoesNotContain("fake-private-token", encoded); Assert.DoesNotContain("preferences", encoded);
     }
     [Fact] public void InvalidLoadDoesNotProduceAPartialWorkspace()
-    { var state=State(); Assert.Throws<InvalidDataException>(()=>GameSaves.Apply(state,new(1,"bad",[],state.Notes))); Assert.Equal(2,state.Notes.Count); }
+    { var state=State(); Assert.Throws<InvalidDataException>(()=>GameSaves.Apply(state,new(1,"bad",[],state.Notes))); Assert.Equal(3,state.Notes.Count); }
     [Fact] public async Task ManualCreateOverwriteReadDeleteAreAtomicAndPreserveOtherSoftware()
     {
         using var git = new MemoryGit(); var service = new CloudSaveService(new HttpClient(git)); var state = State();

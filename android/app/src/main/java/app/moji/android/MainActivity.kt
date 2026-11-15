@@ -28,23 +28,16 @@ class MainActivity : FragmentActivity() {
     val vm: MojiViewModel by viewModels { viewModelFactory { initializer { MojiViewModel(application) } } }
     val posture = MutableStateFlow(WindowPosture())
     private var copiedSecret: String? = null
-    private val screenOff = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { if (intent?.action == Intent.ACTION_SCREEN_OFF) { clearSecretClipboard(); vm.lock() } } }
+    private val screenOff = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { if (intent?.action == Intent.ACTION_SCREEN_OFF) { clearSecretClipboard(); vm.background() } } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         lifecycleScope.launch { WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info -> val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull(); posture.value = fold?.let { WindowPosture(if (it.orientation == FoldingFeature.Orientation.VERTICAL) it.bounds.left else null, if (it.orientation == FoldingFeature.Orientation.HORIZONTAL) it.bounds.top else null, it.bounds.width(), it.bounds.height(), it.isSeparating) } ?: WindowPosture() } }
-        window.decorView.setOnDragListener { _, event ->
-            when (event.action) {
-                DragEvent.ACTION_DRAG_STARTED -> event.clipDescription?.hasMimeType("text/plain") == true
-                DragEvent.ACTION_DROP -> { val text = event.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString(); if (!text.isNullOrBlank() && text.length <= 2_000_000) vm.importText("拖入的文字", text); true }
-                else -> true
-            }
-        }
         receive(intent); setContent { MojiRoot(vm, this) }
         lifecycleScope.launch { vm.state.collect { s -> if (s.workspace == null) clearSecretClipboard() } }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receive(intent) }
-    private fun receive(intent: Intent?) { if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.length <= 2_000_000 }?.let { vm.importText(intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "接收的文字", it) } }
+    private fun receive(intent: Intent?) { if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.length <= 2_000_000 }?.let { vm.importText(intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "接收的文字", it,notebookId="choose") } }
     override fun onStart() { super.onStart(); vm.foreground() }
     override fun onStop() { if (!isChangingConfigurations) vm.background(); super.onStop() }
     override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); vm.touch() }

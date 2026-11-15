@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the signed native release using Android's UI hierarchy and installer."""
+import hashlib
+import urllib.request
 import json
 import re
 import subprocess
@@ -24,7 +26,7 @@ def hierarchy():
     adb("shell", "uiautomator", "dump", "/sdcard/moji-release-window.xml")
     return ET.fromstring(adb("shell", "cat", "/sdcard/moji-release-window.xml"))
 
-def wait_node(resource=None, text=None, contains=None, timeout=45):
+def wait_node(resource=None, text=None, contains=None, description=None, timeout=45):
     until = time.monotonic() + timeout
     while time.monotonic() < until:
         try:
@@ -37,13 +39,15 @@ def wait_node(resource=None, text=None, contains=None, timeout=45):
                     continue
                 if contains is not None and contains not in label:
                     continue
-                if not resource and text is None and contains is None:
+                if description is not None and node.attrib.get("content-desc") != description:
+                    continue
+                if not resource and text is None and contains is None and description is None:
                     continue
                 return node
         except (ET.ParseError, RuntimeError):
             pass
         time.sleep(.6)
-    raise RuntimeError("Native release UI did not reach: " + str(resource or text or contains))
+    raise RuntimeError("Native release UI did not reach: " + str(resource or text or contains or description))
 
 def tap(node):
     bounds = [int(value) for value in re.findall(r"\d+", node.attrib["bounds"])]
@@ -60,26 +64,48 @@ def launch():
     (REPORT.parent / "launch.txt").write_text(output)
 
 try:
+    if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
+        raise RuntimeError("Install tests must run on an Android emulator, never a personal device")
     adb("shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", "0")
-    adb("install", "-r", str(APK)); launch()
+    adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
+    tap(wait_node(resource="book-Text")); tap(wait_node(description="新建记录"))
+    enter("note-content", MARKER); time.sleep(1.5)
+    adb("shell", "am", "force-stop", PACKAGE)
+    adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
+    tap(wait_node(resource="book-Text")); tap(wait_node(contains="未命名记录"))
+    wait_node(resource="note-content", contains=MARKER)
+    checks.append("fresh signed install opens without a password and preserves native edits across reinstall")
+
+    legacy = REPORT.parent / "legacy-1.0.0.apk"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    url = "https://github.com/piayboy894/moji-notes/releases/download/android-v1.0.0/Moji-Notes-Android-1.0.0.apk"
+    with urllib.request.urlopen(url, timeout=45) as response:
+        legacy.write_bytes(response.read())
+    if hashlib.sha256(legacy.read_bytes()).hexdigest() != "b3052bcdb3844e8e1bc48849cdfc7e693f4f21ba29afd68144aafa7faf078a40":
+        raise RuntimeError("Legacy test APK hash mismatch")
+    adb("uninstall", PACKAGE)  # The guarded emulator contains only this script's fake records.
+    adb("install", str(legacy)); launch()
     enter("auth-password", PASSWORD); enter("auth-confirm", PASSWORD)
-    # The Enter key invokes the single-line field's Done action, closing the IME.
     adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
-    checks.append("signed production APK installed, launched and created an encrypted space")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
     tap(wait_node(resource="note-content")); adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
     adb("shell", "input", "text", MARKER); time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch()
-    enter("auth-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
-    tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
+    enter("migration-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
+    tap(wait_node(resource="migrate")); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
     wait_node(resource="note-content", contains=MARKER)
-    checks.append("cover installation preserved encrypted project data and the same master password")
+    checks.append("published 1.0.0 upgrades with the same signature; one-time migration preserves old records")
+    adb("shell", "am", "force-stop", PACKAGE); launch(); wait_node(resource="home-title")
+    tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
+    wait_node(resource="note-content", contains=MARKER)
+    checks.append("migrated records reopen without password or automatic locking")
+    legacy.unlink()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps({"success": True, "package": PACKAGE, "framework": "Kotlin / Jetpack Compose", "checks": checks}, indent=2))
-    print("Signed native release installation and data-preserving reinstall passed.")
+    print("Signed native fresh install, reinstall and published-version migration passed.")
 except Exception as error:
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps({"success": False, "error": str(error), "checks": checks}, indent=2))
