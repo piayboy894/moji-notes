@@ -98,7 +98,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
                 "change"->{
                     val content=data.getValue("content").jsonPrimitive.content;val vars=json.decodeFromJsonElement<List<PromptVariable>>(data.getValue("variables"))
                     if(!EditorContent.isDocument(content)||vars.any{!Regex("[a-f0-9]{32}").matches(it.id)||it.name.length !in 1..2000})return@runCatching
-                    val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==activeId&&it.deletedAt==null&&it.purgedAt==null}?:return@runCatching
+                    val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==activeId&&it.purgedAt==null}?:return@runCatching
                     if(old.content!=content||old.variables!=vars)vm.edit(activeId){it.copy(content=content,variables=vars)}
                 }
                 "action"->if(visible)vm.editorActions.tryEmit(data["action"]?.jsonPrimitive?.content?:"")

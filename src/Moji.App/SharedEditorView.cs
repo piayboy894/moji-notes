@@ -59,7 +59,7 @@ internal sealed class SharedEditorView : Grid, IDisposable
             if(type=="change"){
                 var content=root.GetProperty("content").GetString()!;if(!EditorContent.IsDocument(content)||content.Length>30_000_000)return;
                 var vars=Json.Deserialize<List<PromptVariable>>(root.GetProperty("variables").GetRawText());if(vars==null||vars.Any(v=>!System.Text.RegularExpressions.Regex.IsMatch(v.Id,"^[a-f0-9]{32}$")||v.Name.Length is <1 or >2000))return;
-                var old=vm.State?.Notes.FirstOrDefault(n=>n.Id==noteId);if(old==null||old.DeletedAt!=null||old.PurgedAt!=null)return;
+                var old=vm.State?.Notes.FirstOrDefault(n=>n.Id==noteId);if(old==null||old.PurgedAt!=null)return;
                 lastContent=content;if(old.Content!=content||!old.Variables.SequenceEqual(vars))vm.EditNote(noteId,n=>n with{Content=content,Variables=vars});return;
             }
             if(!active)return;
