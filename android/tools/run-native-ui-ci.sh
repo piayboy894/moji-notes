@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+# The CI image's Pixel Launcher can ANR while Google initializes background
+# models, covering the application with an unrelated modal dialog. The launcher
+# is not part of these tests. Disable only that package on the disposable emulator;
+# errors from Moji remain visible and still fail the tests.
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
+
 # Retain captures even if a native assertion fails before the emulator shuts down.
 ./gradlew :app:connectedDebugAndroidTest --no-daemon
 moji_test_status=$?
