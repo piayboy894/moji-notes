@@ -220,12 +220,14 @@ class AdaptiveUiTest {
             compose.onNodeWithText("侧栏消息可见").assertIsDisplayed()
             screenshot("15-drawer-feedback-no-handles")
             compose.onNodeWithContentDescription("偏好设置").performClick()
-            compose.onNodeWithText("更新",substring=false).performClick()
+            compose.onNodeWithText("偏好设置",substring=false).assertIsDisplayed()
+            compose.onNodeWithText("更新",substring=false).performScrollTo().performClick()
             compose.activityRule.scenario.onActivity { it.vm.message("你已在使用最新版本") }
             compose.waitUntil(8000) { compose.onAllNodesWithText("你已在使用最新版本").fetchSemanticsNodes().isNotEmpty() }
             compose.onNode(hasText("你已在使用最新版本") and hasAnyAncestor(isDialog())).assertIsDisplayed()
             screenshot("16-update-feedback-above-dialog")
             compose.onNodeWithContentDescription("关闭").performClick()
+            shell("input keyevent KEYCODE_BACK"); compose.waitForIdle()
             webReady(); assertEquals(body,jsText())
             tapWeb(".tiptap"); js("window.MojiEditor.editor.commands.insertContent(' Still editable')")
             compose.waitUntil(5000) { jsText().contains("Still editable") }

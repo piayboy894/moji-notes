@@ -131,7 +131,7 @@ import java.util.zip.ZipOutputStream
                         }
                     }
                 }
-                ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter))
+                ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (drawerVisible) 72.dp else 0.dp))
                 exportTarget?.let { note -> PanelDialog("导出记录",{exportTarget=null}) {
                     TextButton(onClick={exportTarget=null;val text=visibleText(activity,note);createDocument(Records.safeName(note.title)+".txt","text/plain"){it.write(text.toByteArray(Charsets.UTF_8))}}){Text("普通文本 (.txt)")}
                     TextButton(onClick={exportTarget=null;val text="<!doctype html><meta charset=\"utf-8\">"+EditorContent.html(PromptVariables.fill(note,note.variables.associate{it.id to it.name}));createDocument(Records.safeName(note.title)+".html","text/html"){it.write(text.toByteArray(Charsets.UTF_8))}}){Text("HTML (.html)")}
