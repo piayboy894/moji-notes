@@ -81,11 +81,12 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
         AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
             WebView(context).apply {
                 tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
+                setOnTouchListener { view,event->if(event.actionMasked==android.view.MotionEvent.ACTION_DOWN)view.requestFocus();false }
                 settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 isVerticalScrollBarEnabled=false
                 val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(context)).build()
                 val current=SharedEditorBridge(this,vm,note.id,vm.workspaceEpoch,vm.state.value.editorGeneration);bridge=current;web=this;vm.editorFlushers.add(current.flusher)
-                current.onReady={if(!current.loadSent)current.load(note,if(dark)"dark"else"light",prefs.fontSize,prefs)}
+                current.onReady={if(!current.loadSent)current.load(vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:note,if(dark)"dark"else"light",prefs.fontSize,prefs)}
                 addJavascriptInterface(current,"MojiNative")
                 webViewClient=object:WebViewClient(){
                     override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=loader.shouldInterceptRequest(request.url)?:WebResourceResponse("text/plain","UTF-8",java.io.ByteArrayInputStream(ByteArray(0)))

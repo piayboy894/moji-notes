@@ -15,7 +15,7 @@ try:
     adb('shell','wm','size','1920x1200');adb('shell','wm','density','160');adb('shell','settings','put','secure','show_ime_with_hard_keyboard','0')
     adb('install','-r',str(APK));adb('shell','pm','clear',PACKAGE);launch();wait_node(resource='home-title')
     tap(wait_node(resource='add-notebook-card'));enter('notebook-name','EditorTest');tap(wait_node(text='提示词'));tap(wait_node(text='创建记事本'))
-    tap(wait_node(description='新建记录'));tap(wait_editor());tool('引用');adb('shell','input','text','Quote');adb('shell','input','keyevent','KEYCODE_ENTER','KEYCODE_ENTER');adb('shell','input','text','Normal')
+    tap(wait_node(description='新建记录'));tap(wait_editor());tool('引用');type_editor_text('Quote');adb('shell','input','keyevent','KEYCODE_ENTER','KEYCODE_ENTER');type_editor_text('Normal')
     wait_editor(contains='Normal');checks.append('signed shared editor quote inserts, exits with Enter and accepts normal text');capture('01-quote')
     tap(wait_node(text='插入变量'));enter('variable-name','Audience');tap(wait_node(text='插入'));wait_editor(contains='Audience');checks.append('native variable dialog inserts an atomic variable into the signed WebView');capture('02-variable')
     tool('插入图片');adb('shell','input','keyevent','KEYCODE_BACK');wait_editor(contains='Audience');checks.append('canceling system image selection preserves the document')

@@ -89,10 +89,24 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: android
           script: bash tools/run-native-ui-ci.sh
+      - name: Verify signed APK on a fresh emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          working-directory: android
+          script: bash tools/run-signed-ui-ci.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

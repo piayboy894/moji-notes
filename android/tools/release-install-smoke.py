@@ -65,7 +65,7 @@ def launch():
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     (REPORT.parent / "launch.txt").write_text(output)
 
-from native_ui import wait_editor
+from native_ui import wait_editor,type_editor_text
 
 try:
     if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
@@ -79,7 +79,7 @@ try:
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(description="新建记录"))
-    tap(wait_editor());adb("shell","input","text",MARKER);wait_editor(contains=MARKER);time.sleep(1.5)
+    tap(wait_editor());type_editor_text(MARKER);wait_editor(contains=MARKER);time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="未命名记录"))

@@ -88,3 +88,10 @@ def wait_embedded_image(name,timeout=45):
                 if name in node.get('content-desc','') or node.get('text')==name:return node
         time.sleep(.5)
     raise RuntimeError('Embedded image is not visible: '+name)
+
+def type_editor_text(value):
+    # adb `input text` prebuilds synthetic key events in one batch. Use distinct
+    # shell key actions here; rapid keyboard bursts are covered by Instrumentation.
+    for character in value:
+        adb('shell','input','text','%s' if character==' ' else character)
+        time.sleep(.025)
