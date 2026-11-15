@@ -17,6 +17,8 @@ internal static class NativeSmoke
         {
             using var vm = new WorkspaceViewModel(data); var window = new MainWindow(vm,true); Application.Current.MainWindow = window; window.Show();
             if (!await vm.OpenAsync() || vm.State!.Notebooks.Count != 0 || vm.State.Notes.Count != 0 || vm.State.Sync.Repository != "") throw new Exception("Fresh start was not empty and password-free");
+            if (FindNamed<Button>(window,"NewRecordButton")!.Visibility != Visibility.Collapsed) throw new Exception("Workspace exposes a record creation action");
+            window.AddNote(); if(vm.State.Notes.Count!=0)throw new Exception("Record creation escaped notebook scope");
             var savedData = GameSaves.Capture(vm.State); await Render(); Capture(window,Path.Combine(output,"01-workspace.png")); checks.Add("password-free start has no notebooks, records or preset repository");
             var customize=Application.Current.Dispatcher.InvokeAsync(async()=>{
                 await Render();var dialog=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="新建记事本");
@@ -29,7 +31,9 @@ internal static class NativeSmoke
             var customBook=vm.State.LiveBooks.Single(b=>b.Name=="旅行手记");if(customBook.Mode!=NoteMode.Text||customBook.Color!="#A1C4FD"||customBook.ColorEnd!="#C2E9FB"||customBook.Icon!="Leaf")throw new Exception("Notebook appearance changed type or failed to save");
             await vm.SaveAsync();await vm.OpenAsync();if(vm.State!.LiveBooks.First(b=>b.Id==customBook.Id).Icon!="Leaf")throw new Exception("Notebook appearance was lost on reopen");window.Navigate("home");await Render();Capture(window,Path.Combine(output,"09-custom-notebook-home.png"));
             vm.Change(w=>w with{Notebooks=[..w.Notebooks,new Notebook{Name="提示词",Mode=NoteMode.Prompt},new Notebook{Name="账号密码",Mode=NoteMode.Password}]});savedData=GameSaves.Capture(vm.State!);checks.Add("dashed add tile opens notebook creation; chosen color and icon persist independently of notebook type");
-            var book = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Text); window.Navigate(book.Id); window.AddNote(); await Render();
+            foreach(var view in new[]{"home","all","star","archive","trash"}){window.Navigate(view);await Render();if(FindNamed<Button>(window,"NewRecordButton")!.Visibility!=Visibility.Collapsed||FindTool(window,"新建记录")!=null)throw new Exception("Aggregate page exposes record creation");window.AddNote();if(vm.State!.Notes.Count!=0)throw new Exception("Aggregate action created a record");}
+            checks.Add("workspace and aggregate views cannot create records; creation belongs to a specific notebook");
+            var book = vm.State!.LiveBooks.First(b=>b.Mode==NoteMode.Text); window.Navigate(book.Id);if(FindNamed<Button>(window,"NewRecordButton")!.Visibility!=Visibility.Visible)throw new Exception("Notebook creation action is missing");window.AddNote(); await Render();
             var editor = Find<RichTextBox>(window) ?? throw new Exception("Native editor not created"); new TextRange(editor.Document.ContentStart,editor.Document.ContentEnd).Text = "Native edit\n\nPlain local persistence. _ * <example> &amp; \\path"; await vm.SaveAsync(); var noteId = vm.SelectedId;
             if (!(await File.ReadAllTextAsync(vm.Store.VaultPath)).Contains("Plain local persistence")) throw new Exception("Local data was not plain text");
             await vm.OpenAsync(); if (!vm.State!.Notes.Any(n=>n.Id==noteId && n.Content.Contains("Plain local persistence"))) throw new Exception("Restart lost data");

@@ -34,8 +34,7 @@ class AdaptiveUiTest {
         compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
         assertTrue(compose.activity.vm.state.value.workspace!!.notebooks.isEmpty())
         compose.onNodeWithTag("add-notebook-card").assertIsDisplayed(); screenshot("00-empty-workspace")
-        compose.onAllNodesWithContentDescription("新建记录").onFirst().performClick()
-        compose.onNodeWithText("新建记事本").assertIsDisplayed(); compose.onNodeWithContentDescription("关闭").performClick()
+        compose.onAllNodesWithContentDescription("新建记录").assertCountEquals(0)
         compose.onNodeWithTag("add-notebook-card").performClick()
         compose.onNodeWithTag("notebook-name").performTextInput("My first notebook"); hideKeyboard()
         compose.onNodeWithText("账号密码",substring=false).performScrollTo().performClick()
@@ -66,14 +65,18 @@ class AdaptiveUiTest {
             compose.activityRule.scenario.onActivity { it.onWindowFocusChanged(false) }; assertNotNull(compose.activity.vm.state.value.workspace)
         } catch(t:Throwable){runCatching{screenshot("failure-adaptive")};throw t} finally {shell("wm size reset");shell("wm density reset")}
     }
-    @Test fun newRecordRequiresExplicitNotebookAndCloudSavesRemainGlobal() {
-        ready(); compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
-        compose.onNodeWithTag("add-notebook-card").performScrollTo().performClick();compose.onNodeWithText("新建记事本").assertIsDisplayed();compose.onNodeWithContentDescription("关闭").performClick()
+    @Test fun recordCreationExistsOnlyInsideANotebookAndCloudSavesRemainGlobal() {
+        ready()
         val before=compose.activity.vm.state.value.workspace!!.notes.size
-        compose.onAllNodesWithContentDescription("新建记录").onFirst().performClick(); compose.onNodeWithText("选择记事本").assertIsDisplayed()
+        listOf("home","all","star","archive","trash").forEach { view ->
+            compose.activityRule.scenario.onActivity { it.vm.navigate(view) }
+            compose.onAllNodesWithContentDescription("新建记录").assertCountEquals(0)
+            compose.onAllNodesWithText("新建记录",substring=false).assertCountEquals(0)
+        }
         assertEquals(before,compose.activity.vm.state.value.workspace!!.notes.size)
         val target=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}
-        compose.onNodeWithTag("choose-book-${target.id}").performClick()
+        compose.activityRule.scenario.onActivity { it.vm.navigate(target.id) }
+        compose.onNodeWithContentDescription("新建记录").performClick()
         assertEquals(target.id,compose.activity.vm.selectedNote()!!.notebookId); assertEquals("",compose.activity.vm.selectedNote()!!.content)
         compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
         compose.onNodeWithContentDescription("打开导航").performClick(); compose.onNodeWithText("云存档").performClick()
@@ -178,6 +181,13 @@ class AdaptiveUiTest {
         assertEquals("Ctrl+Shift+N",compose.activity.vm.state.value.workspace!!.preferences.shortcuts["new"])
         compose.onNodeWithContentDescription("关闭").performClick()
         compose.waitForIdle();compose.onNodeWithTag("adaptive-layout").performKeyInput { keyDown(Key.CtrlLeft); keyDown(Key.ShiftLeft); pressKey(Key.N); keyUp(Key.ShiftLeft); keyUp(Key.CtrlLeft) }
-        compose.onNodeWithText("选择记事本").assertIsDisplayed()
+        compose.onNodeWithTag("home-title").assertIsDisplayed()
+        compose.onAllNodesWithText("选择记事本").assertCountEquals(0)
+        val book=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}
+        val before=compose.activity.vm.state.value.workspace!!.notes.size
+        compose.activityRule.scenario.onActivity { it.vm.navigate(book.id) }
+        compose.waitForIdle();compose.onNodeWithTag("adaptive-layout").performKeyInput { keyDown(Key.CtrlLeft); keyDown(Key.ShiftLeft); pressKey(Key.N); keyUp(Key.ShiftLeft); keyUp(Key.CtrlLeft) }
+        assertEquals(before+1,compose.activity.vm.state.value.workspace!!.notes.size)
+        assertEquals(book.id,compose.activity.vm.selectedNote()!!.notebookId)
     }
 }

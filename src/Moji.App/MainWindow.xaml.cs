@@ -69,6 +69,7 @@ public partial class MainWindow : Window
             button.AllowDrop = true; button.DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; BooksPanel.Children.Add(button);
         }
         HomeNav.Background = VM.View == "home" ? Ui.Resource("AccentLight") : Brushes.Transparent; AllNav.Background = VM.View == "all" ? Ui.Resource("AccentLight") : Brushes.Transparent; StarNav.Background = VM.View == "star" ? Ui.Resource("AccentLight") : Brushes.Transparent;
+        NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else RenderWorkspace();
     }
     private UIElement NavContent(string kind, string title, int? count = null)
@@ -87,6 +88,7 @@ public partial class MainWindow : Window
         SyncButton.Content = "云存档  ↗";
         SaveText.Text = VM.SaveStatus;
     }
+    private bool CanCreateRecord => VM.State?.LiveBooks.Any(b => b.Id == VM.View) == true;
     private string ViewTitle() => VM.State?.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Name ?? VM.View switch { "home" => "工作台", "star" => "我的收藏", "archive" => "归档记录", "trash" => "回收站", _ => "全部记录" };
     internal Note? CurrentNote() => VM.State?.Notes.FirstOrDefault(n => n.Id == VM.SelectedId);
     public void Toast(string message) { ToastText.Text = message; ToastBorder.Visibility = Visibility.Visible; toastTimer.Stop(); toastTimer.Start(); }
@@ -116,7 +118,7 @@ public partial class MainWindow : Window
         var action = Shortcuts.Resolve(VM.State!.Preferences, KeyChord(e));
         switch (action) {
             case "search": e.Handled = true; SearchDialog(); break;
-            case "new": e.Handled = true; AddNote(); break;
+            case "new": if (CanCreateRecord) { e.Handled = true; AddNote(); } break;
             case "cloud": e.Handled = true; ShowCloudSaves(); break;
             case "save": e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } break;
             case "focus": e.Handled = true; ToggleFocus(); break;

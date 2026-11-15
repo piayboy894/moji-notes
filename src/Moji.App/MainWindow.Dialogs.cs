@@ -17,25 +17,11 @@ public partial class MainWindow
     { var content=new StackPanel{Margin=new Thickness(27)};content.Children.Add(Ui.Text(title,19,null,true));content.Children.Add(Ui.Spaced(Ui.Text(text,12,"#929D86"),new Thickness(0,18,0,25)));Window? dialog=null;var cancel=Ui.Button("取消",()=>dialog!.DialogResult=false);var accept=Ui.Button("确认",()=>dialog!.DialogResult=true,true);var buttons=Ui.Row(cancel,Ui.Spaced(accept,new Thickness(10,0,0,0)));buttons.HorizontalAlignment=HorizontalAlignment.Right;content.Children.Add(buttons);dialog=Ui.Dialog(this,"墨记",content,460);return dialog.ShowDialog()==true; }
     private string? AskPassword(string title)
     {var pw=new PasswordBox{MinWidth=300};var content=Ui.Stack(Ui.Field(title,pw));content.Margin=new Thickness(27);Window? dialog=null;var button=Ui.Button("解密并继续",()=>dialog!.DialogResult=true,true);button.HorizontalAlignment=HorizontalAlignment.Right;content.Children.Add(button);dialog=Ui.Dialog(this,title,content,420);dialog.Loaded+=(_,_)=>pw.Focus();var result=dialog.ShowDialog()==true?pw.Password:null;pw.Clear();return result;}
-    public void AddNote(string? notebookId = null)
+    public void AddNote()
     {
-        if (VM.State == null) return;
-        notebookId ??= VM.State.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Id;
-        if (notebookId == null) { ChooseNotebook(); return; }
-        var note = NoteCreation.InNotebook(VM.State, notebookId);
+        if (!CanCreateRecord) return;
+        var note = NoteCreation.InNotebook(VM.State!, VM.View);
         VM.Change(w => w with { Notes = [note, ..w.Notes] }); Navigate(note.NotebookId, note.Id, true); titleBox?.Focus(); titleBox?.SelectAll();
-    }
-    private void ChooseNotebook()
-    {
-        if (!VM.State!.LiveBooks.Any()) { NotebookDialog(); return; }
-        var panel = new StackPanel { Margin = new Thickness(22) }; Window? dialog = null;
-        foreach (var book in VM.State!.LiveBooks) {
-            var button = Ui.Button("", () => { dialog!.Close(); AddNote(book.Id); });
-            button.Content = Ui.Stack(Ui.Text(book.Name,14,null,true), Ui.Text(RecordTools.ModeName(book.Mode),11));
-            button.HorizontalContentAlignment = HorizontalAlignment.Left; button.Margin = new Thickness(0,0,0,9); panel.Children.Add(button);
-        }
-        panel.Children.Add(Ui.Button("新建记事本", () => { dialog!.Close(); NotebookDialog(); }));
-        dialog = Ui.Dialog(this,"选择记事本",new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 500 },450); dialog.ShowDialog();
     }
     private void NotebookDialog(Notebook? book=null)
     {

@@ -47,14 +47,15 @@ import java.util.zip.ZipOutputStream
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable fun MojiRoot(vm: MojiViewModel, activity: MainActivity) {
     val s by vm.state.collectAsStateWithLifecycle(); val posture by activity.posture.collectAsStateWithLifecycle()
-    var cloudSaves by remember { mutableStateOf(false) }; var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var chooseNotebook by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) }
+    var cloudSaves by remember { mutableStateOf(false) }; var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) }
     var exportTarget by remember { mutableStateOf<Note?>(null) }
     var plainBackup by remember { mutableStateOf<SyncPayload?>(null) }
     var backup by remember { mutableStateOf<Envelope?>(null) }; var backupPassword by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf("") }; var restoring by remember { mutableStateOf(false) }
     var exportWriter by remember { mutableStateOf<(suspend (OutputStream) -> Unit)?>(null) }
-    fun addRecord() { if (s.workspace?.liveBooks.isNullOrEmpty()) newBook = true else if (s.workspace?.liveBooks?.any { it.id == s.view } == true) vm.addNote(s.view) else chooseNotebook = true }
+    val canCreateRecord = s.workspace?.liveBooks?.any { it.id == s.view } == true
+    fun addRecord() { if (canCreateRecord) vm.addNote(s.view) }
     val keyboardFocus=remember{FocusRequester()}
-    LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,chooseNotebook,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!chooseNotebook&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
+    LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
     fun name(uri: Uri): String = runCatching { activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } }.getOrNull() ?: "导入记录"
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
@@ -71,16 +72,16 @@ import java.util.zip.ZipOutputStream
     fun exportBackup() { scope.launch { try { val content = vm.localBackup(); createDocument("墨记-存档-${java.time.LocalDate.now()}.moji", "application/octet-stream") { it.write(content.toByteArray(Charsets.UTF_8)) } } catch (error: Exception) { vm.message(UserMessages.forError(error,"备份失败")) } } }
     fun exportTexts() { val w = s.workspace ?: return; createDocument("墨记-文本集-${java.time.LocalDate.now()}.zip", "application/zip") { stream -> ZipOutputStream(stream).use { zip -> w.liveNotes.forEach { note -> val b = w.notebooks.first { it.id == note.notebookId }; if (b.mode != NoteMode.Password) { zip.putNextEntry(ZipEntry("${Records.safeName(b.name)}/${Records.safeName(note.title)}-${note.id.take(6)}.md")); zip.write("# ${RichMarkdown.escape(note.title)}\n\n${PromptVariables.fill(note,note.variables.associate{it.id to RichMarkdown.escape(it.name)})}".toByteArray(Charsets.UTF_8)); zip.closeEntry() } } } } }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
-    LaunchedEffect(s.workspace == null) { if (s.workspace == null) { cloudSaves = false; settings = null; bookDialog = null; newBook = false; chooseNotebook = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
+    LaunchedEffect(s.workspace == null) { if (s.workspace == null) { cloudSaves = false; settings = null; bookDialog = null; newBook = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
     val dark = s.workspace?.preferences?.theme == "dark" || ((s.workspace?.preferences?.theme ?: "system") == "system" && isSystemInDarkTheme())
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences?.theme ?: "system") {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize().focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
-                if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || chooseNotebook || globalSearch || backup != null) false
+                if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || backup != null) false
                 else when (Shortcuts.resolve(s.workspace!!.preferences, keyChord(event))) {
                     "search" -> { globalSearch = true; true }
-                    "new" -> { addRecord(); true }
+                    "new" -> { if (canCreateRecord) { addRecord(); true } else false }
                     "cloud" -> { cloudSaves = true; true }
                     "save" -> { vm.selectedNote()?.let { vm.checkpoint(it.id) }; true }
                     else -> false
@@ -97,9 +98,9 @@ import java.util.zip.ZipOutputStream
                         if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surface) { SideNavigation(s, vm, {}, { settings = "general" }, { newBook = true }, { globalSearch = true }, { cloudSaves = true }) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         else if (rail) { CompactNavigation(s, vm, { settings = "general" }, { scope.launch { drawer.open() } }); VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         Scaffold(Modifier.weight(1f).fillMaxHeight(), containerColor = MaterialTheme.colorScheme.background,
-                            topBar = { if (twoPane || active == null || s.view == "home") TopAppBar(title = { Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines = 1) }, navigationIcon = { if (!wide && !rail) Tool(MojiIcons.Menu, "打开导航") { scope.launch { drawer.open() } } }, actions = { if (s.saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp) else if (s.saveError) Icon(MojiIcons.ErrorOutline, "保存失败", tint = MaterialTheme.colorScheme.error) ; Tool(MojiIcons.Search, "全局搜索") { globalSearch = true }; Tool(MojiIcons.Add, "新建记录") { addRecord() } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
+                            topBar = { if (twoPane || active == null || s.view == "home") TopAppBar(title = { Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines = 1) }, navigationIcon = { if (!wide && !rail) Tool(MojiIcons.Menu, "打开导航") { scope.launch { drawer.open() } } }, actions = { if (s.saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp) else if (s.saveError) Icon(MojiIcons.ErrorOutline, "保存失败", tint = MaterialTheme.colorScheme.error) ; Tool(MojiIcons.Search, "全局搜索") { globalSearch = true }; if (twoPane && canCreateRecord) Tool(MojiIcons.Add, "新建记录") { addRecord() } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
                             snackbarHost = { SnackbarHost(snackbar) },
-                            floatingActionButton = { if (!twoPane && active == null && s.view != "trash") FloatingActionButton(onClick = { addRecord() }, containerColor = MaterialTheme.colorScheme.primary) { Icon(MojiIcons.Add, "新建记录", tint = MaterialTheme.colorScheme.onPrimary) } }
+                            floatingActionButton = { if (!twoPane && active == null && canCreateRecord) FloatingActionButton(onClick = { addRecord() }, containerColor = MaterialTheme.colorScheme.primary) { Icon(MojiIcons.Add, "新建记录", tint = MaterialTheme.colorScheme.onPrimary) } }
                         ) { padding ->
                             Box(Modifier.padding(padding).fillMaxSize()) {
                                 if (s.view == "home") HomeScreen(vm, s, { newBook = true }, { bookDialog = it })
@@ -109,10 +110,10 @@ import java.util.zip.ZipOutputStream
                                         val seam = posture.hingeLeft?.let { with(density) { (it - contentX).toDp() } }
                                         val listWidth = if (posture.separating && seam != null && seam > 180.dp && seam < maxWidth - 260.dp) seam else if (maxWidth > 1200.dp) 320.dp else 276.dp
                                         val gap = if (posture.separating && seam == listWidth) with(density) { posture.hingeWidth.toDp().coerceAtLeast(8.dp) } else 1.dp
-                                        Row(Modifier.fillMaxSize()) { NoteList(vm, s, Modifier.width(listWidth), { bookDialog = it }, ::addRecord); Spacer(Modifier.width(gap).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant)); if (active != null) EditorScreen(vm, s, active, activity, ::exportNote, Modifier.weight(1f)) else EmptyEditor(Modifier.weight(1f)) }
+                                        Row(Modifier.fillMaxSize()) { NoteList(vm, s, Modifier.width(listWidth), { bookDialog = it }); Spacer(Modifier.width(gap).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant)); if (active != null) EditorScreen(vm, s, active, activity, ::exportNote, Modifier.weight(1f)) else EmptyEditor(Modifier.weight(1f)) }
                                     }
                                 } else if (active != null) EditorScreen(vm, s, active, activity, ::exportNote, showBack = true, back = vm::clearSelection)
-                                else NoteList(vm, s, editBook = { bookDialog = it }, addRecord = ::addRecord)
+                                else NoteList(vm, s, editBook = { bookDialog = it })
                                 if (s.busy) Surface(Modifier.fillMaxSize().clickable(enabled = true, onClick = {}), color = MaterialTheme.colorScheme.surface.copy(alpha = .7f)) { Box(contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                             }
                         }
@@ -125,7 +126,6 @@ import java.util.zip.ZipOutputStream
                 if (settings != null) SettingsDialog(s, vm, activity, settings!!, { settings = null }, ::exportBackup, ::exportTexts, { importFile.launch(arrayOf("text/*", "application/octet-stream", "application/json", "*/*")) }, { settings = null; cloudSaves = true })
                 if (cloudSaves) CloudSavesDialog(vm, s, { cloudSaves = false }, { cloudSaves = false; settings = "sync" })
                 if (newBook || bookDialog != null) NotebookDialog(bookDialog, vm) { newBook = false; bookDialog = null }
-                if (chooseNotebook) ChooseNotebookDialog(s, vm, { newBook = true }) { chooseNotebook = false }
                 if (globalSearch) GlobalSearch(s, vm) { globalSearch = false }
                 if (s.textImport != null) PanelDialog("导入到记事本",vm::cancelImport) {
                     s.workspace!!.liveBooks.filter{it.mode!=NoteMode.Password}.forEach{book->TextButton(onClick={vm.importText(s.textImport!!.name,s.textImport!!.text,book.id,s.textImport!!.markdown)}){Text(book.name)}}

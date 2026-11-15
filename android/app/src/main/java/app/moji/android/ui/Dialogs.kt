@@ -77,20 +77,6 @@ import java.util.Locale
     }
     if(deleting&&book!=null)Confirm("删除「${book.name}」？","其中的记录会移到回收站，之后仍可恢复。",{deleting=false}){vm.deleteBook(book);close()}
 }
-@Composable fun ChooseNotebookDialog(s: AppState, vm: MojiViewModel, newBook: () -> Unit, close: () -> Unit) {
-    PanelDialog("选择记事本", close) {
-        s.workspace?.liveBooks?.forEach { book ->
-            OutlinedCard(onClick = { vm.addNote(book.id); close() }, modifier = Modifier.fillMaxWidth().testTag("choose-book-${book.id}")) {
-                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Icon(notebookIcon(book), null, tint = modeColor(book.mode))
-                    Column(Modifier.weight(1f)) { Text(book.name); Text(book.mode.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Icon(MojiIcons.ChevronRight, null)
-                }
-            }
-        }
-        TextButton(onClick = { close(); newBook() }) { Text("新建记事本") }
-    }
-}
 @Composable fun PromptDialog(note: Note, activity: MainActivity, close: () -> Unit) {
     val variables=PromptVariables.used(note);var values by remember(note.id){mutableStateOf(emptyMap<String,String>())}
     PanelDialog("使用提示词",close,actions={Button(onClick={activity.copy(visibleText(activity,note,values))},enabled=variables.all{values[it.id]?.isNotBlank()==true}){Text("复制提示词")}}){

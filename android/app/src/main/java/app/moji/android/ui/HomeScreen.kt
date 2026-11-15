@@ -60,7 +60,7 @@ import app.moji.android.data.*
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, addRecord: () -> Unit) {
+@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit) {
     val w = s.workspace ?: return; val notes = vm.filtered()
     var selected by remember(s.view) { mutableStateOf(emptySet<String>()) }; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
     Column(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface)) {
@@ -73,7 +73,7 @@ import app.moji.android.data.*
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box { TextButton(onClick = { sortMenu = true }, contentPadding = PaddingValues(0.dp)) { Text(when (s.sort) { "name" -> "名称顺序"; "created" -> "创建时间"; else -> "最近编辑" }, style = MaterialTheme.typography.labelSmall); Icon(MojiIcons.ExpandMore, null, Modifier.size(16.dp)) }; DropdownMenu(sortMenu, { sortMenu = false }) { listOf("updated" to "最近编辑", "created" to "创建时间", "name" to "名称顺序").forEach { (id, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { vm.sort(id); sortMenu = false }) } } }
                 Spacer(Modifier.weight(1f)); Text("${notes.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (s.view != "trash") Tool(MojiIcons.Add, "新建记录", action = addRecord) else Tool(MojiIcons.DeleteSweep, "清空回收站", notes.isNotEmpty()) { selected = notes.map { it.id }.toSet(); purge = true }
+                if (s.view == "trash") Tool(MojiIcons.DeleteSweep, "清空回收站", notes.isNotEmpty()) { selected = notes.map { it.id }.toSet(); purge = true }
             }
         }
         if (selected.isNotEmpty()) Surface(color = MaterialTheme.colorScheme.primaryContainer) { Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(selected.size == notes.size, { selected = if (selected.size == notes.size) emptySet() else notes.map { it.id }.toSet() }); Text("已选 ${selected.size}", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall); if (s.view == "trash") Tool(MojiIcons.RestoreFromTrash, "恢复所选") { vm.restore(selected); selected = emptySet() } else Tool(MojiIcons.StarOutline, "收藏所选") { selected.forEach { id -> vm.edit(id) { it.copy(favorite = true) } }; selected = emptySet() }; Tool(MojiIcons.DeleteOutline, "删除所选") { if (s.view == "trash") purge = true else { vm.trash(selected); selected = emptySet() } }; Tool(MojiIcons.Close, "取消多选") { selected = emptySet() } } }
@@ -91,7 +91,7 @@ import app.moji.android.data.*
                     }
                 }
             }
-            if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant); if (s.view != "trash" && s.search.isBlank()) TextButton(onClick = addRecord) { Text("新建记录") } } }
+            if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         }
     }
     if (purge) Confirm("永久删除 ${selected.size} 条记录？", "正文、密码和历史版本会被清除，无法从回收站恢复。", { purge = false }) { vm.purge(selected); selected = emptySet() }
