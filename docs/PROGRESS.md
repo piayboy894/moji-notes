@@ -20,7 +20,11 @@
 - Android JVM 核心测试 22 项通过，原生调试 APK 与仪器测试 APK 编译通过。
 - C# 实际生成的全局存档目录与数据向量在 Kotlin 解密通过，包含中文、密码模式和历史。
 - 已在私有 `xuxian-data` 的隔离测试目录实际完成新建、读取、覆盖、刷新与删除；其他所有文件 blob SHA 保持不变，测试目录已清理。
-- 发布流水线额外运行 Windows 原生界面、Android 多尺寸/旋转/全局存档界面、正式 APK 证书、安装与覆盖安装保留数据检查；只有全部通过才发布。
+- [Windows 发布流水线](https://github.com/piayboy894/moji-notes/actions/runs/43669106617)通过：23 项核心测试、x64 / ARM64 构建、8 项实际 WPF 原生检查（含整库读取和四个全局存档操作）。
+- [Android 正式发布流水线](https://github.com/piayboy894/moji-notes/actions/runs/43670304701)通过：22 项核心测试、3 项原生仪器测试、9 张多尺寸与全局存档截图、固定证书核对、正式包安装/创建加密空间/覆盖安装保留数据。
+- 正式包会话模型使用显式工厂创建；实际发布 APK 已完成启动与数据保留验证。
+- APK SHA-256：`b3052bcdb3844e8e1bc48849cdfc7e693f4f21ba29afd68144aafa7faf078a40`。
+- 固定发布证书 SHA-256：`4c74ca5b73e47d9435c7f0fcc68edd2e56b9923177b65f33a32e92d67e661198`。
 
 ## 下载与保留
 
