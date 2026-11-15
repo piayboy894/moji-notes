@@ -13,7 +13,7 @@ val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls
 }
 @Serializable data class Notebook(
     val id: String = uid(), val name: String = "新记事本", val mode: NoteMode = NoteMode.Text,
-    val color: String = "#75876D", val icon: String = "", val createdAt: Long = now(), val updatedAt: Long = now(),
+    val color: String = "#75876D", val colorEnd:String = "", val icon: String = "", val createdAt: Long = now(), val updatedAt: Long = now(),
     val revision: String = uid(), val deletedAt: Long? = null
 )
 @Serializable data class NoteVersion(

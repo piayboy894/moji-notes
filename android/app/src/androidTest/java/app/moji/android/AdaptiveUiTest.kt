@@ -117,17 +117,18 @@ class AdaptiveUiTest {
         compose.onNodeWithTag("book-Prompt").performTouchInput{longClick()}
         compose.onNodeWithText("编辑记事本").assertIsDisplayed()
         compose.onNodeWithTag("notebook-color-#A5849D").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("星标").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("绿叶").performScrollTo().performClick()
+        compose.onNodeWithText("渐变").performScrollTo().performClick();compose.onNodeWithTag("notebook-gradient-0").performScrollTo().performClick()
         hideKeyboard();screenshot("12-notebook-appearance")
         compose.onNodeWithText("保存修改").performClick()
         fun current()=compose.activity.vm.state.value.workspace!!.notebooks.first{it.id==original.id}
-        assertEquals(original.mode,current().mode);assertEquals("#A5849D",current().color);assertEquals("Star",current().icon)
+        assertEquals(original.mode,current().mode);assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);assertEquals("Leaf",current().icon)
         runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready()
-        assertEquals("#A5849D",current().color);assertEquals("Star",current().icon)
+        assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);assertEquals("Leaf",current().icon)
         val payload=GameSaves.capture(compose.activity.vm.state.value.workspace!!)
         compose.activityRule.scenario.onActivity{it.vm.saveBook(current(),original.name,original.mode,"#75876D","Cloud")}
         runBlocking{compose.activity.vm.replaceData(payload)}
-        assertEquals("Star",current().icon);assertEquals("#A5849D",current().color);screenshot("13-custom-notebook-home")
+        assertEquals("Leaf",current().icon);assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);screenshot("13-custom-notebook-home")
     }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {
         ready(); compose.activityRule.scenario.onActivity{it.vm.navigate("home")}

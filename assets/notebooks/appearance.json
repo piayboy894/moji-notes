@@ -1,0 +1,328 @@
+{
+  "icons": [
+    {
+      "id": "Book",
+      "name": "笔记本",
+      "svg": "notebook"
+    },
+    {
+      "id": "Document",
+      "name": "文档",
+      "svg": "file-text"
+    },
+    {
+      "id": "Prompt",
+      "name": "灵感",
+      "svg": "sparkles"
+    },
+    {
+      "id": "Lock",
+      "name": "钥匙",
+      "svg": "key-round"
+    },
+    {
+      "id": "Star",
+      "name": "星标",
+      "svg": "star"
+    },
+    {
+      "id": "Archive",
+      "name": "收纳",
+      "svg": "archive"
+    },
+    {
+      "id": "Pin",
+      "name": "图钉",
+      "svg": "pin"
+    },
+    {
+      "id": "Image",
+      "name": "图片",
+      "svg": "image"
+    },
+    {
+      "id": "Cloud",
+      "name": "云朵",
+      "svg": "cloud"
+    },
+    {
+      "id": "Code",
+      "name": "代码",
+      "svg": "code"
+    },
+    {
+      "id": "Search",
+      "name": "搜索",
+      "svg": "search"
+    },
+    {
+      "id": "Settings",
+      "name": "齿轮",
+      "svg": "settings"
+    },
+    {
+      "id": "Heart",
+      "name": "心愿",
+      "svg": "heart"
+    },
+    {
+      "id": "Leaf",
+      "name": "绿叶",
+      "svg": "leaf"
+    },
+    {
+      "id": "Flower",
+      "name": "花朵",
+      "svg": "flower-2"
+    },
+    {
+      "id": "Sun",
+      "name": "太阳",
+      "svg": "sun"
+    },
+    {
+      "id": "Moon",
+      "name": "月亮",
+      "svg": "moon"
+    },
+    {
+      "id": "Mountain",
+      "name": "山野",
+      "svg": "mountain"
+    },
+    {
+      "id": "Plane",
+      "name": "旅行",
+      "svg": "plane"
+    },
+    {
+      "id": "Compass",
+      "name": "指南针",
+      "svg": "compass"
+    },
+    {
+      "id": "Globe",
+      "name": "世界",
+      "svg": "globe"
+    },
+    {
+      "id": "Camera",
+      "name": "摄影",
+      "svg": "camera"
+    },
+    {
+      "id": "Music",
+      "name": "音乐",
+      "svg": "music"
+    },
+    {
+      "id": "Film",
+      "name": "电影",
+      "svg": "film"
+    },
+    {
+      "id": "Palette",
+      "name": "绘画",
+      "svg": "palette"
+    },
+    {
+      "id": "Pen",
+      "name": "写作",
+      "svg": "pen-line"
+    },
+    {
+      "id": "Lightbulb",
+      "name": "想法",
+      "svg": "lightbulb"
+    },
+    {
+      "id": "Graduation",
+      "name": "学习",
+      "svg": "graduation-cap"
+    },
+    {
+      "id": "Briefcase",
+      "name": "工作",
+      "svg": "briefcase-business"
+    },
+    {
+      "id": "Calendar",
+      "name": "日程",
+      "svg": "calendar-days"
+    },
+    {
+      "id": "Checklist",
+      "name": "清单",
+      "svg": "list-checks"
+    },
+    {
+      "id": "Coffee",
+      "name": "咖啡",
+      "svg": "coffee"
+    },
+    {
+      "id": "Gift",
+      "name": "礼物",
+      "svg": "gift"
+    },
+    {
+      "id": "Wallet",
+      "name": "账本",
+      "svg": "wallet"
+    },
+    {
+      "id": "Target",
+      "name": "目标",
+      "svg": "target"
+    },
+    {
+      "id": "Terminal",
+      "name": "开发",
+      "svg": "terminal"
+    }
+  ],
+  "solid": [
+    {
+      "name": "鼠尾草",
+      "start": "#75876D",
+      "end": ""
+    },
+    {
+      "name": "麦穗",
+      "start": "#B2946E",
+      "end": ""
+    },
+    {
+      "name": "雾蓝",
+      "start": "#8393AC",
+      "end": ""
+    },
+    {
+      "name": "烟粉",
+      "start": "#A5849D",
+      "end": ""
+    },
+    {
+      "name": "陶土",
+      "start": "#BA886C",
+      "end": ""
+    },
+    {
+      "name": "薰衣草",
+      "start": "#9182A8",
+      "end": ""
+    },
+    {
+      "name": "松针",
+      "start": "#557768",
+      "end": ""
+    },
+    {
+      "name": "青瓷",
+      "start": "#6C9B95",
+      "end": ""
+    },
+    {
+      "name": "海盐",
+      "start": "#7198B1",
+      "end": ""
+    },
+    {
+      "name": "牛仔",
+      "start": "#60718D",
+      "end": ""
+    },
+    {
+      "name": "葡萄",
+      "start": "#7C678E",
+      "end": ""
+    },
+    {
+      "name": "玫瑰",
+      "start": "#B8798B",
+      "end": ""
+    },
+    {
+      "name": "杏桃",
+      "start": "#D6A285",
+      "end": ""
+    },
+    {
+      "name": "蜂蜜",
+      "start": "#C8AC65",
+      "end": ""
+    },
+    {
+      "name": "燕麦",
+      "start": "#ADAA96",
+      "end": ""
+    },
+    {
+      "name": "岩灰",
+      "start": "#7F8991",
+      "end": ""
+    }
+  ],
+  "gradient": [
+    {
+      "name": "冬日晴空",
+      "start": "#A1C4FD",
+      "end": "#C2E9FB"
+    },
+    {
+      "name": "桃色微光",
+      "start": "#FF9A9E",
+      "end": "#FAD0C4"
+    },
+    {
+      "name": "杏子奶油",
+      "start": "#FFECD2",
+      "end": "#FCB69F"
+    },
+    {
+      "name": "薰衣草雾",
+      "start": "#E0C3FC",
+      "end": "#8EC5FC"
+    },
+    {
+      "name": "樱花薄雾",
+      "start": "#FBC2EB",
+      "end": "#A6C1EE"
+    },
+    {
+      "name": "春日新芽",
+      "start": "#D4FC79",
+      "end": "#96E6A1"
+    },
+    {
+      "name": "晨间暖阳",
+      "start": "#F6D365",
+      "end": "#FDA085"
+    },
+    {
+      "name": "纸页时光",
+      "start": "#FDFCFB",
+      "end": "#E2D1C3"
+    },
+    {
+      "name": "苔绿花园",
+      "start": "#CFE0BE",
+      "end": "#B7D4CC"
+    },
+    {
+      "name": "海岸信笺",
+      "start": "#A8D5D1",
+      "end": "#D5DEEF"
+    },
+    {
+      "name": "落日余温",
+      "start": "#D9AEC2",
+      "end": "#EAC9A7"
+    },
+    {
+      "name": "灰紫云层",
+      "start": "#D3CCE3",
+      "end": "#E9E4F0"
+    }
+  ]
+}

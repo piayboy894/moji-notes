@@ -28,7 +28,10 @@ import app.moji.android.data.NoteMode
 @Composable fun NotebookCard(book: Notebook, count: Int, open: () -> Unit, edit: () -> Unit) {
     val dark = MaterialTheme.colorScheme.background.luminance() < .3f
     val chosen=color(book.color)
-    val palette=listOf(lerp(chosen,Color.White,.78f),lerp(chosen,Color.White,.58f),lerp(chosen,Color.Black,.15f),chosen)
+    val palette=if(book.colorEnd.isBlank())listOf(lerp(chosen,Color.White,.78f),lerp(chosen,Color.White,.58f),lerp(chosen,Color.Black,.15f),chosen)else{
+        val end=color(book.colorEnd);val band=lerp(lerp(chosen,end,.5f),Color.Black,.18f)
+        listOf(notebookPaper(chosen),notebookPaper(end),lerp(band,Color.Black,.15f),band)
+    }
     BoxWithConstraints(Modifier.widthIn(max=210.dp).fillMaxWidth().aspectRatio(.87f).combinedClickable(onClick = open, onLongClick = edit).testTag("book-${book.mode.name}")) {
         val small = maxWidth < 220.dp
         Canvas(Modifier.fillMaxSize()) {
@@ -71,3 +74,6 @@ import app.moji.android.data.NoteMode
         Icon(MojiIcons.Add,null,Modifier.padding(bottom=10.dp).size(32.dp),tint=accent)
     }
 }
+
+fun notebookPaper(value:Color):Color {var result=lerp(value,Color.White,.12f);while(result.luminance()<.45f)result=lerp(result,Color.White,.08f);return result}
+fun notebookSwatch(start:String,end:String):Brush=if(end.isBlank())SolidColor(color(start))else Brush.linearGradient(listOf(notebookPaper(color(start)),notebookPaper(color(end))))

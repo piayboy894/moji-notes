@@ -19,7 +19,7 @@ public partial class MainWindow
         foreach (var book in state.LiveBooks)
         {
             var face = new Grid { Width = 210, Height = 250, Margin = new Thickness(0, 0, 0, 14) };
-            face.Children.Add(new NotebookCover { Mode = book.Mode, CoverColor=book.Color, Dark = state.Preferences.Theme == "dark", IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
+            face.Children.Add(new NotebookCover { Mode = book.Mode, CoverColor=book.Color,CoverColorEnd=book.ColorEnd, Dark = state.Preferences.Theme == "dark", IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
             var contents = new StackPanel { Margin = new Thickness(28,28,42,25), IsHitTestVisible = false };
             contents.Children.Add(new NativeIcon { Kind = NativeIcon.ForNotebook(book), Width = 27, Height = 27, Foreground = Ui.Brush(NotebookAppearance.Ink(book.Color)), HorizontalAlignment = HorizontalAlignment.Left });
             var name = Ui.Text(book.Name, 21, "#283025", true); name.Margin = new Thickness(0,22,0,8); name.MaxHeight = 60; name.TextTrimming = TextTrimming.CharacterEllipsis; contents.Children.Add(name);

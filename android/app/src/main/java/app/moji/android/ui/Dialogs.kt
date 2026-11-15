@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,22 +26,56 @@ import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun NotebookDialog(book: Notebook?, vm: MojiViewModel, close: () -> Unit) {
-    var name by remember { mutableStateOf(book?.name ?: "") }; var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }; var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }; var selectedIcon by remember{mutableStateOf(book?.let{notebookIconId(it)}?:"Book")};var customColor by remember{mutableStateOf(false)};var deleting by remember { mutableStateOf(false) }
-    PanelDialog(if (book == null) "新建记事本" else "编辑记事本", close, actions = { if (book != null) TextButton(onClick = { deleting = true }) { Text("删除", color = MaterialTheme.colorScheme.error) }; Spacer(Modifier.weight(1f)); TextButton(onClick = close) { Text("取消") }; Button(onClick = { vm.saveBook(book, name, mode, selectedColor,selectedIcon); close() }, enabled = name.isNotBlank()) { Text(if (book == null) "创建记事本" else "保存修改") } }) {
+    var name by remember { mutableStateOf(book?.name ?: "") }
+    var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }
+    var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }
+    var selectedEnd by remember { mutableStateOf(book?.colorEnd ?: "") }
+    var selectedIcon by remember { mutableStateOf(book?.let(::notebookIconId) ?: "Book") }
+    var gradient by remember { mutableStateOf(selectedEnd.isNotBlank()) }
+    var customColor by remember { mutableStateOf<Int?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    PanelDialog(if (book == null) "新建记事本" else "编辑记事本", close, actions = {
+        if (book != null) TextButton(onClick = { deleting = true }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+        Spacer(Modifier.weight(1f)); TextButton(onClick = close) { Text("取消") }
+        Button(onClick = { vm.saveBook(book, name, mode, selectedColor, selectedIcon, selectedEnd); close() }, enabled = name.isNotBlank()) { Text(if (book == null) "创建记事本" else "保存修改") }
+    }) {
         Field("记事本名称", name, Modifier.testTag("notebook-name")) { name = it.take(40) }
         Text("记录模式", style = MaterialTheme.typography.labelLarge)
-        Column { NoteMode.entries.forEach { type -> Row(Modifier.fillMaxWidth().clickable(enabled = book == null) { mode = type }, verticalAlignment = Alignment.CenterVertically) { RadioButton(mode == type, { mode = type }, enabled = book == null); Icon(modeIcon(type), null, Modifier.size(20.dp), tint = modeColor(type)); Spacer(Modifier.width(12.dp)); Text(type.label) } } }
-        Row(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.White,.78f),androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){Icon(notebookIcon(Notebook(icon=selectedIcon)),null,Modifier.size(26.dp),tint=androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.Black,.32f));Text(name.ifBlank{"新记事本"},color=androidx.compose.ui.graphics.Color(0xFF293226))}
-        Text("封面颜色", style = MaterialTheme.typography.labelLarge)
-        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("#75876D", "#B2946E", "#8393AC", "#A5849D", "#BA886C", "#9182A8").forEach { c -> Box(Modifier.size(40.dp).testTag("notebook-color-$c").background(color(c), CircleShape).clickable { selectedColor = c }, contentAlignment = Alignment.Center) { if (selectedColor == c) Icon(MojiIcons.Check, "已选颜色", Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White) } } }
-        TextButton(onClick={customColor=true}){Text("自定义颜色")}
+        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            NoteMode.entries.forEach { type -> FilterChip(selected=mode==type,onClick={mode=type},enabled=book==null,label={Text(type.label)}) }
+        }
+        val previewBrush=if(gradient)notebookSwatch(selectedColor,selectedEnd)else androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.White,.75f))
+        Row(Modifier.fillMaxWidth().background(previewBrush,androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Icon(notebookIcon(Notebook(icon=selectedIcon)),null,Modifier.size(26.dp),tint=androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.Black,.32f))
+            Text(name.ifBlank{"新记事本"},color=androidx.compose.ui.graphics.Color(0xFF293226))
+        }
+        Text("封面颜色",style=MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected=!gradient,onClick={gradient=false;selectedEnd=""},label={Text("纯色")})
+            FilterChip(selected=gradient,onClick={if(!gradient){gradient=true;selectedColor=notebookGradients[0].start;selectedEnd=notebookGradients[0].end}},label={Text("渐变")})
+        }
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            (if(gradient)notebookGradients else notebookSolids).forEachIndexed { index,palette ->
+                Box(Modifier.size(48.dp,40.dp).testTag(if(gradient)"notebook-gradient-$index" else "notebook-color-${palette.start}")
+                    .background(notebookSwatch(palette.start,palette.end),androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clickable { selectedColor=palette.start;selectedEnd=palette.end }.semantics{contentDescription=palette.name},contentAlignment=Alignment.Center) {
+                    if(selectedColor==palette.start&&selectedEnd==palette.end)Icon(MojiIcons.Check,"已选颜色",Modifier.size(22.dp),tint=if(gradient)androidx.compose.ui.graphics.Color(0xFF293226)else androidx.compose.ui.graphics.Color.White)
+                }
+            }
+        }
+        Row { TextButton(onClick={customColor=0}){Text(if(gradient)"起始色" else "自定义颜色")};if(gradient)TextButton(onClick={customColor=1}){Text("结束色")} }
         Text("图标",style=MaterialTheme.typography.labelLarge)
         FlowRow { notebookIcons.forEach{(id,label)->Tool(notebookIcon(Notebook(icon=id)),label,selected=selectedIcon==id){selectedIcon=id}} }
     }
-    if(customColor){val initial=remember{color(selectedColor)};var red by remember{mutableFloatStateOf(initial.red)};var green by remember{mutableFloatStateOf(initial.green)};var blue by remember{mutableFloatStateOf(initial.blue)}
-        PanelDialog("自定义颜色",{customColor=false},actions={Button(onClick={selectedColor="#%02X%02X%02X".format((red*255).toInt(),(green*255).toInt(),(blue*255).toInt());customColor=false}){Text("使用此颜色")}}){Box(Modifier.fillMaxWidth().height(48.dp).background(androidx.compose.ui.graphics.Color(red,green,blue),androidx.compose.foundation.shape.RoundedCornerShape(8.dp)));Text("红色");Slider(red,{red=it});Text("绿色");Slider(green,{green=it});Text("蓝色");Slider(blue,{blue=it})}
+    customColor?.let { target ->
+        val initial=remember(target){color(if(target==0)selectedColor else selectedEnd)}
+        var red by remember{mutableFloatStateOf(initial.red)};var green by remember{mutableFloatStateOf(initial.green)};var blue by remember{mutableFloatStateOf(initial.blue)}
+        PanelDialog("自定义颜色",{customColor=null},actions={Button(onClick={val value="#%02X%02X%02X".format((red*255).toInt(),(green*255).toInt(),(blue*255).toInt());if(target==0)selectedColor=value else selectedEnd=value;customColor=null}){Text("使用此颜色")}}) {
+            Box(Modifier.fillMaxWidth().height(48.dp).background(androidx.compose.ui.graphics.Color(red,green,blue),androidx.compose.foundation.shape.RoundedCornerShape(8.dp)))
+            Text("红色");Slider(red,{red=it});Text("绿色");Slider(green,{green=it});Text("蓝色");Slider(blue,{blue=it})
+        }
     }
-    if (deleting && book != null) Confirm("删除「${book.name}」？", "其中的记录会移到回收站，之后仍可恢复。", { deleting = false }) { vm.deleteBook(book); close() }
+    if(deleting&&book!=null)Confirm("删除「${book.name}」？","其中的记录会移到回收站，之后仍可恢复。",{deleting=false}){vm.deleteBook(book);close()}
 }
 @Composable fun ChooseNotebookDialog(s: AppState, vm: MojiViewModel, newBook: () -> Unit, close: () -> Unit) {
     PanelDialog("选择记事本", close) {

@@ -29,6 +29,7 @@ public sealed class NotebookCover : FrameworkElement
     public NoteMode Mode { get; set; }
     public bool Dark { get; set; }
     public string CoverColor { get; set; } = "#75876D";
+    public string CoverColorEnd { get; set; } = "";
     private static Color C(string value) => (Color)ColorConverter.ConvertFromString(value);
     private static Brush Gradient(params string[] colors)
     { var brush = new LinearGradientBrush { StartPoint = new Point(0, .1), EndPoint = new Point(1, .9) }; for (var i = 0; i < colors.Length; i++) brush.GradientStops.Add(new(C(colors[i]), i / (double)(colors.Length - 1))); return brush; }
@@ -36,6 +37,7 @@ public sealed class NotebookCover : FrameworkElement
     {
         var w = ActualWidth; var h = ActualHeight; if (w < 20 || h < 20) return;
         var chosen=NotebookAppearance.Parse(CoverColor);var top=NotebookAppearance.Mix(chosen,Colors.White,.78).ToString();var bottom=NotebookAppearance.Mix(chosen,Colors.White,.58).ToString();var edge=NotebookAppearance.Mix(chosen,Colors.Black,.15).ToString();var band=chosen.ToString();
+        if(!string.IsNullOrEmpty(CoverColorEnd)){var last=NotebookAppearance.Parse(CoverColorEnd);top=NotebookAppearance.Paper(chosen).ToString();bottom=NotebookAppearance.Paper(last).ToString();band=NotebookAppearance.Mix(NotebookAppearance.Mix(chosen,last,.5),Colors.Black,.18).ToString();edge=NotebookAppearance.Mix(NotebookAppearance.Parse(band),Colors.Black,.15).ToString();}
         var pageTop = h - 31;
         dc.DrawRoundedRectangle(Ui.Brush(edge), null, new Rect(4, pageTop - 8, w - 9, 23), 13, 13);
         dc.DrawRoundedRectangle(Gradient("#F4F1E6", "#DDDACA"), new Pen(Ui.Brush(edge), .65), new Rect(8, pageTop - 6, w - 18, 17), 9, 9);

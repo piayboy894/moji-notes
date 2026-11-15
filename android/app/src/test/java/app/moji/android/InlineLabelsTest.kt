@@ -30,6 +30,17 @@ class InlineLabelsTest {
         assertTrue(state.toHtml().contains("tail"))
         assertTrue(state.toHtml().contains("moji-variable:one"));assertTrue(state.toHtml().contains("moji-variable:two"))
     }
+    @Test fun deletingAndReplacingAnAtomicVariableKeepsSurroundingText() {
+        val state=RichTextState().apply{setMarkdown("Keep {{literal}} ![变量](moji-variable:one)")}
+        state.selection=androidx.compose.ui.text.TextRange(18);state.addTextAfterSelection(" tail")
+        state.removeTextRange(androidx.compose.ui.text.TextRange(17,18))
+        assertEquals("Keep {{literal}}  tail",state.annotatedString.text)
+        assertFalse(state.toHtml().contains("moji-variable:"))
+        state.setMarkdown("A ![变量](moji-variable:one) B ![变量](moji-variable:one) C")
+        state.replaceTextRange(androidx.compose.ui.text.TextRange(2,3),"replacement")
+        assertEquals("A replacement B \uFFFC C",state.annotatedString.text)
+        assertEquals(1,Regex("moji-variable:one").findAll(state.toHtml()).count())
+    }
     @Test fun unregisteredLiteralTextKeepsIdentityMapping() {
         val text=AnnotatedString("{{not a variable}}")
         val display=renderInlineLabels(text,emptyMap())

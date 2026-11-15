@@ -38,16 +38,44 @@ public partial class MainWindow
     }
     private void NotebookDialog(Notebook? book=null)
     {
-        var name=Ui.Input(book?.Name??"");name.Name="NotebookName";var modes=new ComboBox{ItemsSource=new[]{"普通文本","提示词","账号密码"},SelectedIndex=(int)(book?.Mode??NoteMode.Text),IsEnabled=book==null,Name="NotebookMode"};
-        var chosenColor=book?.Color??"#75876D";var chosenIcon=book==null?"Book":NativeIcon.ForNotebook(book);var palette=new WrapPanel();var icons=new WrapPanel();
-        var preview=new Border{Height=46,CornerRadius=new CornerRadius(8),Padding=new Thickness(12),Margin=new Thickness(0,0,0,18)};
-        void Refresh(){preview.Background=new SolidColorBrush(NotebookAppearance.Mix(NotebookAppearance.Parse(chosenColor),Colors.White,.75));preview.Child=new NativeIcon{Kind=chosenIcon,Width=24,Height=24,Foreground=Ui.Brush(NotebookAppearance.Ink(chosenColor)),HorizontalAlignment=HorizontalAlignment.Left};foreach(Button button in icons.Children)button.Background=button.Tag?.ToString()==chosenIcon?Ui.Resource("AccentLight"):Brushes.Transparent;foreach(Button button in palette.Children)button.BorderThickness=button.Tag?.ToString()==chosenColor?new Thickness(2):new Thickness(0);}
-        foreach(var value in NotebookAppearance.Colors){var color=value;var button=Ui.Button("",()=>{chosenColor=color;Refresh();},tip:"选择颜色");button.Content=new System.Windows.Shapes.Ellipse{Width=25,Height=25,Fill=Ui.Brush(color)};button.Width=42;button.Height=42;button.Padding=new Thickness(5);button.Margin=new Thickness(3);button.Tag=color;button.Name="NotebookColor"+color.TrimStart('#');palette.Children.Add(button);}
-        palette.Children.Add(Ui.Button("自定义",()=>PickNotebookColor(chosenColor,value=>{chosenColor=value;Refresh();})));
+        var name=Ui.Input(book?.Name??""); name.Name="NotebookName";
+        var modes=new ComboBox{ItemsSource=new[]{"普通文本","提示词","账号密码"},SelectedIndex=(int)(book?.Mode??NoteMode.Text),IsEnabled=book==null,Name="NotebookMode"};
+        var chosenColor=book?.Color??"#75876D"; var chosenEnd=book?.ColorEnd??"";
+        var chosenIcon=book==null?"Book":NativeIcon.ForNotebook(book); var gradient=chosenEnd.Length>0;
+        var palette=new WrapPanel(); var icons=new WrapPanel(); var custom=new StackPanel{Orientation=Orientation.Horizontal};
+        var preview=new Border{Height=62,CornerRadius=new CornerRadius(10),Padding=new Thickness(16),Margin=new Thickness(0,0,0,20)};
+        Button? solidTab=null,gradientTab=null;
+        void Refresh(){
+            preview.Background=gradient?NotebookAppearance.Swatch(chosenColor,chosenEnd):new SolidColorBrush(NotebookAppearance.Mix(NotebookAppearance.Parse(chosenColor),Colors.White,.75));
+            var sample=Ui.Row(new NativeIcon{Kind=chosenIcon,Width=26,Height=26,Foreground=Ui.Brush(NotebookAppearance.Ink(chosenColor))},Ui.Spaced(Ui.Text(string.IsNullOrWhiteSpace(name.Text)?"新记事本":name.Text,15,"#293226",true),new Thickness(12,0,0,0)));preview.Child=sample;
+            foreach(Button button in icons.Children)button.Background=button.Tag?.ToString()==chosenIcon?Ui.Resource("AccentLight"):Brushes.Transparent;
+            foreach(Button button in palette.Children)button.BorderThickness=button.Tag?.ToString()==chosenColor+"|"+chosenEnd?new Thickness(2):new Thickness(0);
+            if(solidTab!=null)solidTab.Background=!gradient?Ui.Resource("AccentLight"):Brushes.Transparent;
+            if(gradientTab!=null)gradientTab.Background=gradient?Ui.Resource("AccentLight"):Brushes.Transparent;
+        }
+        void RenderPalette(){
+            palette.Children.Clear();custom.Children.Clear();var presets=gradient?NotebookAppearance.Gradients:NotebookAppearance.Solids;var index=0;
+            foreach(var preset in presets){var value=preset;var button=Ui.Button("",()=>{chosenColor=value.Start;chosenEnd=value.End;Refresh();},tip:value.Name);
+                button.Content=new Border{Width=47,Height=32,CornerRadius=new CornerRadius(7),Background=NotebookAppearance.Swatch(value.Start,value.End)};button.Width=59;button.Height=46;button.Padding=new Thickness(4);button.Margin=new Thickness(2);button.Tag=value.Start+"|"+value.End;button.Name=gradient?"NotebookGradient"+index:"NotebookColor"+value.Start.TrimStart('#');palette.Children.Add(button);index++;
+            }
+            custom.Children.Add(Ui.Button(gradient?"起始色":"自定义颜色",()=>PickNotebookColor(chosenColor,value=>{chosenColor=value;Refresh();})));
+            if(gradient)custom.Children.Add(Ui.Spaced(Ui.Button("结束色",()=>PickNotebookColor(chosenEnd,value=>{chosenEnd=value;Refresh();})),new Thickness(8,0,0,0)));
+            Refresh();
+        }
+        solidTab=Ui.Button("纯色",()=>{gradient=false;chosenEnd="";RenderPalette();});
+        gradientTab=Ui.Button("渐变",()=>{if(!gradient){gradient=true;chosenColor=NotebookAppearance.Gradients[0].Start;chosenEnd=NotebookAppearance.Gradients[0].End;}RenderPalette();});
         foreach(var(icon,label)in NotebookAppearance.Icons){var value=icon;var button=Ui.Icon(icon,()=>{chosenIcon=value;Refresh();},label);button.Tag=icon;icons.Children.Add(button);}
-        var content=Ui.Stack(preview,Ui.Field("记事本名称",name),Ui.Field("记录模式",modes),Ui.Field("封面颜色",palette),Ui.Field("图标",icons));content.Margin=new Thickness(25);Window? dialog=null;
-        var save=Ui.Button(book==null?"创建记事本":"保存修改",()=>{if(string.IsNullOrWhiteSpace(name.Text))return;if(book==null){var created=new Notebook{Name=name.Text.Trim(),Mode=(NoteMode)modes.SelectedIndex,Color=chosenColor,Icon=chosenIcon};VM.Change(v=>v with{Notebooks=[..v.Notebooks,created]});dialog!.Close();Navigate(created.Id);}else{VM.Change(v=>v with{Notebooks=v.Notebooks.Select(b=>b.Id==book.Id?b with{Name=name.Text.Trim(),Color=chosenColor,Icon=chosenIcon,UpdatedAt=Clock.Now,Revision=Clock.Id}:b).ToList()});dialog!.Close();}},true);
-        var buttons=Ui.Row();if(book!=null)buttons.Children.Add(Ui.Button("删除记事本",()=>{dialog!.Close();DeleteNotebook(book);}));buttons.Children.Add(Ui.Spaced(save,new Thickness(12,0,0,0)));buttons.HorizontalAlignment=HorizontalAlignment.Right;content.Children.Add(buttons);Refresh();dialog=Ui.Dialog(this,book==null?"新建记事本":"编辑记事本",content,490);dialog.Loaded+=(_,_)=>name.Focus();dialog.ShowDialog();
+        name.TextChanged+=(_,_)=>Refresh();
+        var content=Ui.Stack(preview,Ui.Field("记事本名称",name),Ui.Field("记录模式",modes),Ui.Field("封面颜色",Ui.Stack(Ui.Spaced(Ui.Row(solidTab,gradientTab),new Thickness(0,0,0,8)),palette,Ui.Spaced(custom,new Thickness(2,8,0,0)))),Ui.Field("图标",icons));
+        Window? dialog=null;
+        var save=Ui.Button(book==null?"创建记事本":"保存修改",()=>{
+            if(string.IsNullOrWhiteSpace(name.Text))return;
+            if(book==null){var created=new Notebook{Name=name.Text.Trim(),Mode=(NoteMode)modes.SelectedIndex,Color=chosenColor,ColorEnd=chosenEnd,Icon=chosenIcon};VM.Change(v=>v with{Notebooks=[..v.Notebooks,created]});dialog!.Close();Navigate(created.Id);}
+            else{VM.Change(v=>v with{Notebooks=v.Notebooks.Select(b=>b.Id==book.Id?b with{Name=name.Text.Trim(),Color=chosenColor,ColorEnd=chosenEnd,Icon=chosenIcon,UpdatedAt=Clock.Now,Revision=Clock.Id}:b).ToList()});dialog!.Close();}
+        },true);
+        var buttons=Ui.Row();if(book!=null)buttons.Children.Add(Ui.Button("删除记事本",()=>{dialog!.Close();DeleteNotebook(book);}));buttons.Children.Add(Ui.Spaced(save,new Thickness(12,0,0,0)));buttons.HorizontalAlignment=HorizontalAlignment.Right;buttons.Margin=new Thickness(0,12,0,0);
+        var root=new DockPanel{Margin=new Thickness(24)};DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);root.Children.Add(new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+        RenderPalette();dialog=Ui.Dialog(this,book==null?"新建记事本":"编辑记事本",root,540,Math.Min(800,SystemParameters.WorkArea.Height-60));dialog.Loaded+=(_,_)=>name.Focus();dialog.ShowDialog();
     }
     private void PickNotebookColor(string current,Action<string> apply)
     {

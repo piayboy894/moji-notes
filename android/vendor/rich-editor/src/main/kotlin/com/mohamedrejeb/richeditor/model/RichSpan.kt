@@ -480,6 +480,7 @@ internal class RichSpan(
         // Remove all text if it's in the text range
         if (removeTextRange.min <= this.textRange.min && removeTextRange.max >= this.textRange.max) {
             this.textRange = TextRange(start = 0, end = 0)
+            if (richSpanStyle is RichSpanStyle.Image) richSpanStyle = RichSpanStyle.Default
             text = ""
         }
         // Remove text from start and end
@@ -603,7 +604,7 @@ internal class RichSpan(
         text = text,
         textRange = textRange,
         spanStyle = spanStyle,
-        richSpanStyle = richSpanStyle,
+        richSpanStyle = if (text.isEmpty() && richSpanStyle is RichSpanStyle.Image) RichSpanStyle.Default else richSpanStyle,
     )
 
     override fun toString(): String {
