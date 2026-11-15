@@ -3,7 +3,6 @@ package app.moji.android.data
 object Shortcuts {
     val actions = listOf(
         Triple("search", "全局搜索", "Ctrl+K"), Triple("new", "新建记录", "Ctrl+N"),
-        Triple("find", "查找", "Ctrl+F"), Triple("replace", "查找与替换", "Ctrl+H"),
         Triple("save", "保存历史版本", "Ctrl+S"), Triple("cloud", "云存档", "Ctrl+Shift+S"),
         Triple("undo", "撤销", "Ctrl+Z"), Triple("redo", "重做", "Ctrl+Y"), Triple("bold", "加粗", "Ctrl+B")
     )

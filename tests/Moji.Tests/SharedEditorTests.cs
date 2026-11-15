@@ -1,0 +1,7 @@
+using Moji.Core;
+namespace Moji.Tests;
+public class SharedEditorTests {
+ [Xunit.Fact] public void SharedHtmlIsSearchableWithoutMarkup(){var content=EditorContent.Prefix+"<h2>标题</h2><p><strong>正文</strong> {{原样}}</p><img src='data:image/png;base64,AAAA' alt='图片'>";Xunit.Assert.Equal("标题\n正文 {{原样}}\n图片",EditorContent.Plain(content));Xunit.Assert.DoesNotContain("base64",RecordTools.Plain(content));}
+ [Xunit.Fact] public void ExplicitVariablesFillOnceWithoutInterpretingUserInput(){var v=new PromptVariable{Name="受众"};var note=new Note{Content=EditorContent.Prefix+$"<p>{{{{原样}}}} <span data-moji-variable=\"{v.Id}\" data-name=\"受众\">受众</span></p>",Variables=[v]};Xunit.Assert.Single(PromptVariables.Used(note));var value="<script>& {{原样}}";Xunit.Assert.Equal("{{原样}} "+value,PromptVariables.PlainText(note,new Dictionary<string,string>{{v.Id,value}},EditorContent.Plain));Xunit.Assert.Empty(PromptVariables.Used(note with{Content="{{受众}}"}));}
+ [Xunit.Fact] public void PreexistingTextRemainsLiteral(){Xunit.Assert.Equal("# Heading\n- [x] task",EditorContent.Plain("# Heading\n- [x] task"));}
+}

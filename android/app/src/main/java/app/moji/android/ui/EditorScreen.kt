@@ -30,10 +30,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.moji.android.*
 import app.moji.android.data.*
 import app.moji.android.security.Crypto
-import io.noties.markwon.*
-import io.noties.markwon.ext.tables.TablePlugin
-import io.noties.markwon.ext.tasklist.TaskListPlugin
-import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import kotlinx.coroutines.delay
 
 @Composable fun EditorScreen(vm: MojiViewModel, s: AppState, note: Note, activity: MainActivity, export: (Note) -> Unit, modifier: Modifier = Modifier, showBack: Boolean = false, back: () -> Unit = {}) {
@@ -69,29 +65,8 @@ import kotlinx.coroutines.delay
     if(move)PanelDialog("移动到记事本",{move=false}){val books=workspace.liveBooks.filter{it.mode==book.mode&&it.id!=book.id};if(books.isEmpty())Text("暂无同类型记事本");books.forEach{target->TextButton(onClick={vm.edit(note.id){it.copy(notebookId=target.id)};vm.navigate(target.id);vm.select(note.id);move=false}){Text(target.name)}}}
     if(purge)Confirm("永久删除这条记录？","正文、密码和历史版本会被清除，无法恢复。",{purge=false}){vm.purge(setOf(note.id))}
 }
-@Composable fun MarkdownPreview(content: String, size: Float, modifier: Modifier = Modifier) {
-    val context = LocalContext.current; val ink = MaterialTheme.colorScheme.onSurface
-    val markwon = remember(context) {
-        Markwon.builder(context)
-            .usePlugin(TablePlugin.create(context))
-            .usePlugin(TaskListPlugin.create(context))
-            .usePlugin(StrikethroughPlugin.create())
-            .usePlugin(object : AbstractMarkwonPlugin() {
-                override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
-                    builder.linkResolver { view, link ->
-                        val uri = Uri.parse(link)
-                        if (uri.scheme in listOf("http", "https")) {
-                            runCatching { view.context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                        }
-                    }
-                }
-            }).build()
-    }
-    val images = remember(content) { Regex("!\\[[^]]*]\\((data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+)\\)").findAll(content).mapNotNull { match -> runCatching { val bytes = Crypto.unb64(match.groupValues[1].substringAfter(',')); if (bytes.size > 2_000_000) null else BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull() }.toList() }
-    Column(modifier.verticalScroll(rememberScrollState()).padding(23.dp, 20.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
-        AndroidView(factory = { TextView(it).apply { setTextIsSelectable(true); setPadding(0, 0, 0, 0); setLineSpacing(0f, 1.5f) } }, update = { view -> view.textSize = size; view.setTextColor(android.graphics.Color.argb(255, (ink.red * 255).toInt(), (ink.green * 255).toInt(), (ink.blue * 255).toInt())); markwon.setMarkdown(view, content.replace(Regex("!\\[([^]]*)]\\(data:image/[^)]+\\)"), "[图片：$1]")) }, modifier = Modifier.fillMaxWidth().testTag("markdown-preview"))
-        images.forEach { Image(it, "内嵌图片", Modifier.fillMaxWidth().heightIn(max = 400.dp)) }
-    }
+@Composable fun HistoryPreview(content:String,size:Float,modifier:Modifier=Modifier) {
+    androidx.compose.foundation.text.selection.SelectionContainer(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) { Text(EditorContent.plain(content),fontSize=size.sp) }
 }
 @Composable private fun CredentialEditor(vm: MojiViewModel, note: Note, activity: MainActivity, editing: Boolean, modifier: Modifier = Modifier) {
     var generator by remember { mutableStateOf(false) }
@@ -104,4 +79,4 @@ import kotlinx.coroutines.delay
     if (generator) PasswordDialog(activity, { generator = false }) { password -> vm.edit(note.id) { it.copy(password = password) }; generator = false }
 }
 
-fun visibleText(context:android.content.Context,note:Note,values:Map<String,String> = note.variables.associate{it.id to it.name}):String = PromptVariables.plainText(note,values){Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(TaskListPlugin.create(context)).usePlugin(StrikethroughPlugin.create()).build().toMarkdown(it).toString()}
+fun visibleText(context:android.content.Context,note:Note,values:Map<String,String> = note.variables.associate{it.id to it.name}):String = PromptVariables.plainText(note,values){EditorContent.plain(it)}

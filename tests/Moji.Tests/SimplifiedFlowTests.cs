@@ -36,7 +36,7 @@ public class ExplicitVariableTests
     }
 }
 
-public class VisibleSearchTests { [Xunit.Fact] public void RichTextSearchUsesVisibleWords(){Xunit.Assert.Equal("Hello world left|right #literal",Moji.Core.RecordTools.Plain("**Hello** world left\\|right \\#literal"));} }
+
 
 public class UserMessageTests{[Xunit.Fact]public void RuntimeDetailsNeverReachUser(){var error=new InvalidOperationException("WindowInteropHelper.EnsureHandle ShowDialog Close");Xunit.Assert.Equal("操作未完成，请重试。",Moji.Core.UserMessages.For(error));Xunit.Assert.DoesNotContain("WindowInteropHelper",Moji.Core.UserMessages.For(error));}}
 

@@ -26,3 +26,8 @@ __pycache__/
 *.pyc
 
 *_wpftmp.csproj
+
+editor/node_modules/
+editor/test-results/
+editor/playwright-report/
+webview-runtime/

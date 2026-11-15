@@ -4,120 +4,43 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using System.Windows.Documents;
 using Moji.Core;
+using Microsoft.Web.WebView2.Core;
 
 namespace Moji.App;
 internal static class NativeSmoke
 {
     public static async Task Run(string[] args)
     {
-        var index=Array.IndexOf(args,"--output");var output=index>=0&&args.Length>index+1?Path.GetFullPath(args[index+1]):Path.Combine(Path.GetTempPath(),"moji-native-smoke");Directory.CreateDirectory(output);var data=Path.Combine(output,"test-data");var checks=new List<string>();
-        try
-        {
-            using var vm = new WorkspaceViewModel(data); var window = new MainWindow(vm,true); Application.Current.MainWindow = window; window.Show();
-            if (!await vm.OpenAsync() || vm.State!.Notebooks.Count != 0 || vm.State.Notes.Count != 0 || vm.State.Sync.Repository != "") throw new Exception("Fresh start was not empty and password-free");
-            if (FindNamed<Button>(window,"NewRecordButton")!.Visibility != Visibility.Collapsed) throw new Exception("Workspace exposes a record creation action");
-            window.AddNote(); if(vm.State.Notes.Count!=0)throw new Exception("Record creation escaped notebook scope");
-            var savedData = GameSaves.Capture(vm.State); await Render(); Capture(window,Path.Combine(output,"01-workspace.png")); checks.Add("password-free start has no notebooks, records or preset repository");
-            var customize=Application.Current.Dispatcher.InvokeAsync(async()=>{
-                await Render();var dialog=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="新建记事本");
-                try{FindNamed<TextBox>(dialog,"NotebookName")!.Text="旅行手记";FindNamed<ComboBox>(dialog,"NotebookMode")!.SelectedIndex=(int)NoteMode.Text;
-                    FindNamed<Button>(dialog,"NotebookColorA5849D")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));FindTool(dialog,"绿叶")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));FindButton(dialog,"渐变")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));FindNamed<Button>(dialog,"NotebookGradient0")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Render();Capture(dialog,Path.Combine(output,"08-notebook-appearance.png"),540,760);
-                    FindButton(dialog,"创建记事本")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                }catch{dialog.Close();throw;}
-            });
-            FindNamed<Button>(window,"AddNotebookCard")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await customize.Task.Unwrap();
-            var customBook=vm.State.LiveBooks.Single(b=>b.Name=="旅行手记");if(customBook.Mode!=NoteMode.Text||customBook.Color!="#A1C4FD"||customBook.ColorEnd!="#C2E9FB"||customBook.Icon!="Leaf")throw new Exception("Notebook appearance changed type or failed to save");
-            await vm.SaveAsync();await vm.OpenAsync();if(vm.State!.LiveBooks.First(b=>b.Id==customBook.Id).Icon!="Leaf")throw new Exception("Notebook appearance was lost on reopen");window.Navigate("home");await Render();Capture(window,Path.Combine(output,"09-custom-notebook-home.png"));
-            vm.Change(w=>w with{Notebooks=[..w.Notebooks,new Notebook{Name="提示词",Mode=NoteMode.Prompt},new Notebook{Name="账号密码",Mode=NoteMode.Password}]});savedData=GameSaves.Capture(vm.State!);checks.Add("dashed add tile opens notebook creation; chosen color and icon persist independently of notebook type");
-            foreach(var view in new[]{"home","all","star","archive","trash"}){window.Navigate(view);await Render();if(FindNamed<Button>(window,"NewRecordButton")!.Visibility!=Visibility.Collapsed||FindTool(window,"新建记录")!=null)throw new Exception("Aggregate page exposes record creation");window.AddNote();if(vm.State!.Notes.Count!=0)throw new Exception("Aggregate action created a record");}
-            checks.Add("workspace and aggregate views cannot create records; creation belongs to a specific notebook");
-            var book = vm.State!.LiveBooks.First(b=>b.Mode==NoteMode.Text); window.Navigate(book.Id);if(FindNamed<Button>(window,"NewRecordButton")!.Visibility!=Visibility.Visible)throw new Exception("Notebook creation action is missing");window.AddNote(); await Render();
-            var editor = Find<RichTextBox>(window) ?? throw new Exception("Native editor not created"); new TextRange(editor.Document.ContentStart,editor.Document.ContentEnd).Text = "Native edit\n\nPlain local persistence. _ * <example> &amp; \\path"; await vm.SaveAsync(); var noteId = vm.SelectedId;
-            if (!(await File.ReadAllTextAsync(vm.Store.VaultPath)).Contains("Plain local persistence")) throw new Exception("Local data was not plain text");
-            await vm.OpenAsync(); if (!vm.State!.Notes.Any(n=>n.Id==noteId && n.Content.Contains("Plain local persistence"))) throw new Exception("Restart lost data");
-            window.Navigate(book.Id,noteId); await Render(); var reopenedEditor=Find<RichTextBox>(window)!;if(!new TextRange(reopenedEditor.Document.ContentStart,reopenedEditor.Document.ContentEnd).Text.Contains("_ * <example> &amp; \\path"))throw new Exception("Literal punctuation changed after reopening");Capture(window,Path.Combine(output,"02-editor.png")); checks.Add("native editing autosaves to ordinary JSON and reopens without a password");
-            window.AddNote();await Render();var boundaryId=vm.SelectedId;var emptyEditor=Find<RichTextBox>(window)!;
-            FindTool(window,"引用")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));if(!RichDocument.Serialize(emptyEditor.Document).Contains(">"))throw new Exception("Quote failed on an empty record");
-            var tableDialog=Application.Current.Dispatcher.InvokeAsync(async()=>{await Render();var d=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="插入表格");FindButton(d,"插入")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));});FindTool(window,"插入表格")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await tableDialog.Task.Unwrap();
-            emptyEditor=Find<RichTextBox>(window)!;if(!emptyEditor.Document.Blocks.OfType<Table>().Any())throw new Exception("Toolbar table did not insert after quote");
-            window.EmbedBitmap(BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[]{0,0,255,255,0,255,0,255,255,0,0,255,255,255,255,255},8));
-            if(!vm.State!.Notes.First(n=>n.Id==boundaryId).Content.Contains("data:image/png;base64,"))throw new Exception("Native image insertion failed");await vm.SaveAsync();await vm.OpenAsync();window.Navigate(book.Id,boundaryId);await Render();
-            if(!vm.State!.Notes.First(n=>n.Id==boundaryId).Content.Contains("data:image/png;base64,"))throw new Exception("Embedded image lost on reopen");
-            checks.Add("actual quote and table toolbar actions work on empty content; embedded images save and reopen");window.Navigate(book.Id,noteId);await Render();
-            var variable=new PromptVariable{Name="受众"};var richSource="# Heading\n\n**Bold** and *italic* and ~~strike~~\n\n- [ ] Task\n\n| A | B |\n| --- | --- |\n| one | two |\n\n"+PromptVariables.Token(variable)+"\n\n用户手打 {{原样保留}}";
-            vm.EditNote(noteId,n=>n with{Content=richSource,Variables=[variable]});window.Navigate(book.Id,noteId);await Render();editor=Find<RichTextBox>(window)!;
-            var visible=new TextRange(editor.Document.ContentStart,editor.Document.ContentEnd).Text;if(visible.Contains("**")||visible.Contains("# Heading"))throw new Exception("WYSIWYG displayed source markup");
-            var task=Find<CheckBox>(editor)??throw new Exception("Task is not an interactive checkbox");task.IsChecked=true;await Render();
-            if(!vm.State.Notes.First(n=>n.Id==noteId).Content.Contains("[x]"))throw new Exception("Task state did not persist");
-            var roundTrip=RichDocument.Serialize(editor.Document);if(!roundTrip.Contains("**Bold**")||!roundTrip.Contains("| one | two |")||!roundTrip.Contains("moji-variable:"+variable.Id))throw new Exception("Rich format or variables lost on save");
-            if(PromptVariables.Used(vm.State.Notes.First(n=>n.Id==noteId)).Count!=1)throw new Exception("Typed braces triggered a variable");checks.Add("WYSIWYG renders styles, clickable tasks, editable tables and explicit variable blocks without source markup");
-            var table=editor.Document.Blocks.OfType<Table>().Single();var firstCell=table.RowGroups[0].Rows[0].Cells[0];editor.CaretPosition=firstCell.ContentStart;
-            FindButton(window,"添加列")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));if(table.RowGroups[0].Rows[0].Cells.Count!=3)throw new Exception("Add column did not affect table");
-            FindTool(window,"撤销")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));table=editor.Document.Blocks.OfType<Table>().Single();if(table.RowGroups[0].Rows[0].Cells.Count!=2)throw new Exception("Table operation cannot be undone");
-            FindTool(window,"重做")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));table=editor.Document.Blocks.OfType<Table>().Single();if(table.RowGroups[0].Rows[0].Cells.Count!=3)throw new Exception("Table operation cannot be redone");
-            firstCell=table.RowGroups[0].Rows[0].Cells[0];new TextRange(firstCell.ContentStart,firstCell.ContentEnd).Text="left|right";var savedRich=vm.State.Notes.First(n=>n.Id==noteId);
-            var reread=MarkdownDocument.Render(savedRich.Content,15,savedRich.Variables).Blocks.OfType<Table>().Single();if(reread.RowGroups[0].Rows[0].Cells.Count!=3||!new TextRange(reread.ContentStart,reread.ContentEnd).Text.Contains("left|right"))throw new Exception("Table text broke columns after reopen");
-            var copied=RichDocument.PlainText(savedRich);if(copied.Contains("**")||copied.Contains("moji-variable:")||!copied.Contains("受众")||!copied.Contains("{{原样保留}}"))throw new Exception("Copy full text leaked source or lost literal text");
-            Capture(window,Path.Combine(output,"07-rich-tools.png"));checks.Add("table add-column, undo, redo, literal pipe round-trip and plain full-text copy work in native controls");
-            var passwordBook = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Password); window.Navigate(passwordBook.Id); window.AddNote(); await Render();
-            if (vm.State.Notes.First(n=>n.Id==vm.SelectedId).NotebookId!=passwordBook.Id || FindNamed<TextBox>(window,"PasswordEdit")?.IsReadOnly!=false) throw new Exception("New password did not open in its own notebook editor");
-            var credentialId=vm.SelectedId; vm.EditNote(credentialId,n=>n with { Username="test@example.com",Password="Test-only-2026!" }); window.Navigate(passwordBook.Id,credentialId); await Render();
-            var readAccount=FindNamed<TextBox>(window,"AccountValue"); if(readAccount?.IsReadOnly!=true || FindNamed<Button>(window,"EditCredential")?.Content?.ToString()!="编辑密码")throw new Exception("Password view must be read-only with an edit action");
-            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(FindNamed<TextBox>(window,"PasswordEdit")?.IsReadOnly!=false)throw new Exception("Edit button did not enable password editor");
-            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(FindNamed<TextBox>(window,"AccountValue")?.IsReadOnly!=true)throw new Exception("Done did not return to read-only");
-            await Render(); Capture(window,Path.Combine(output,"03-password.png")); checks.Add("password records open read-only; Edit password and Done change the editing state");
-            window.Navigate(vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Prompt).Id); window.AddNote(); await Render(); Capture(window,Path.Combine(output,"04-prompt.png"));
-            if(vm.State.Notebooks.First(b=>b.Id==vm.View).Mode!=NoteMode.Prompt)throw new Exception("Prompt created in wrong notebook");
-            checks.Add("new text, prompt and password records stay in the selected notebook");
-            vm.EditNote(noteId,n=>n with{Favorite=true}); window.Navigate("star"); await Render();
-            var options=FindNamed<Button>(window,"ListOptions")??throw new Exception("Missing list options"); options.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            if(options.ContextMenu?.IsOpen!=true)throw new Exception("Favorites menu did not open");
-            var removeStar=options.ContextMenu.Items.OfType<MenuItem>().First(i=>i.Header?.ToString()=="取消收藏所选"); if(!removeStar.IsEnabled)throw new Exception("Favorite action disabled"); removeStar.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            if(vm.State.Notes.First(n=>n.Id==noteId).Favorite)throw new Exception("Unfavorite had no effect"); options.ContextMenu.IsOpen=false; checks.Add("favorites ellipsis opens real actions and unfavorite updates data");
-            vm.Change(v=>v with{Preferences=v.Preferences with{Theme="dark"}}); window.Navigate("home"); await Render(); Capture(window,Path.Combine(output,"05-dark.png"));
-            await vm.ReplaceDataAsync(savedData); if(vm.State!.Notes.Count!=0||vm.State.Preferences.Theme!="dark")throw new Exception("Global restore scope incorrect");
-            vm.Change(v=>v with{Preferences=v.Preferences with{Theme="light"}}); window.Navigate("home"); var saves=window.BuildCloudSavesWindow(); saves.Show(); await Render();
-            foreach(var label in new[]{"新建存档","覆盖存档","读取存档","删除存档"})if(!HasButton(saves,label))throw new Exception("Missing global save action: "+label);
-            Capture(saves,Path.Combine(output,"06-global-saves.png"),860,650); saves.Close(); checks.Add("four global manual save actions retained");
-            var oldDirectory=Path.Combine(output,"migration-test"); Directory.CreateDirectory(oldDirectory); var oldState=Seed.Create();
-            using(var oldKey=CryptoService.NewKey("Legacy-test-password"))await File.WriteAllTextAsync(Path.Combine(oldDirectory,"vault.moji"),Json.Serialize(CryptoService.Encrypt(oldState,oldKey)));
-            using(var migration=new WorkspaceViewModel(oldDirectory)) { if(await migration.OpenAsync())throw new Exception("Encrypted legacy file was skipped"); await migration.MigrateAsync("Legacy-test-password"); if(!await migration.OpenAsync()||migration.State!.Id!=oldState.Id)throw new Exception("Migration did not preserve old data"); }
-            checks.Add("legacy data migrates once and then reopens without password or key");
-            Application.Current.ShutdownMode=ShutdownMode.OnExplicitShutdown;await vm.SaveAsync();var didClose=false;window.Closed+=(_,_)=>didClose=true;window.Close();await Render();if(!didClose)throw new Exception("Clean close did not complete without a recursive Closing call");checks.Add("already-saved window closes without reentrant callbacks or error prompts");
-            await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / .NET 10",embeddedBrowser=false,checks}));Application.Current.Shutdown(0);
-        }
-        catch(Exception error){await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=false,error=error.ToString(),checks}));Application.Current.Shutdown(1);}
+        var index=Array.IndexOf(args,"--output");var output=index>=0?Path.GetFullPath(args[index+1]):Path.Combine(Path.GetTempPath(),"moji-shared-editor-test");Directory.CreateDirectory(output);var checks=new List<string>();
+        try {
+            using var vm=new WorkspaceViewModel(Path.Combine(output,"test-data"));var window=new MainWindow(vm,true);Application.Current.MainWindow=window;window.Width=1200;window.Height=850;window.Show();
+            if(!await vm.OpenAsync()||vm.State!.Notebooks.Count!=0)throw new Exception("Fresh workspace is not empty");await Render();Capture(window,Path.Combine(output,"01-workspace.png"));checks.Add("empty workspace; only notebooks can own new records");
+            var book=new Notebook{Name="编辑测试",Mode=NoteMode.Prompt,Color="#75876D"};vm.Change(w=>w with{Notebooks=[book]},"edit");window.Navigate(book.Id);await Render();window.AddNote();var editor=await window.ReadyEditor();
+            await Script(editor,"window.MojiEditor.editor.commands.insertContent('Hello 世界')");await Render();var id=vm.SelectedId;
+            if(!EditorContent.IsDocument(vm.State!.Notes.First(n=>n.Id==id).Content)||!EditorContent.Plain(vm.State.Notes.First(n=>n.Id==id).Content).Contains("Hello 世界"))throw new Exception("WebView bridge did not save the actual editor document");
+            checks.Add("bundled Tiptap editor loads inside WPF and saves through the native bridge");
+            await Script(editor,"const e=window.MojiEditor.editor;e.commands.clearContent();e.commands.toggleBlockquote();e.commands.insertContent('引用');e.commands.unsetBlockquote();e.commands.insertContent('正常正文')");await Render();
+            var html=await editor.Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.editor.getHTML()");if(html.Contains("blockquote"))throw new Exception("Quote cannot be removed");checks.Add("official quote toggle can be removed without leaving a permanent indent");
+            await Script(editor,"const e=window.MojiEditor.editor;e.commands.clearContent();e.commands.toggleTaskList();e.commands.insertContent('Task');e.commands.splitListItem('taskItem');e.commands.insertContent('Second');e.commands.liftListItem('taskItem');e.commands.insertContent('Body')");await Render();
+            html=await editor.Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.editor.getHTML()");if(!html.Contains("taskItem")||!html.Contains("Body"))throw new Exception("Official task document was not stored");checks.Add("official task list creates multiple lines and exits back to a paragraph");
+            var variable=new PromptVariable{Name="受众"};await editor.Command("insertVariable",variable);await Render();
+            var note=vm.State.Notes.First(n=>n.Id==id);if(PromptVariables.Used(note).Count!=1)throw new Exception("Prompt variable missing");
+            var plain=PromptVariables.PlainText(note,new Dictionary<string,string>{{variable.Id,"用户"}},EditorContent.Plain);if(!plain.Contains("用户"))throw new Exception("Prompt variable copy failed");
+            await editor.Command("undo");await Render();if(PromptVariables.Used(vm.State.Notes.First(n=>n.Id==id)).Count!=0)throw new Exception("Native undo did not reach the shared editor");await editor.Command("redo");await Render();checks.Add("atomic prompt variables insert, undo, redo and fill without typing triggers");
+            await using(var stream=File.Create(Path.Combine(output,"02-editor.png")))await editor.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream);
+            await editor.Flush();await vm.SaveAsync();window.Navigate("home");await Render();await vm.OpenAsync();window.Navigate(book.Id,id);editor=await window.ReadyEditor();
+            html=await editor.Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.editor.getHTML()");if(!html.Contains(variable.Id)||!html.Contains("Task"))throw new Exception("Document lost content when reopened");checks.Add("HTML document and variables reopen in the same editor without native block reconstruction");
+            var password=new Notebook{Name="账号",Mode=NoteMode.Password};vm.Change(w=>w with{Notebooks=[..w.Notebooks,password]},"edit");window.Navigate(password.Id);await Render();window.AddNote();await Render();var credential=vm.SelectedId;vm.EditNote(credential,n=>n with{Username="test@example.com",Password="test-only"});window.Navigate(password.Id,credential);await Render();if(FindNamed<Button>(window,"EditCredential")?.Content?.ToString()!="编辑密码")throw new Exception("Password edit action missing");checks.Add("password records retain native explicit editing outside the shared text editor");Capture(window,Path.Combine(output,"03-password.png"));
+            vm.Change(w=>w with{Preferences=w.Preferences with{Theme="dark"}},"edit");window.Navigate(book.Id,id);editor=await window.ReadyEditor();await Render();await using(var stream=File.Create(Path.Combine(output,"05-dark.png")))await editor.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream);
+            var saves=window.BuildCloudSavesWindow();saves.Show();await Render();foreach(var label in new[]{"新建存档","覆盖存档","读取存档","删除存档"})if(!HasButton(saves,label))throw new Exception("Missing global cloud action");Capture(saves,Path.Combine(output,"06-global-saves.png"));saves.Close();checks.Add("four global manual cloud-save actions remain separate from the editor");
+            Application.Current.ShutdownMode=ShutdownMode.OnExplicitShutdown;await editor.Flush();await vm.SaveAsync();window.Close();await Render();checks.Add("closing waits for the shared editor bridge and local save");
+            await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / WebView2 / Tiptap 3.34.0 official Simple Editor",embeddedBrowser=true,checks}));Application.Current.Shutdown(0);
+        } catch(Exception e){await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=false,error=e.ToString(),checks}));Application.Current.Shutdown(1);}
     }
-    private static async Task Render(){await Application.Current.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(450);}
-    private static void Capture(Window window,string path,int width=1440,int height=940)
-    {
-        // Render the actual WPF tree offscreen so CI's small monitor does not crop wide layouts.
-        var root=(FrameworkElement)window.Content;
-        window.Content=null;
-        // ContentPresenter must release its child before offscreen layout; otherwise the
-        // live window's old client size is reapplied by WPF during UpdateLayout.
-        window.UpdateLayout();
-        var host=new Border{Width=width,Height=height,Background=window.Background};
-        try
-        {
-            if(VisualTreeHelper.GetParent(root)!=null)throw new InvalidOperationException("The native view was not detached for offscreen layout.");
-            System.Windows.Documents.TextElement.SetFontFamily(host,window.FontFamily);
-            System.Windows.Documents.TextElement.SetFontSize(host,window.FontSize);
-            System.Windows.Documents.TextElement.SetForeground(host,window.Foreground);
-            host.Child=root;root.InvalidateMeasure();host.Measure(new Size(width,height));host.Arrange(new Rect(0,0,width,height));host.UpdateLayout();
-            if(Math.Abs(root.ActualWidth-(width-root.Margin.Left-root.Margin.Right))>.1||Math.Abs(root.ActualHeight-(height-root.Margin.Top-root.Margin.Bottom))>.1)throw new InvalidOperationException("The native view did not fill the requested client size.");
-            var bitmap=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bitmap.Render(host);
-            var pixel=new byte[4];bitmap.CopyPixels(new Int32Rect(width-1,height-1,1,1),pixel,4,0);
-            if(pixel[3]!=255)throw new InvalidOperationException("The native client background was cropped.");
-            var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(path))encoder.Save(stream);
-        }
-        finally {host.Child=null;window.Content=root;window.UpdateLayout();}
-    }
-    private static T? FindNamed<T>(DependencyObject root,string name) where T:FrameworkElement { if(root is T item && item.Name==name)return item; for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var match=FindNamed<T>(VisualTreeHelper.GetChild(root,i),name);if(match!=null)return match;}return null; }
-    private static Button? FindButton(DependencyObject root,string label){if(root is Button{Content:string value} button&&value==label)return button;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var found=FindButton(VisualTreeHelper.GetChild(root,i),label);if(found!=null)return found;}return null;}
-    private static Button? FindTool(DependencyObject root,string label){if(root is Button button&&button.ToolTip?.ToString()==label)return button;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var found=FindTool(VisualTreeHelper.GetChild(root,i),label);if(found!=null)return found;}return null;}
-    private static bool HasButton(DependencyObject root,string label){if(root is Button{Content:string value}&&value==label)return true;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++)if(HasButton(VisualTreeHelper.GetChild(root,i),label))return true;return false;}
-    private static T? Find<T>(DependencyObject root)where T:DependencyObject{if(root is T match)return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=Find<T>(VisualTreeHelper.GetChild(root,i));if(child!=null)return child;}return null;}
+    private static async Task Script(SharedEditorView editor,string code){await editor.Browser.CoreWebView2.ExecuteScriptAsync("(()=>{"+code+"})()");await Render();}
+    private static async Task Render(){await Application.Current.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(300);}
+    private static void Capture(Window window,string path){var root=(FrameworkElement)window.Content;var bitmap=new RenderTargetBitmap(Math.Max(1,(int)root.ActualWidth),Math.Max(1,(int)root.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(root);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using var stream=File.Create(path);encoder.Save(stream);}
+    private static T? FindNamed<T>(DependencyObject root,string name)where T:FrameworkElement{if(root is T t&&t.Name==name)return t;for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var found=FindNamed<T>(VisualTreeHelper.GetChild(root,i),name);if(found!=null)return found;}return null;}
+    private static bool HasButton(DependencyObject root,string label){if(root is Button{Content:string value}&&value==label)return true;for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++)if(HasButton(VisualTreeHelper.GetChild(root,i),label))return true;return false;}
 }

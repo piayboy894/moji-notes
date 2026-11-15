@@ -27,6 +27,11 @@ class AdaptiveUiTest {
             NoteMode.entries.forEach { mode -> if (a.vm.state.value.workspace!!.liveBooks.none { it.mode==mode }) a.vm.saveBook(null,"测试${mode.label}",mode,"#75876D") }
         }
     }
+    private fun webView():android.webkit.WebView { var result:android.webkit.WebView?=null;compose.activityRule.scenario.onActivity{a->fun find(v:android.view.View){if(v is android.webkit.WebView&&v.tag=="MojiSharedEditor")result=v;else if(v is android.view.ViewGroup)for(i in 0 until v.childCount)find(v.getChildAt(i))};find(a.window.decorView)};return result?:error("Shared editor is not attached") }
+    private fun js(code:String):String {val done=java.util.concurrent.CountDownLatch(1);var result="";val web=webView();compose.activityRule.scenario.onActivity{web.evaluateJavascript(code){result=it;done.countDown()}};check(done.await(10,java.util.concurrent.TimeUnit.SECONDS)){"Editor script timed out"};return result}
+    private fun jsText():String=org.json.JSONTokener(js("window.MojiEditor.editor.getText() ")).nextValue().toString()
+    private fun webReady(){compose.waitForIdle();compose.waitUntil(30000){runCatching{js("Boolean(window.MojiEditor?.editor && window.MojiEditor.editor.isEditable && window.MojiEditor.recordId)")=="true"}.getOrDefault(false)}}
+    private fun tapWeb(selector:String){val raw=js("JSON.stringify((()=>{const e=document.querySelector('$selector');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})())");val point=org.json.JSONObject(org.json.JSONTokener(raw).nextValue().toString());val location=IntArray(2);var density=1f;val web=webView();compose.activityRule.scenario.onActivity{web.getLocationOnScreen(location);density=web.resources.displayMetrics.density};shell("input tap ${(location[0]+point.getDouble("x")*density).toInt()} ${(location[1]+point.getDouble("y")*density).toInt()}")}
     private fun hideKeyboard() { compose.activityRule.scenario.onActivity { androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(350); compose.waitForIdle() }
     private fun screenshot(name: String) { compose.waitForIdle(); Thread.sleep(500); val path="/sdcard/Download/moji-native-ui/$name.png"; shell("mkdir -p /sdcard/Download/moji-native-ui"); shell("screencap -p $path"); check((shell("stat -c %s $path").trim().toLongOrNull()?:0)>1024) }
     @Test fun emptyWorkspaceCreatesOnlyTheNotebookChosenByUser() {
@@ -51,17 +56,17 @@ class AdaptiveUiTest {
             compose.onNodeWithTag("book-Text").performClick()
             compose.activityRule.scenario.onActivity { it.vm.addNote() }
             compose.onNodeWithTag("note-title").performTextReplacement("Native layout test")
-            compose.onNodeWithTag("note-content").performTextReplacement("# 原生编辑\n\nRotation and resize keep this text.")
+            webReady();js("window.MojiEditor.editor.commands.insertContent(\"Rotation and resize keep this text.\")")
             hideKeyboard(); val id=compose.activity.vm.state.value.selectedId!!
             compose.activityRule.scenario.onActivity { it.requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }; Thread.sleep(1200)
-            compose.onNodeWithTag("note-content").assertTextContains("Rotation and resize",substring=true); screenshot("02-phone-landscape")
+            webReady();assertTrue(jsText().contains("Rotation and resize")); screenshot("02-phone-landscape")
             compose.activityRule.scenario.onActivity { it.requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
-            resize(1600,2560,240); compose.onNodeWithTag("note-content").assertExists(); screenshot("03-tablet-portrait")
+            resize(1600,2560,240); webReady(); screenshot("03-tablet-portrait")
             resize(2560,1600,240); compose.onNodeWithTag("note-list").assertExists(); screenshot("04-tablet-landscape")
-            resize(3440,1440,240); compose.onNodeWithTag("note-content").assertExists(); screenshot("05-wide-window")
+            resize(3440,1440,240); webReady(); screenshot("05-wide-window")
             compose.onNode(hasText("工作台") and hasAnyAncestor(hasTestTag("wide-navigation"))).performClick(); screenshot("06-wide-home")
             compose.activityRule.scenario.onActivity { a -> val note=a.vm.state.value.workspace!!.notes.first{it.id==id}; a.vm.navigate(note.notebookId); a.vm.select(id) }
-            resize(720,1280,320); compose.onNodeWithTag("note-content").assertTextContains("Rotation and resize",substring=true); screenshot("07-narrow-window")
+            resize(720,1280,320); webReady();assertTrue(jsText().contains("Rotation and resize")); screenshot("07-narrow-window")
             compose.activityRule.scenario.onActivity { it.onWindowFocusChanged(false) }; assertNotNull(compose.activity.vm.state.value.workspace)
         } catch(t:Throwable){runCatching{screenshot("failure-adaptive")};throw t} finally {shell("wm size reset");shell("wm density reset")}
     }
@@ -98,80 +103,34 @@ class AdaptiveUiTest {
             runBlocking{compose.activity.vm.replaceData(save)}; assertEquals(save.notes,compose.activity.vm.state.value.workspace!!.notes)
         }catch(t:Throwable){runCatching{screenshot("failure-persistence")};throw t}
     }
-    @Test fun richToolsPersistStylesTasksTablesAndExplicitVariables() {
-        try {
-            ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
-            compose.onNodeWithTag("note-content").performTextInput("Literal {{braces}}")
-            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(0,7))
-            compose.onNodeWithContentDescription("加粗").performClick()
-            compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("**Literal**")}
-            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(18))
-            compose.onNodeWithContentDescription("待办事项").performScrollTo().performClick()
-            compose.onNodeWithTag("task-text").performTextInput("Clickable task");compose.onNodeWithTag("task-check").performClick()
-            compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("[x] Clickable task")}
-            hideKeyboard();compose.onNodeWithContentDescription("插入表格").performScrollTo().performClick();compose.onNodeWithText("插入",substring=false).performClick()
-            compose.onNodeWithTag("table-cell-0-0").performScrollTo().performTextInput("left|right")
-            hideKeyboard();compose.onNodeWithText("添加列").performScrollTo().performClick()
-            compose.waitUntil(5000){RichBlocks.parse(compose.activity.vm.selectedNote()!!.content).first{it.kind=="table"}.rows[0].size==3}
-            val saved=compose.activity.vm.selectedNote()!!;assertEquals("left|right",RichBlocks.parse(saved.content).first{it.kind=="table"}.rows[0][0]);screenshot("10-rich-table")
-            compose.onNodeWithContentDescription("撤销").performScrollTo().performClick()
-            compose.waitUntil(5000){RichBlocks.parse(compose.activity.vm.selectedNote()!!.content).first{it.kind=="table"}.rows[0].size==2}
-            compose.onNodeWithContentDescription("重做").performScrollTo().performClick()
-            compose.waitUntil(5000){RichBlocks.parse(compose.activity.vm.selectedNote()!!.content).first{it.kind=="table"}.rows[0].size==3}
-            compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}.id);a.vm.addNote()}
-            compose.onNodeWithTag("note-content").performTextInput("Keep {{literal}} ");hideKeyboard()
-            assertTrue(PromptVariables.used(compose.activity.vm.selectedNote()!!).isEmpty())
-            compose.onNodeWithText("插入变量").performClick();compose.onNodeWithTag("variable-name").performTextInput("Audience");compose.onNodeWithText("插入",substring=false).performClick()
-            compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1}
-            val prompt=compose.activity.vm.selectedNote()!!;assertTrue(prompt.content.contains("{{literal}}"));assertEquals("Audience",prompt.variables.single().name)
-            compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
-            compose.onNodeWithTag("home-title").assertIsDisplayed()
-            compose.activityRule.scenario.onActivity{it.vm.navigate(prompt.notebookId);it.vm.select(prompt.id)}
-            compose.onNodeWithTag("note-content").assertTextContains("Audience",substring=true);screenshot("11-explicit-variable")
-            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(18))
-            compose.onNodeWithTag("note-content").performTextInput(" tail")
-            assertEquals(1,PromptVariables.used(compose.activity.vm.selectedNote()!!).size)
-            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(17,18));compose.onNodeWithTag("note-content").performTextInput("")
-            assertTrue(PromptVariables.used(compose.activity.vm.selectedNote()!!).isEmpty())
-            compose.onNodeWithContentDescription("撤销").performScrollTo().performClick()
-            compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1}
-        }catch(t:Throwable){runCatching{screenshot("failure-rich-tools")};throw t}
+    @Test fun officialQuoteTasksVariablesAndLocalImagesPersist() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}.id);a.vm.addNote()};webReady()
+        js("window.MojiEditor.editor.chain().focus().toggleBlockquote().insertContent('Quote').run()")
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
+        InstrumentationRegistry.getInstrumentation().sendStringSync("Normal")
+        compose.waitUntil(5000){jsText().contains("Normal")};assertTrue(js("window.MojiEditor.editor.getHTML()").contains("</blockquote><p>Normal"))
+        js("window.MojiEditor.editor.chain().clearContent().toggleTaskList().insertContent('Task').run()")
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendStringSync("Second")
+        js("document.querySelector('li input[type=checkbox]').click()")
+        compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data-checked=\"true\"")}
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
+        InstrumentationRegistry.getInstrumentation().sendStringSync("Tail {{literal}}")
+        hideKeyboard();compose.onNodeWithText("插入变量").performClick();compose.onNodeWithTag("variable-name").performTextInput("Audience");compose.onNodeWithText("插入",substring=false).performClick()
+        compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1};assertTrue(jsText().contains("{{literal}}"))
+        js("window.MojiEditor.editor.chain().focus('end').setImage({src:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuoAAAAASUVORK5CYII='}).run()")
+        compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data:image/")};runBlocking{compose.activity.vm.flush()}
+        val saved=compose.activity.vm.selectedNote()!!;screenshot("10-shared-editor")
+        compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertExists();compose.activityRule.scenario.onActivity{it.vm.navigate(saved.notebookId);it.vm.select(saved.id)};webReady()
+        assertTrue(jsText().contains("Audience"));assertTrue(js("Boolean(document.querySelector('.tiptap img')?.complete)")=="true");assertFalse(js("window.MojiEditor.editor.can().undo()")=="true");screenshot("11-explicit-variable")
     }
-    @Test fun emptyInsertionAndSystemImagePickerRoundTrip() {
-        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}.id);a.vm.addNote()}
-        compose.onNodeWithContentDescription("引用").performScrollTo().performClick();compose.onNodeWithTag("quote-text").performTextInput("Quoted")
-        compose.onNodeWithContentDescription("插入表格").performScrollTo().performClick();compose.onNodeWithText("插入",substring=false).performClick()
-        compose.onNodeWithTag("table-cell-0-0").performTextInput("Cell");hideKeyboard()
-        val context=compose.activity;val file=java.io.File(context.cacheDir,"exports/editor-test.png");file.parentFile!!.mkdirs()
-        val bitmap=android.graphics.Bitmap.createBitmap(2000,1200,android.graphics.Bitmap.Config.ARGB_8888)
-        val pixels=IntArray(2000*1200){0xff000000.toInt() or java.util.Random(it.toLong()).nextInt(0x1000000)};bitmap.setPixels(pixels,0,2000,0,0,2000,1200);file.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+    @Test fun systemImagePickerReturnsToSameSharedDocument() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady()
+        val context=compose.activity;val file=java.io.File(context.cacheDir,"exports/editor-test.png");file.parentFile!!.mkdirs();val bitmap=android.graphics.Bitmap.createBitmap(64,64,android.graphics.Bitmap.Config.ARGB_8888);bitmap.eraseColor(android.graphics.Color.GREEN);file.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
         val uri=androidx.core.content.FileProvider.getUriForFile(context,context.packageName+".files",file)
         val instrumentation=InstrumentationRegistry.getInstrumentation()
-        val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult?=if(intent.action==android.content.Intent.ACTION_OPEN_DOCUMENT)android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))else null}
+        val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult?=if(intent.action in listOf(android.content.Intent.ACTION_OPEN_DOCUMENT,android.content.Intent.ACTION_GET_CONTENT))android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))else null}
         instrumentation.addMonitor(monitor)
-        try {compose.onNodeWithContentDescription("插入图片").performScrollTo().performClick();compose.waitUntil(15000){compose.activity.vm.selectedNote()!!.content.contains("data:image/")};compose.onNodeWithTag("embedded-image").performScrollTo().assertExists()}finally{instrumentation.removeMonitor(monitor)}
-        val note=compose.activity.vm.selectedNote()!!;runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertExists();compose.activityRule.scenario.onActivity{it.vm.navigate(note.notebookId);it.vm.select(note.id)}
-        compose.onNodeWithTag("embedded-image").assertExists();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Cell"));file.delete()
-    }
-    @Test fun remainingFormattingLinkAndReplaceToolsPersist() {
-        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
-        compose.onNodeWithTag("note-content").performTextInput("Alpha Beta")
-        compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(0,5))
-        compose.onNodeWithContentDescription("斜体").performScrollTo().performClick();compose.onNodeWithContentDescription("删除线").performScrollTo().performClick()
-        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("~~"));assertTrue(compose.activity.vm.selectedNote()!!.content.contains("*"))
-        compose.onNodeWithContentDescription("项目列表").performScrollTo().performClick();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("- "))
-        compose.onNodeWithContentDescription("编号列表").performScrollTo().performClick();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("1. "))
-        compose.onNodeWithContentDescription("标题").performScrollTo().performClick();hideKeyboard()
-        val visible=compose.onNodeWithTag("note-content").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text
-        val alpha=visible.indexOf("Alpha");assertTrue(alpha>=0)
-        compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(alpha,alpha+5))
-        compose.onNodeWithContentDescription("插入链接").performScrollTo().performClick();compose.onNodeWithTag("link-label").performTextReplacement("Example");compose.onNodeWithTag("link-url").performTextReplacement("https://example.com");hideKeyboard();compose.onNodeWithText("插入",substring=false).performClick()
-        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("https://example.com"))
-        compose.onNodeWithContentDescription("查找与替换").performScrollTo().performClick();compose.onNodeWithTag("find-query").performTextInput("Beta");compose.onNodeWithTag("find-replacement").performTextInput("Gamma");hideKeyboard();compose.onNodeWithText("全部替换").performClick();compose.onNodeWithContentDescription("关闭").performClick()
-        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Gamma"));assertFalse(compose.activity.vm.selectedNote()!!.content.contains("Beta"))
-        val note=compose.activity.vm.selectedNote()!!;compose.activityRule.scenario.onActivity{it.vm.addNote()};compose.onNodeWithTag("note-content").assertTextEquals("")
-        compose.activityRule.scenario.onActivity{it.vm.select(note.id)};compose.onNodeWithTag("note-content").assertTextContains("Gamma",substring=true)
-        compose.onNodeWithTag("note-content").assertTextContains("Example",substring=true)
+        try {js("window.MojiEditor.editor.commands.insertContent({type:'imageUpload'})");tapWeb(".tiptap-image-upload");compose.waitUntil(15000){compose.activity.vm.selectedNote()!!.content.contains("data:image/")};assertEquals("true",js("Boolean(document.querySelector('.tiptap img')?.naturalWidth>0)"))}finally{instrumentation.removeMonitor(monitor);file.delete()}
     }
     @Test fun notebookAppearanceIsEditableAndSurvivesLocalAndGlobalSaves() {
         ready();compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
@@ -197,15 +156,15 @@ class AdaptiveUiTest {
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
         val marker="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115"
         compose.waitUntil(10000){compose.activity.hasWindowFocus()}
-        compose.onNodeWithTag("note-content").performClick()
-        hideKeyboard();compose.onNodeWithTag("note-content").assertIsFocused()
+        webReady();js("window.MojiEditor.editor.commands.focus()")
+        hideKeyboard();js("window.MojiEditor.editor.commands.focus()")
         InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
-        compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
+        compose.waitUntil(5000){jsText().contains(marker)}
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
         compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)}
-        compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
+        compose.waitUntil(5000){jsText().contains(marker)}
         }catch(t:Throwable){runCatching{screenshot("failure-physical-keyboard")};throw t}
     }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {

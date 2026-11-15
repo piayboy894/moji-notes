@@ -45,7 +45,7 @@ public partial class MainWindow
             {
                 Heading("数据管理",$"{state.LiveBooks.Count()} 本记事本 · {state.LiveNotes.Count()} 条记录");
                 void Option(string title,string hint,string button,Action action){var row=new DockPanel();var b=Ui.Small(button,action);DockPanel.SetDock(b,Dock.Right);row.Children.Add(b);row.Children.Add(Ui.Stack(Ui.Text(title,13,null,true),Ui.Spaced(Ui.Text(hint,10,"#9CA68E"),new Thickness(0,9,0,0))));var card=Ui.Card(row);card.Padding=new Thickness(18);card.Margin=new Thickness(0,0,0,15);content.Children.Add(card);}
-                Option("本地存档","全部记事本与记录。","导出",()=>_ = ExportBackup());Option("Markdown 文本集","按记事本导出 ZIP，不包含密码库。","导出",ExportAllMarkdown);Option("导入与恢复","支持 Markdown、TXT 和墨记存档。","导入",()=>_ = ImportFiles());Option("本地数据目录",VM.Store.DirectoryPath,"打开",()=>Process.Start(new ProcessStartInfo("explorer.exe",VM.Store.DirectoryPath){UseShellExecute=true}));content.Children.Add(Ui.Spaced(Ui.Text("云端 Git 提交历史可能仍保留旧存档；清空回收站不会删除 GitHub 历史。",10,"#A2AA97"),new Thickness(0,18,0,0)));
+                Option("本地存档","全部记事本与记录。","导出",()=>_ = ExportBackup());Option("文本集","按记事本导出 ZIP，不包含密码库。","导出",ExportAllMarkdown);Option("导入与恢复","支持 Markdown、TXT 和墨记存档。","导入",()=>_ = ImportFiles());Option("本地数据目录",VM.Store.DirectoryPath,"打开",()=>Process.Start(new ProcessStartInfo("explorer.exe",VM.Store.DirectoryPath){UseShellExecute=true}));content.Children.Add(Ui.Spaced(Ui.Text("云端 Git 提交历史可能仍保留旧存档；清空回收站不会删除 GitHub 历史。",10,"#A2AA97"),new Thickness(0,18,0,0)));
             }
             else
             {

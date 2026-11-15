@@ -10,7 +10,7 @@ public partial class MainWindow
 {
     private void RenderDashboard()
     {
-        textEditor = null;
+        editorRequest++;var previous=sharedEditor;sharedEditor=null;if(previous!=null)editorRelease=Release(previous);
         var state = VM.State!;
         var content = new StackPanel { Margin = new Thickness(45, 43, 45, 38) };
         var title = new DockPanel { Margin = new Thickness(0, 0, 0, 30) };

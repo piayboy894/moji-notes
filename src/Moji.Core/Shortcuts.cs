@@ -4,7 +4,6 @@ public static class Shortcuts
 {
     public static readonly (string Id, string Label, string Default)[] Actions = [
         ("search", "全局搜索", "Ctrl+K"), ("new", "新建记录", "Ctrl+N"),
-        ("find", "查找", "Ctrl+F"), ("replace", "查找与替换", "Ctrl+H"),
         ("save", "保存历史版本", "Ctrl+S"), ("cloud", "云存档", "Ctrl+Shift+S"),
         ("undo", "撤销", "Ctrl+Z"), ("redo", "重做", "Ctrl+Y"),
         ("bold", "加粗", "Ctrl+B"), ("focus", "专注模式", "F11")

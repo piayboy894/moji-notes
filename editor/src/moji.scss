@@ -1,0 +1,7 @@
+:root{--moji-font-size:16px;--tt-bg-color:#fff;--tt-brand-color-500:#516b4d}
+.dark{--tt-bg-color:#202721}
+.tiptap.ProseMirror{font-size:var(--moji-font-size);overflow-wrap:anywhere;line-height:1.7}
+.moji-variable{display:inline-flex;align-items:center;vertical-align:baseline;background:#e3ebdc;color:#3d5739;padding:0 .4em;border-radius:4px;white-space:nowrap;line-height:1.6;font-weight:500}
+.dark .moji-variable{background:#364535;color:#dcebd5}
+
+@media print{.tiptap-toolbar{display:none!important}.simple-editor-wrapper,.simple-editor-content{height:auto!important;overflow:visible!important}.simple-editor-content .tiptap.ProseMirror.simple-editor{padding:0!important}html,body,#app{height:auto!important;background:white!important}}

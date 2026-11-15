@@ -22,6 +22,8 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     private readonly SemaphoreSlim saveGate = new(1, 1);
     private bool dirty;
     private long epoch;
+    public long WorkspaceEpoch=>epoch;
+    internal Func<Task>? FlushEditor {get;set;}
     public WorkspaceViewModel(string? directory = null)
     { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(); } catch (Exception) { Notice?.Invoke("暂时无法保存，可重试或导出存档。"); } }; }
     public async Task<bool> OpenAsync()
@@ -45,6 +47,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     public void EditNote(string id, Func<Note, Note> edit, bool checkpoint = false) => Change(v => v.ChangeNote(id, edit, checkpoint), "edit");
     public async Task SaveAsync()
     {
+        if(FlushEditor!=null)await FlushEditor();
         saveTimer.Stop(); if (State == null || !dirty) return;
         await saveGate.WaitAsync();
         try { if (State == null) return; var state = State; await Task.Run(() => Store.SaveAsync(state)); if (ReferenceEquals(State, state)) dirty = false; SaveStatus = dirty ? "保存中" : "已保存"; PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); if (dirty) saveTimer.Start(); }

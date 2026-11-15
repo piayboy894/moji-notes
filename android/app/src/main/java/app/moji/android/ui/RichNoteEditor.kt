@@ -1,120 +1,110 @@
 package app.moji.android.ui
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Paint
+import android.net.Uri
+import android.webkit.*
+import android.view.View
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.input.key.*
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.*
-import app.moji.android.MojiViewModel
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebViewAssetLoader
+import app.moji.android.*
 import app.moji.android.data.*
-import app.moji.android.security.Crypto
-import com.mohamedrejeb.richeditor.annotation.ExperimentalRichTextApi
-import com.mohamedrejeb.richeditor.model.*
-import com.mohamedrejeb.richeditor.ui.BasicRichTextEditor
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.*
+import org.json.JSONObject
+import kotlinx.coroutines.*
 
-private class RichCell(val original:String,plain:Boolean=false) {
-    val state=RichTextState().apply{if(plain)setText(original)else setMarkdown(original)}
-    val focus=FocusRequester()
-    fun slice(start:Int,end:Int):String {val clone=state.copy();val length=clone.annotatedString.length;val from=start.coerceIn(0,length);val to=end.coerceIn(from,length);if(to<length)clone.removeTextRange(TextRange(to,length));if(from>0)clone.removeTextRange(TextRange(0,from));return RichMarkdown.fromHtml(clone.toHtml())}
-    private val initial=RichMarkdown.fromHtml(state.toHtml())
-    fun markdown():String {val value=RichMarkdown.fromHtml(state.toHtml());return if(value==initial)original else value}
-}
-private class Piece(val block:RichBlock) {
-    val key=uid(); val cell by lazy { RichCell(block.content,block.kind=="code") }
-    val rows=block.rows.map{row->row.map{RichCell(it)}}.toMutableStateList()
-    var checked by mutableStateOf(block.checked)
-    fun snapshot()=block.copy(content=if(block.kind=="code")cell.state.annotatedString.text else if(block.kind in listOf("image","rule"))block.content else cell.markdown(),rows=rows.map{row->row.map{it.markdown()}},checked=checked)
-    fun cells()=if(block.kind=="table")rows.flatten() else if(block.kind in listOf("image","rule"))emptyList() else listOf(cell)
-}
-@OptIn(ExperimentalRichTextApi::class)
-@Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier,usePrompt:()->Unit) {
-    val context=LocalContext.current;val scope=rememberCoroutineScope();val workspace=vm.state.collectAsState().value.workspace?:return
-    val pieces=remember(note.id){RichBlocks.parse(note.content).map(::Piece).toMutableStateList()}
-    var active by remember(note.id){mutableStateOf(pieces.firstNotNullOfOrNull{it.cells().firstOrNull()})}
-    var lastSaved by remember(note.id){mutableStateOf(note.content)}
-    var variableDialog by remember{mutableStateOf(false)};var linkDialog by remember{mutableStateOf(false)};var findDialog by remember{mutableStateOf(false)};var tableDialog by remember{mutableStateOf(false)};var removePiece by remember{mutableStateOf<Piece?>(null)}
-    fun publish(){val value=RichBlocks.serialize(pieces.map{it.snapshot()});if(value!=lastSaved){lastSaved=value;vm.content(note.id,value)}}
-    LaunchedEffect(note.content){val current=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?.content?:return@LaunchedEffect;if(current!=lastSaved){pieces.clear();pieces.addAll(RichBlocks.parse(current).map(::Piece));active=pieces.firstNotNullOfOrNull{it.cells().firstOrNull()};lastSaved=current}}
-    fun insertBlock(block:RichBlock){
-        val index=pieces.indexOfFirst{p->p.cells().any{it===active}}.let{if(it<0)pieces.lastIndex else it}
-        val current=pieces.getOrNull(index);val inserted=Piece(block)
-        if(current?.block?.kind=="text"){
-            val cell=current.cell;val range=cell.state.selection;val before=cell.slice(0,range.min);val after=cell.slice(range.max,cell.state.annotatedString.length)
-            val replacement=listOf(Piece(RichBlock(content=before)),inserted,Piece(RichBlock(content=after)));pieces.removeAt(index);pieces.addAll(index,replacement)
-        }else pieces.add(index+1,inserted)
-        if(pieces.last().block.kind!="text")pieces.add(Piece(RichBlock()))
-        active=inserted.cells().firstOrNull()?:pieces.last().cell;publish()
-        scope.launch{kotlinx.coroutines.delay(80);runCatching{active?.focus?.requestFocus()}}
-    }
-    val imagePicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)scope.launch{try{val image=EditorImages.load(context,uri);insertBlock(RichBlock("image",image))}catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}catch(e:Exception){vm.message(UserMessages.forError(e,"无法插入图片，请重新选择"))}}}
-    fun heading(){val state=active?.state?:return;val value=state.annotatedString.text;if(value.isEmpty()){state.toggleSpanStyle(SpanStyle(fontSize=1.5.em,fontWeight=FontWeight.Bold));return};val selection=state.selection;val start=value.lastIndexOf('\n',(selection.start-1).coerceAtLeast(0)).let{if(it<0)0 else it+1};val end=value.indexOf('\n',selection.end).let{if(it<0)value.length else it};state.selection=TextRange(start,end);state.toggleSpanStyle(SpanStyle(fontSize=1.5.em,fontWeight=FontWeight.Bold));state.selection=selection;publish()}
-    fun action(id:String):Boolean {val state=active?.state;return when(id){"bold"->{state?.toggleSpanStyle(SpanStyle(fontWeight=FontWeight.Bold));publish();true};"undo"->{vm.undo(note.id);true};"redo"->{vm.redo(note.id);true};"find","replace"->{findDialog=true;true};else->false}}
-    val labels=note.variables.associate{"moji-variable:"+it.id to it.name}
-    run {
-        Column(modifier.onPreviewKeyEvent{event->if(event.type!=KeyEventType.KeyDown||variableDialog||linkDialog||findDialog||tableDialog||removePiece!=null)false else {val chord=keyChord(event);val resolved=Shortcuts.resolve(workspace.preferences,chord);if(resolved!=null)action(resolved)else Shortcuts.actions.any{it.third==chord&&Shortcuts.binding(workspace.preferences,it.first)!=chord}}}) {
-            HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically){
-                Tool(MojiIcons.Title,"标题",action=::heading);Tool(MojiIcons.FormatBold,"加粗",selected=active?.state?.currentSpanStyle?.fontWeight==FontWeight.Bold){action("bold")};Tool(MojiIcons.FormatItalic,"斜体",selected=active?.state?.currentSpanStyle?.fontStyle==FontStyle.Italic){active?.state?.toggleSpanStyle(SpanStyle(fontStyle=FontStyle.Italic));publish()};Tool(MojiIcons.FormatStrikethrough,"删除线",selected=active?.state?.currentSpanStyle?.textDecoration?.contains(TextDecoration.LineThrough)==true){active?.state?.toggleSpanStyle(SpanStyle(textDecoration=TextDecoration.LineThrough));publish()}
-                Tool(MojiIcons.FormatListBulleted,"项目列表",selected=active?.state?.isUnorderedList==true){active?.state?.toggleUnorderedList();publish()};Tool(MojiIcons.FormatListNumbered,"编号列表",selected=active?.state?.isOrderedList==true){active?.state?.toggleOrderedList();publish()};Tool(MojiIcons.Checklist,"待办事项"){insertBlock(RichBlock("task"))};Tool(MojiIcons.FormatQuote,"引用"){insertBlock(RichBlock("quote"))}
-                Tool(MojiIcons.Link,"插入链接"){linkDialog=true};Tool(MojiIcons.Image,"插入图片"){imagePicker.launch(arrayOf("image/*"))};Tool(MojiIcons.TableChart,"插入表格"){tableDialog=true}
-                Tool(MojiIcons.Undo,"撤销",enabled=vm.undo[note.id]?.isNotEmpty()==true){action("undo")};Tool(MojiIcons.Redo,"重做",enabled=vm.redo[note.id]?.isNotEmpty()==true){action("redo")};Tool(MojiIcons.FindReplace,"查找与替换"){findDialog=true}
-            }
-            if(active?.state?.isLink==true)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){TextButton(onClick={val url=active?.state?.selectedLinkUrl?:return@TextButton;if(url.startsWith("https://")||url.startsWith("http://"))runCatching{context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url)))}}){Text("打开链接")};TextButton(onClick={linkDialog=true}){Text("修改链接")};TextButton(onClick={active?.state?.removeLink();publish()}){Text("移除链接")}}
-            if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){TextButton(onClick={variableDialog=true}){Text("插入变量")};Spacer(Modifier.weight(1f));Button(onClick=usePrompt){Text("使用提示词")}}
-            HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(22.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-                pieces.forEachIndexed{index,piece->key(piece.key){
-                    @Composable fun Cell(cell:RichCell,mod:Modifier=Modifier,plain:Boolean=false){BasicRichTextEditor(state=cell.state,onValueChange={publish()},inlineLabels=labels,modifier=mod.fillMaxWidth().focusRequester(cell.focus).onFocusChanged{if(it.isFocused)active=cell}.onPreviewKeyEvent{event->if(piece.block.kind=="table"&&event.type==KeyEventType.KeyDown&&event.key==Key.Tab){val cells=piece.cells();val at=cells.indexOf(cell);cells[(at+(if(event.isShiftPressed)cells.size-1 else 1))%cells.size].focus.requestFocus();true}else false},textStyle=MaterialTheme.typography.bodyLarge.copy(color=MaterialTheme.colorScheme.onSurface,fontSize=workspace.preferences.fontSize.sp,lineHeight=(workspace.preferences.fontSize*1.8).sp,fontFamily=if(plain)FontFamily.Monospace else FontFamily.Default),minLines=1)}
-                    when(piece.block.kind){
-                        "table"->{
-                            Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){piece.rows.forEachIndexed{ri,row->Row{row.forEachIndexed{ci,cell->Box(Modifier.width(160.dp).border(1.dp,MaterialTheme.colorScheme.outlineVariant).padding(10.dp)){Cell(cell,Modifier.testTag("table-cell-$ri-$ci"))}}}}}
-                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){
-                                TextButton(onClick={val row=piece.rows.indexOfFirst{it.any{c->c===active}}.let{if(it<0)piece.rows.lastIndex else it};piece.rows.add(row+1,List(piece.rows.firstOrNull()?.size?:2){RichCell("")});publish()}){Text("添加行")}
-                                TextButton(onClick={val col=piece.rows.firstOrNull{it.any{c->c===active}}?.indexOf(active)?:((piece.rows.firstOrNull()?.size?:1)-1);for(i in piece.rows.indices){val cells=piece.rows[i].toMutableList();cells.add((col+1).coerceIn(0,cells.size),RichCell(""));piece.rows[i]=cells};publish()}){Text("添加列")}
-                                TextButton(onClick={val row=piece.rows.indexOfFirst{it.any{c->c===active}};if(row>=0&&piece.rows.size>1){piece.rows.removeAt(row);active=piece.rows.first()[0];publish()}else removePiece=piece},enabled=piece.cells().any{it===active}){Text("删除行")}
-                                TextButton(onClick={val col=piece.rows.firstOrNull{it.any{c->c===active}}?.indexOf(active)?:-1;if(col>=0&&(piece.rows.firstOrNull()?.size?:0)>1){for(i in piece.rows.indices)piece.rows[i]=piece.rows[i].filterIndexed{j,_->j!=col};active=piece.rows.first()[0];publish()}else removePiece=piece},enabled=piece.cells().any{it===active}){Text("删除列")}
-                                TextButton(onClick={removePiece=piece}){Text("删除表格")}
-                            }
-                        }
-                        "task"->Row(verticalAlignment=Alignment.CenterVertically){Checkbox(piece.checked,{piece.checked=it;publish()},Modifier.testTag("task-check"));Cell(piece.cell,Modifier.weight(1f).testTag("task-text"))}
-                        "quote"->Row(Modifier.testTag("quote-block")){Box(Modifier.width(3.dp).height(40.dp).background(MaterialTheme.colorScheme.primary));Cell(piece.cell,Modifier.weight(1f).padding(start=14.dp).testTag("quote-text"))}
-                        "code"->Surface(color=MaterialTheme.colorScheme.surfaceVariant){Cell(piece.cell,Modifier.padding(14.dp),true)}
-                        "image"->{val uri=piece.block.content.substringAfter("](").dropLast(1);val bitmap=remember(uri){if(uri.startsWith("data:image/"))runCatching{val bytes=Crypto.unb64(uri.substringAfter(','));BitmapFactory.decodeByteArray(bytes,0,bytes.size)?.asImageBitmap()}.getOrNull()else null};if(bitmap!=null)Image(bitmap,"图片",Modifier.testTag("embedded-image").fillMaxWidth().heightIn(max=400.dp))else TextButton(onClick={if(uri.startsWith("https://")||uri.startsWith("http://"))runCatching{context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(uri)))}}){Text("打开图片链接")};TextButton(onClick={removePiece=piece}){Text("删除图片")}}
-                        "rule"->HorizontalDivider()
-                        else->Cell(piece.cell,Modifier.heightIn(min=if(index==pieces.lastIndex)180.dp else 32.dp).testTag(if(index==0)"note-content" else "note-content-${piece.key}"))
+/** The Android host owns persistence and file permissions. Tiptap owns the entire document. */
+class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long) {
+    private val pending=mutableMapOf<String,CompletableDeferred<Unit>>()
+    val flusher:suspend ()->Unit={flush()}
+    private suspend fun flush(){if(ready&&vm.workspaceEpoch==epoch){val token=uid();val done=CompletableDeferred<Unit>();pending[token]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(token)})",null);withTimeout(10000){done.await()}}finally{pending.remove(token)}}}
+    var ready=false
+    var loadSent=false
+    var lastContent=""
+    var fileResult:ValueCallback<Array<Uri>>?=null
+    var onReady:(()->Unit)?=null
+    @JavascriptInterface fun postMessage(message:String) {
+        if(message.length>30_000_000)return
+        web.post {
+            if(vm.workspaceEpoch!=epoch)return@post
+            runCatching {
+                val data=json.parseToJsonElement(message).jsonObject
+                when(data["type"]?.jsonPrimitive?.content){
+                    "ready"->onReady?.invoke()
+                    "loaded"->if(data["id"]?.jsonPrimitive?.content==id)ready=true
+                    "flushed"->pending.remove(data["token"]?.jsonPrimitive?.content)?.complete(Unit)
+                    "change"->{if(data["id"]?.jsonPrimitive?.content!=id)return@runCatching
+                        val content=data.getValue("content").jsonPrimitive.content
+                        val variables=json.decodeFromJsonElement<List<PromptVariable>>(data.getValue("variables"))
+                        if(!EditorContent.isDocument(content)||variables.any{!Regex("[a-f0-9]{32}").matches(it.id)||it.name.length !in 1..40})return@runCatching
+                        val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==id}?:return@runCatching
+                        lastContent=content
+                        if(old.content!=content||old.variables!=variables)vm.edit(id){it.copy(content=content,variables=variables)}
                     }
-                }}
+                    "openLink"->{val uri=Uri.parse(data["url"]?.jsonPrimitive?.content?:"");if(uri.scheme in listOf("http","https"))runCatching{web.context.startActivity(Intent(Intent.ACTION_VIEW,uri))}}
+                    "action"->if(vm.state.value.selectedId==id)vm.editorActions.tryEmit(data["action"]?.jsonPrimitive?.content?:"")
+                }
             }
         }
     }
-    if(removePiece!=null)Confirm("删除这项内容？","可以通过撤销恢复。",{removePiece=null}){pieces.remove(removePiece);if(pieces.isEmpty()||pieces.last().block.kind!="text")pieces.add(Piece(RichBlock()));active=pieces.last().cell;publish()}
-    if(tableDialog){var rows by remember{mutableIntStateOf(3)};var columns by remember{mutableIntStateOf(2)};PanelDialog("插入表格",{tableDialog=false},actions={Button(onClick={insertBlock(RichBlock("table",rows=List(rows){List(columns){""}}));tableDialog=false}){Text("插入")}}){Row(verticalAlignment=Alignment.CenterVertically){Text("行数",Modifier.weight(1f));TextButton(onClick={rows=(rows-1).coerceAtLeast(1)}){Text("−")};Text("$rows");TextButton(onClick={rows=(rows+1).coerceAtMost(20)}){Text("+")}};Row(verticalAlignment=Alignment.CenterVertically){Text("列数",Modifier.weight(1f));TextButton(onClick={columns=(columns-1).coerceAtLeast(1)}){Text("−")};Text("$columns");TextButton(onClick={columns=(columns+1).coerceAtMost(10)}){Text("+")}}}}
-    if(variableDialog){var name by remember{mutableStateOf("")};var error by remember{mutableStateOf("")};PanelDialog("插入变量",{variableDialog=false},actions={Button(onClick={try{val current=vm.selectedNote()?:note;val variable=PromptVariables.named(current,name);if(current.variables.none{it.id==variable.id})vm.edit(note.id){it.copy(variables=it.variables+variable)};active?.state?.removeSelectedText();active?.state?.insertHtmlAfterSelection("<img src=\"moji-variable:${variable.id}\" width=\"0\" height=\"0\">");publish();variableDialog=false}catch(e:Exception){error=UserMessages.forError(e,"插入失败")}},enabled=name.isNotBlank()){Text("插入")}}){Field("变量名称",name,Modifier.testTag("variable-name")){name=it};if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)}}
-    if(linkDialog){var label by remember{mutableStateOf(active?.state?.let{it.annotatedString.text.substring(it.selection.min,it.selection.max)}?:"")};var url by remember{mutableStateOf(active?.state?.selectedLinkUrl?:"https://")};PanelDialog("插入链接",{linkDialog=false},actions={Button(onClick={active?.state?.let{state->if(state.isLink)state.updateLink(url)else{state.removeSelectedText();state.addLink(label.ifBlank{url},url)}};publish();linkDialog=false},enabled=url.startsWith("https://")||url.startsWith("http://")){Text("插入")}}){Field("显示文字",label,Modifier.testTag("link-label")){label=it};Field("链接地址",url,Modifier.testTag("link-url")){url=it}}}
-    if(findDialog){var query by remember{mutableStateOf("")};var replace by remember{mutableStateOf("")};var message by remember{mutableStateOf("")};var index by remember{mutableIntStateOf(0)};PanelDialog("查找与替换",{findDialog=false},actions={TextButton(onClick={val cells=pieces.flatMap{it.cells()};val matches=cells.flatMap{cell->Regex(Regex.escape(query),RegexOption.IGNORE_CASE).findAll(cell.state.annotatedString.text).map{cell to it.range}.toList()};if(matches.isEmpty())message="没有找到匹配内容" else {val(cell,range)=matches[index++%matches.size];active=cell;cell.state.selection=TextRange(range.first,range.last+1);message="已选中匹配内容"}},enabled=query.isNotEmpty()){Text("下一个")};Button(onClick={var count=0;pieces.flatMap{it.cells()}.forEach{cell->val matches=Regex(Regex.escape(query),RegexOption.IGNORE_CASE).findAll(cell.state.annotatedString.text).toList();matches.asReversed().forEach{cell.state.replaceTextRange(TextRange(it.range.first,it.range.last+1),replace);count++}};publish();message="已替换 $count 处"},enabled=query.isNotEmpty()){Text("全部替换")}}){Field("查找",query,Modifier.testTag("find-query")){query=it;index=0};Field("替换为",replace,Modifier.testTag("find-replacement")){replace=it};if(message.isNotBlank())Text(message)}}
+    fun command(action:String,value:String="null"){web.evaluateJavascript("window.MojiEditor?.action(${JSONObject.quote(action)},$value)",null)}
+    fun load(note:Note,theme:String,fontSize:Double,p:Preferences){
+        loadSent=true;lastContent=note.content
+        val payload=buildJsonObject{put("id",id);put("content",note.content);put("variables",json.encodeToJsonElement(note.variables));put("theme",theme);put("fontSize",fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(p,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
+        web.evaluateJavascript("window.MojiEditor?window.MojiEditor.load($payload):window.__mojiLoad=$payload",null)
+    }
+}
+@SuppressLint("SetJavaScriptEnabled")
+@Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier,usePrompt:()->Unit) {
+    val prefs=vm.state.value.workspace!!.preferences
+    val dark=MaterialTheme.colorScheme.background.red<.5f
+    var bridge by remember(note.id){mutableStateOf<SharedEditorBridge?>(null)}
+    var web by remember(note.id){mutableStateOf<WebView?>(null)}
+    var variableDialog by remember(note.id){mutableStateOf(false)}
+    var failure by remember(note.id){mutableStateOf(false)}
+    val picker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){result->
+        bridge?.fileResult?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode,result.data));bridge?.fileResult=null
+    }
+    Column(modifier){
+        if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),horizontalArrangement=Arrangement.SpaceBetween){TextButton(onClick={variableDialog=true}){Text("插入变量")};Button(onClick=usePrompt){Text("使用提示词")}}
+        if(failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
+        AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
+            WebView(context).apply {
+                tag="MojiSharedEditor";id=View.generateViewId();setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
+                settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                isVerticalScrollBarEnabled=false
+                val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(context)).build()
+                val current=SharedEditorBridge(this,vm,note.id,vm.workspaceEpoch);bridge=current;web=this;vm.editorFlushers.add(current.flusher)
+                current.onReady={if(!current.loadSent)current.load(note,if(dark)"dark"else"light",prefs.fontSize,prefs)}
+                addJavascriptInterface(current,"MojiNative")
+                webViewClient=object:WebViewClient(){
+                    override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=loader.shouldInterceptRequest(request.url)?:WebResourceResponse("text/plain","UTF-8",java.io.ByteArrayInputStream(ByteArray(0)))
+                    override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean = request.url.host!="appassets.androidplatform.net"
+                    override fun onPageFinished(view:WebView,url:String){current.onReady?.invoke()}
+                    override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){if(request.isForMainFrame)failure=true}
+                }
+                webChromeClient=object:WebChromeClient(){
+                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent());true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
+                    override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
+                }
+                loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")
+            }
+        },update={view->
+            val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}
+            val current=bridge
+            if(current?.ready==true&&latest!=null&&latest.content!=current.lastContent)current.load(latest,if(dark)"dark"else"light",prefs.fontSize,prefs)
+            view.evaluateJavascript("window.MojiEditor?.theme({theme:${JSONObject.quote(if(dark)"dark"else"light")},fontSize:${prefs.fontSize}})",null)})
+    }
+    DisposableEffect(note.id){onDispose{val old=web;bridge?.fileResult?.onReceiveValue(null);val previous=bridge;if(previous!=null&&old!=null)vm.releaseEditor(previous.flusher){old.removeJavascriptInterface("MojiNative");old.destroy()}}}
+    if(variableDialog){var name by remember{mutableStateOf("")};var error by remember{mutableStateOf("")};PanelDialog("插入变量",{variableDialog=false},actions={Button(onClick={try{val variable=PromptVariables.named(vm.selectedNote()?:note,name);bridge?.command("insertVariable",json.encodeToString(variable));variableDialog=false}catch(e:Exception){error=UserMessages.forError(e)}},enabled=name.isNotBlank()){Text("插入")}}){Field("变量名称",name,Modifier.testTag("variable-name")){name=it};if(error.isNotBlank())Text(error)}}
 }

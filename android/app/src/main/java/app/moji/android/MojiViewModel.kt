@@ -32,11 +32,12 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     val messages = notices.asSharedFlow()
     private var saveJob: Job? = null
     private val saveMutex = Mutex(); private var serial = 0L; private var savedSerial = 0L
+    val workspaceEpoch get()=epoch
     private var epoch = 0L; private var lastUpdateCheck = 0L
     private var loadingSave = false
-    val cursors = mutableMapOf<String, Pair<Int, Int>>()
-    val undo = mutableMapOf<String, ArrayDeque<String>>()
-    val redo = mutableMapOf<String, ArrayDeque<String>>()
+    val editorActions=MutableSharedFlow<String>(extraBufferCapacity=8)
+    val editorFlushers=mutableSetOf<suspend ()->Unit>()
+    fun releaseEditor(flush:suspend ()->Unit,dispose:()->Unit){viewModelScope.launch{try{flush()}catch(_:Exception){message("请重新打开记录确认内容已保存")}finally{editorFlushers.remove(flush);dispose()}}}
     private var pendingImport: TextImport? = null
     init { openLocal() }
     fun message(text: String) { notices.tryEmit(text) }
@@ -72,18 +73,13 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         saveJob?.cancel(); saveJob = viewModelScope.launch { delay(350); try { flush() } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { mutable.update { it.copy(saveError = true, saving = false) }; message("保存失败，请先导出存档") } }
     }
     fun edit(id: String, checkpoint: Boolean = false, change: (Note) -> Note) = mutate { it.changeNote(id, checkpoint, change) }
-    fun content(id: String, text: String, history: Boolean = true) {
-        val current = mutable.value.workspace?.notes?.firstOrNull { it.id == id } ?: return
-        if (current.content == text) return
-        if (history) { val stack = undo.getOrPut(id) { ArrayDeque() }; if (stack.lastOrNull() != current.content) { stack.addLast(current.content); while (stack.size > 60) stack.removeFirst() }; redo.remove(id) }
-        edit(id) { it.copy(content = text) }
-    }
-    fun undo(id: String) { val before = undo[id]?.removeLastOrNull() ?: return; val current = selectedNote()?.content ?: ""; redo.getOrPut(id) { ArrayDeque() }.addLast(current); content(id, before, false) }
-    fun redo(id: String) { val after = redo[id]?.removeLastOrNull() ?: return; undo.getOrPut(id) { ArrayDeque() }.addLast(selectedNote()?.content ?: ""); content(id, after, false) }
-    suspend fun flush() = saveMutex.withLock {
+    suspend fun flush() {
+        withContext(Dispatchers.Main.immediate){editorFlushers.toList().forEach{it()}}
+        saveMutex.withLock {
         val s = mutable.value; val w = s.workspace ?: return@withLock
         if (serial == savedSerial) return@withLock
         val captured = serial; store.save(w); savedSerial = captured; mutable.update { it.copy(saving = serial != savedSerial, saveError = false) }
+    }
     }
     fun background() { viewModelScope.launch { try { flush() } catch (_: Exception) { message("保存失败，请导出备份") } } }
     fun foreground() { }
@@ -135,7 +131,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
                 val state = mutable.value
                 require(epoch == expectedEpoch) { "空间已变化，请重新读取存档" }
                 val candidate = GameSaves.apply(state.workspace ?: error("本机数据尚未打开"), payload)
-                store.save(candidate); epoch++; serial++; savedSerial = serial; cursors.clear(); undo.clear(); redo.clear()
+                store.save(candidate); epoch++; serial++; savedSerial = serial
                 mutable.value = state.copy(workspace = candidate, saving = false, saveError = false, view = "home", selectedId = null, editingCredentialId = null, search = "")
             }
         } finally { loadingSave = false }
@@ -145,7 +141,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         val workspace=mutable.value.workspace?:run{pendingImport=TextImport(name,text,markdown);return}
         val book=workspace.liveBooks.firstOrNull{it.id==(notebookId?:mutable.value.view)&&it.mode!=NoteMode.Password}
         if(book==null){mutable.update{it.copy(textImport=TextImport(name,text,markdown))};return}
-        val note=Note(notebookId=book.id,title=name,content=if(markdown)text else RichMarkdown.escape(text))
+        val note=Note(notebookId=book.id,title=name,content=text)
         mutate{it.copy(notes=it.notes+note)};mutable.update{it.copy(view=book.id,selectedId=note.id,textImport=null,editingCredentialId=null)}
     }
     fun cancelImport(){mutable.update{it.copy(textImport=null)}}

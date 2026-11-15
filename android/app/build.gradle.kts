@@ -13,8 +13,8 @@ android {
         applicationId = "app.moji.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10101
-        versionName = "1.1.1"
+        versionCode = 20000
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -38,6 +38,7 @@ android {
             signingConfig = signingConfigs.findByName("publisher")
         }
     }
+    sourceSets["main"].assets.srcDir("../../assets")
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
@@ -58,15 +59,11 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation(project(":rich-editor"))
+    implementation("androidx.webkit:webkit:1.14.0")
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("io.noties.markwon:core:4.6.2")
-    implementation("io.noties.markwon:ext-tables:4.6.2")
-    implementation("io.noties.markwon:ext-tasklist:4.6.2")
-    implementation("io.noties.markwon:ext-strikethrough:4.6.2")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

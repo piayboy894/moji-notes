@@ -65,6 +65,8 @@ def launch():
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     (REPORT.parent / "launch.txt").write_text(output)
 
+from native_ui import wait_editor
+
 try:
     if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
         raise RuntimeError("Install tests must run on an Android emulator, never a personal device")
@@ -77,11 +79,11 @@ try:
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(description="新建记录"))
-    enter("note-content", MARKER); wait_node(resource="note-content", contains=MARKER); time.sleep(1.5)
+    tap(wait_editor());adb("shell","input","text",MARKER);wait_editor(contains=MARKER);time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="未命名记录"))
-    wait_node(resource="note-content", contains=MARKER)
+    wait_editor(contains=MARKER)
     checks.append("fresh signed install has no notebooks; user-created notebook and native edits survive reinstall")
 
     legacy = REPORT.parent / "legacy-1.0.0.apk"
@@ -109,11 +111,11 @@ try:
     enter("migration-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="migrate")); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
-    wait_node(resource="note-content", contains=MARKER)
+    wait_editor(contains=MARKER)
     checks.append("published 1.0.0 upgrades with the same signature; one-time migration preserves old records")
     adb("shell", "am", "force-stop", PACKAGE); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
-    wait_node(resource="note-content", contains=MARKER)
+    wait_editor(contains=MARKER)
     checks.append("migrated records reopen without password or automatic locking")
     legacy.unlink()
     REPORT.parent.mkdir(parents=True, exist_ok=True)

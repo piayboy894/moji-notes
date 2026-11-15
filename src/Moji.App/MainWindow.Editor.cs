@@ -31,14 +31,19 @@ public partial class MainWindow
     private void RefreshNoteList()
     {
         if(noteList==null)return;var selected=VM.SelectedId;noteRows.Clear();foreach(var n in VM.Filtered())noteRows.Add(new(n));var row=noteRows.FirstOrDefault(n=>n.Note.Id==selected)??noteRows.FirstOrDefault();
-        if(row!=null){noteList.SelectedItem=row;if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}else{VM.SelectedId="";renderedId="";textEditor=null;titleBox=null;editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("暂无记录",20,"#99A58B")),new Thickness(60,100,60,30))};}
+        if(row!=null){noteList.SelectedItem=row;if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}else{VM.SelectedId="";renderedId="";titleBox=null;editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("暂无记录",20,"#99A58B")),new Thickness(60,100,60,30))};}
     }
-    public void RenderEditor(Note note)
+    public async void RenderEditor(Note note)
     {
-        if(editorHost==null || renderedId==note.Id)return;renderedId=note.Id;loadingEditor=true;textEditor=null;titleBox=null;
+        if(editorHost==null || renderedId==note.Id)return;
+        var request=++editorRequest;var previous=sharedEditor;sharedEditor=null;
+        if(previous!=null){editorRelease=Release(previous);try{await editorRelease;}catch{Toast("编辑内容暂时未能保存，请重试");return;}}
+        if(request!=editorRequest)return;
+        note=VM.State!.Notes.FirstOrDefault(n=>n.Id==note.Id)??note;
+        renderedId=note.Id;loadingEditor=true;titleBox=null;
         if(VM.View=="trash"){var panel=new StackPanel{Margin=new Thickness(50,75,50,30)};panel.Children.Add(new NativeIcon { Kind="Trash", Width=42,Height=42 });panel.Children.Add(Ui.Spaced(Ui.Text(note.Title,25,null,true),new Thickness(0,24,0,15)));panel.Children.Add(Ui.Text("删除于 "+DateTimeOffset.FromUnixTimeMilliseconds(note.DeletedAt!.Value).LocalDateTime.ToString("yyyy-MM-dd HH:mm"),11,"#96A188"));panel.Children.Add(Ui.Spaced(Ui.Row(Ui.Button("恢复记录",()=>RestoreNotes([note.Id]),true),Ui.Spaced(Ui.Button("永久删除",()=>Purge([note.Id])),new Thickness(10,0,0,0))),new Thickness(0,25,0,20)));editorHost.Content=new Border{Background=Ui.Resource("Panel"),Child=panel};loadingEditor=false;return;}
         var book=VM.State!.Notebooks.First(b=>b.Id==note.NotebookId);var container=new DockPanel{Background=Ui.Resource("Panel")};
-        var top=new DockPanel{Margin=new Thickness(27,15,22,15)};var actions=Ui.Row(Ui.Icon("Star",()=> {VM.EditNote(note.Id,n=>n with{Favorite=!n.Favorite});renderedId="";RenderEditor(CurrentNote()!);},"收藏"),Ui.Icon("Restore",()=>HistoryDialog(note.Id),"版本历史"),Ui.Icon("Focus",ToggleFocus,"专注模式"));
+        var top=new DockPanel{Margin=new Thickness(27,15,22,15)};Button? favorite=null;favorite=Ui.Icon("Star",()=>{VM.EditNote(note.Id,n=>n with{Favorite=!n.Favorite});favorite!.Background=CurrentNote()!.Favorite?Ui.Resource("AccentLight"):Ui.Resource("Panel");},"收藏");var actions=Ui.Row(favorite,Ui.Icon("Restore",()=>HistoryDialog(note.Id),"版本历史"),Ui.Icon("Focus",ToggleFocus,"专注模式"));
         if (book.Mode == NoteMode.Password) {
             var edit = Ui.Button(editingCredentialId == note.Id ? "完成" : "编辑密码", () => {
                 editingCredentialId = editingCredentialId == note.Id ? "" : note.Id; renderedId = ""; RenderEditor(CurrentNote()!); _ = VM.SaveAsync();
@@ -49,43 +54,12 @@ public partial class MainWindow
         titleBox=Ui.Input(note.Title,"记录标题");titleBox.IsReadOnly=book.Mode==NoteMode.Password&&editingCredentialId!=note.Id;titleBox.Name="RecordTitle";titleBox.FontSize=25;titleBox.FontWeight=FontWeights.SemiBold;titleBox.Background=Brushes.Transparent;titleBox.BorderThickness=new Thickness(0);titleBox.Padding=new Thickness(0,13,0,12);titleBox.TextChanged+=(_,_)=>{if(!loadingEditor&&!titleBox.IsReadOnly)VM.EditNote(note.Id,n=>n with{Title=titleBox.Text});};heading.Children.Add(titleBox);
         DockPanel.SetDock(heading,Dock.Top);container.Children.Add(heading);
         if(book.Mode==NoteMode.Password){container.Children.Add(editingCredentialId == note.Id ? CredentialView(note) : CredentialReadView(note));editorHost.Content=container;loadingEditor=false;return;}
-        formatTools.Clear();
-        var toolbar = new WrapPanel { Margin = new Thickness(14,5,14,5) };
-        void Tool(string icon,string label,Action action) { var button=Ui.Icon(icon,action,label); button.Focusable=false; formatTools[icon]=button; toolbar.Children.Add(button); }
-        Tool("Heading","标题",()=>SetHeading()); Tool("Bold","加粗",()=>EditingCommands.ToggleBold.Execute(null,textEditor)); Tool("Italic","斜体",()=>EditingCommands.ToggleItalic.Execute(null,textEditor));
-        Tool("Strike","删除线",()=>{if(textEditor!=null){var current=textEditor.Selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;textEditor.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty,current?.Any(t=>t.Location==TextDecorationLocation.Strikethrough)==true?new TextDecorationCollection():TextDecorations.Strikethrough);}});
-        Tool("Bullet","项目列表",()=>EditingCommands.ToggleBullets.Execute(null,textEditor)); Tool("Ordered","编号列表",()=>EditingCommands.ToggleNumbering.Execute(null,textEditor));
-        Tool("Checklist","待办事项",InsertTask);Tool("Quote","引用",InsertQuote);
-        Tool("Link","插入链接",InsertLink); Tool("Image","插入图片",InsertImage); Tool("Table","插入表格",InsertTable);
-        Tool("Undo","撤销",()=>RichUndo()); Tool("Redo","重做",()=>RichUndo(true)); Tool("Find","查找与替换",FindReplaceDialog);
-        var tools=new Border { Child=toolbar, Background=Ui.Resource("Side"), BorderBrush=Ui.Resource("Line"), BorderThickness=new Thickness(0,1,0,1) }; DockPanel.SetDock(tools,Dock.Top); container.Children.Add(tools);
         if(book.Mode==NoteMode.Prompt){var promptBar=new DockPanel{Margin=new Thickness(22,6,22,6)};var use=Ui.Button("使用提示词",()=>PromptDialog(note.Id),true);var insert=Ui.Button("插入变量",InsertVariable);DockPanel.SetDock(insert,Dock.Left);promptBar.Children.Add(insert);DockPanel.SetDock(use,Dock.Right);promptBar.Children.Add(use);container.Children.Add(promptBar);DockPanel.SetDock(promptBar,Dock.Top);}
-        tableTools=BuildTableTools();DockPanel.SetDock(tableTools,Dock.Top);container.Children.Add(tableTools);
-        linkTools=BuildLinkTools();DockPanel.SetDock(linkTools,Dock.Top);container.Children.Add(linkTools);
-        editorStatus=Ui.Text("",11); editorStatus.Margin=new Thickness(24,8,24,8); DockPanel.SetDock(editorStatus,Dock.Bottom);container.Children.Add(editorStatus);
-        textEditor=new RichTextBox { Document=MarkdownDocument.Render(note.Content,VM.State.Preferences.FontSize,note.Variables), IsReadOnly=false, IsDocumentEnabled=true, AcceptsTab=true, BorderThickness=new Thickness(0), Background=Ui.Resource("Panel"), Foreground=Ui.Resource("Ink"), VerticalScrollBarVisibility=ScrollBarVisibility.Auto, UndoLimit=100, Padding=new Thickness(28,16,28,24), Name="RichNoteEditor" };
-        textEditor.TextChanged+=(_,_)=>SaveRichText();textEditor.SelectionChanged+=(_,_)=>UpdateRichSelection();WireTasks();
-        DataObject.AddPastingHandler(textEditor,(_,e)=>{if(e.DataObject.GetDataPresent(DataFormats.Bitmap)&&e.DataObject.GetData(DataFormats.Bitmap) is System.Windows.Media.Imaging.BitmapSource bitmap){e.CancelCommand();EmbedBitmap(bitmap);}});
-        textEditor.AddHandler(CheckBox.CheckedEvent,new RoutedEventHandler((_,_)=>SaveRichText())); textEditor.AddHandler(CheckBox.UncheckedEvent,new RoutedEventHandler((_,_)=>SaveRichText()));
-        container.Children.Add(textEditor);editorHost.Content=container;loadingEditor=false;UpdateEditorStatus();UpdateRichSelection();
+        sharedEditor=new SharedEditorView(VM,note);sharedEditor.ActionRequested+=action=>{switch(action){case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":SearchDialog();break;case "save":VM.Checkpoint(note.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};
+        container.Children.Add(sharedEditor);editorHost.Content=container;loadingEditor=false;
     }
-    private void SaveRichText()
-    {
-        if(loadingEditor||textEditor==null||CurrentNote() is not {} note)return;
-        var content=RichDocument.Serialize(textEditor.Document);if(content!=note.Content){if(!richUndo.ContainsKey(note.Id))richUndo[note.Id]=[];var history=richUndo[note.Id];history.Add(note.Content);if(history.Count>100)history.RemoveAt(0);richRedo.Remove(note.Id);VM.EditNote(note.Id,n=>n with{Content=content});}UpdateEditorStatus();UpdateRichSelection();
-    }
-    private void UpdateEditorStatus(){if(editorStatus!=null&&textEditor!=null)editorStatus.Text=$"{new TextRange(textEditor.Document.ContentStart,textEditor.Document.ContentEnd).Text.Count(c=>!char.IsWhiteSpace(c)):N0} 字";}
-    private void SetHeading()
-    {
-        if(textEditor==null)return;var p=textEditor.CaretPosition.Paragraph;if(p==null)return;
-        textEditor.BeginChange();try { var heading=p.Tag is not int;p.Tag=heading?2:null;p.FontSize=VM.State!.Preferences.FontSize*(heading?1.4:1);p.FontWeight=heading?FontWeights.SemiBold:FontWeights.Normal; }finally{textEditor.EndChange();}SaveRichText();textEditor.Focus();
-    }
-    private void InsertTable()
-    {
-        if(textEditor==null)return;var rows=new ComboBox{ItemsSource=Enumerable.Range(1,20),SelectedItem=3};var cols=new ComboBox{ItemsSource=Enumerable.Range(1,10),SelectedItem=2};var panel=Ui.Stack(Ui.Field("行数",rows),Ui.Field("列数",cols));panel.Margin=new Thickness(24);Window? dialog=null;
-        panel.Children.Add(Ui.Button("插入",()=>{var table=new Table{CellSpacing=0,Margin=new Thickness(0,12,0,12)};var group=new TableRowGroup();for(var i=0;i<(int)rows.SelectedItem;i++){var row=new TableRow();for(var j=0;j<(int)cols.SelectedItem;j++)row.Cells.Add(NewCell());group.Rows.Add(row);}table.RowGroups.Add(group);
-            textEditor.BeginChange();try{var p=textEditor.CaretPosition.Paragraph;if(p?.Parent==textEditor.Document)textEditor.Document.Blocks.InsertAfter(p,table);else textEditor.Document.Blocks.Add(table);textEditor.Document.Blocks.Add(new Paragraph());textEditor.CaretPosition=group.Rows[0].Cells[0].ContentStart;}finally{textEditor.EndChange();}SaveRichText();dialog!.Close();textEditor.Focus();},true));dialog=Ui.Dialog(this,"插入表格",panel,420);dialog.ShowDialog();
-    }
+    private static async Task Release(SharedEditorView editor){await editor.Flush();editor.Dispose();}
+    internal async Task<SharedEditorView> ReadyEditor(){for(var i=0;i<100&&sharedEditor==null;i++)await Task.Delay(50);var editor=sharedEditor??throw new InvalidOperationException("Editor not created");await editor.Ready.WaitAsync(TimeSpan.FromMinutes(2));return editor;}
     private UIElement CredentialReadView(Note note)
     {
         var fields = new StackPanel { Margin = new Thickness(50,25,50,35), MaxWidth = 650 };

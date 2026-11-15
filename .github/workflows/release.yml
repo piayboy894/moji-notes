@@ -13,8 +13,23 @@ jobs:
   windows:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - run: npm ci --prefix editor
+      - run: npm run build --prefix editor
+      - uses: actions/cache@v4
+        with:
+          path: webview-runtime
+          key: webview-fixed-157.0.4341.60
+      - name: Bundle verified offline editor runtime
+        shell: pwsh
+        run: ./tools/prepare-webview.ps1
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -28,11 +43,13 @@ jobs:
       - name: Publish standalone native Windows app
         shell: pwsh
         run: |
-          dotnet publish src/Moji.App -c Release -r win-x64 --self-contained true -o publish/win-x64
+          dotnet publish src/Moji.App -c Release -r win-x64 --self-contained true -p:MojiWebViewRuntimeCab="$pwd/webview-runtime/x64.cab" -o publish/win-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet publish src/Moji.App -c Release -r win-arm64 --self-contained true -o publish/win-arm64
+          dotnet publish src/Moji.App -c Release -r win-arm64 --self-contained true -p:MojiWebViewRuntimeCab="$pwd/webview-runtime/arm64.cab" -o publish/win-arm64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Native WPF smoke test
+        env:
+          MOJI_FORCE_FIXED_WEBVIEW: 1
         shell: pwsh
         run: |
           $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/smoke" -Wait -PassThru

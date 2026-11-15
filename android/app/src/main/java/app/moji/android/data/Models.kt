@@ -70,20 +70,7 @@ object Records {
         query.isBlank() -> true
         else -> listOf(note.title, note.username, note.url, if (mode == NoteMode.Password) "" else plain(PromptVariables.display(note))).joinToString("\n").contains(query, true)
     }
-    private val parser=org.commonmark.parser.Parser.builder().extensions(listOf(org.commonmark.ext.gfm.strikethrough.StrikethroughExtension.create(),org.commonmark.ext.gfm.tables.TablesExtension.create())).build()
-    fun plain(content:String):String {
-        val out=StringBuilder();val visitor=object:org.commonmark.node.AbstractVisitor(){
-            override fun visit(text:org.commonmark.node.Text){out.append(text.literal)}
-            override fun visit(code:org.commonmark.node.Code){out.append(code.literal)}
-            override fun visit(code:org.commonmark.node.FencedCodeBlock){out.append(code.literal).append(' ')}
-            override fun visit(code:org.commonmark.node.IndentedCodeBlock){out.append(code.literal).append(' ')}
-            override fun visit(line:org.commonmark.node.SoftLineBreak){out.append(' ')}
-            override fun visit(line:org.commonmark.node.HardLineBreak){out.append(' ')}
-            override fun visit(p:org.commonmark.node.Paragraph){visitChildren(p);out.append(' ')}
-            override fun visit(h:org.commonmark.node.Heading){visitChildren(h);out.append(' ')}
-            override fun visit(image:org.commonmark.node.Image){out.append("图片")}
-        };parser.parse(content).accept(visitor);return out.toString().replace(Regex("\\s+")," ").trim()
-    }
+    fun plain(content:String)=EditorContent.plain(content).replace(Regex("\\s+")," ").trim()
     fun relative(at: Long): String { val diff = (now() - at).coerceAtLeast(0); return when { diff < 60_000 -> "刚刚"; diff < 3_600_000 -> "${diff / 60_000} 分钟前"; diff < 86_400_000 -> "${diff / 3_600_000} 小时前"; else -> "${diff / 86_400_000} 天前" } }
     fun safeName(name: String) = name.replace(Regex("[\\\\/:*?\"<>|\\x00-\\x1f]"), "_").take(100).ifBlank { "未命名" }
 }

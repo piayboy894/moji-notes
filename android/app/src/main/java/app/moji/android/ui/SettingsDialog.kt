@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
             "data" -> {
                 SectionTitle("数据管理", "${w.liveBooks.size} 本记事本 · ${w.liveNotes.size} 条记录")
                 DataOption("本地存档", "全部记事本与记录。", MojiIcons.Shield, true, backup)
-                DataOption("Markdown 文本集", "按记事本导出 ZIP，不包含密码库。", MojiIcons.FolderZip, true, exportText)
+                DataOption("文本集", "按记事本导出 ZIP，不包含密码库。", MojiIcons.FolderZip, true, exportText)
                 DataOption("导入与恢复", "支持 Markdown、TXT 与墨记存档。", MojiIcons.FileUpload, true, import)
             }
             else -> {

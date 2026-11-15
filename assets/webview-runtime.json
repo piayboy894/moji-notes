@@ -1,0 +1,8 @@
+{
+  "version": "157.0.4341.60",
+  "source": "https://developer.microsoft.com/en-us/microsoft-edge/webview2/",
+  "urls": {
+    "x64": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/9d6605ff-c172-41a1-8116-e1bb02b93a01/Microsoft.WebView2.FixedVersionRuntime.157.0.4341.60.x64.cab",
+    "arm64": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/db82897d-c991-4981-85cd-25d8ff01b84b/Microsoft.WebView2.FixedVersionRuntime.157.0.4341.60.arm64.cab"
+  }
+}

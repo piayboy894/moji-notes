@@ -3,9 +3,9 @@ on:
   push:
     branches: [main]
     tags: ['android-v*']
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', 'editor/**', 'assets/editor/**', '.github/workflows/android.yml']
   pull_request:
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', 'editor/**', 'assets/editor/**', '.github/workflows/android.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,12 +15,28 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - run: npm ci --prefix ../editor
+      - run: npm run build --prefix ../editor
+      - run: npx --prefix ../editor playwright install --with-deps chromium
+      - run: npm test --prefix ../editor -- --workers=2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Shared-editor-regression
+          path: |
+            editor/playwright-report/
+            editor/test-results/
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

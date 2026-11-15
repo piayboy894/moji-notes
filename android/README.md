@@ -1,19 +1,7 @@
-# 墨记 Android
+# Android
 
-原生 Kotlin + Jetpack Compose，Android 8.0+，无 WebView。1.1.1 使用原固定密钥签名，和 Windows 1.2.1 共用项目及云存档格式。
+Kotlin / Jetpack Compose 原生外壳，Android 8.0+。2.0.0 起，正文直接嵌入离线 Tiptap 官方 Simple Editor，与 Windows 使用同一份 `assets/editor/`；不是打开浏览器网站。
 
-正文采用单一所见即所得编辑器；提示词变量显式插入；密码记录先只读，再点击编辑。新装无演示、标签、主密码或自动锁定，数据仓库默认空。本机自动写入普通 JSON，云端提供四种全局手动存档。
+支持手机、平板、横竖屏、分屏和可调整窗口。系统 WebView 负责统一正文的输入、选区、引用、待办和撤销，Compose 负责记事本、变量弹窗、账号密码、存档与系统文件选择器。旧正文按普通文本原样载入，不兼容旧排版。
 
-手机单页编辑，宽窗口列表加正文，大窗口增加导航；适配旋转、分屏、可调整窗口、鼠标和自定义快捷键。三星多窗口 / DeX 配置保留在原生 Activity 中，产品设置仅称「快捷键」。模拟器尺寸测试不代替三星设备实测。
-
-构建需要 JDK 17、SDK 36、Build Tools 35.0.0。Gradle Wrapper 固定 8.11.1 并验证分发包摘要。
-
-```sh
-./gradlew :app:testDebugUnitTest :app:assembleDebug
-./gradlew :app:assembleRelease
-./gradlew :app:connectedDebugAndroidTest
-```
-
-签名见 [SIGNING](SIGNING.md)。没有签名配置时只生成未签名 Release。原生测试包含多尺寸、编辑工具、密码只读、快捷键与本地保存；正式包额外验证安装、重装和从公开 1.0.0 升级迁移。
-
-[完整功能与数据说明](../README.md) · [架构](../docs/ARCHITECTURE.md) · [验证状态](../docs/PROGRESS.md)。
+先在项目根目录执行 `npm ci --prefix editor && npm run build --prefix editor`，再执行 `./gradlew :app:testDebugUnitTest :app:assembleDebug`。发行工作流使用既有固定密钥，并测试优化后的真实签名 APK。无需新增 GitHub Secrets。

@@ -30,8 +30,6 @@ if platform == "windows":
         name = f"Moji-Notes-{version}-win-{architecture}.exe"
         if hashlib.sha256((folder / name).read_bytes()).hexdigest() != sums[name]:
             raise RuntimeError("Windows executable checksum mismatch")
-    for capture, name in [("08-notebook-appearance.png", "Moji-Notebook-Appearance.png"), ("09-custom-notebook-home.png", "Moji-Custom-Notebook.png")]:
-        shutil.copy(folder.parent / "smoke" / capture, folder / name)
     tag, title, notes = f"v{version}", f"墨记 Windows {version}", source("docs/RELEASE.md")
 else:
     version = re.search(r'versionName = "([0-9.]+)"', source("android/app/build.gradle.kts")).group(1)
