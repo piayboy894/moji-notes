@@ -88,11 +88,7 @@ object Records {
     fun safeName(name: String) = name.replace(Regex("[\\\\/:*?\"<>|\\x00-\\x1f]"), "_").take(100).ifBlank { "未命名" }
 }
 object Seed {
-    fun create() = Workspace(notebooks = listOf(
-        Notebook(name = "日常随记"),
-        Notebook(name = "灵感提示词", mode = NoteMode.Prompt, color = "#B2946E"),
-        Notebook(name = "私人密码库", mode = NoteMode.Password, color = "#8393AC")
-    ))
+    fun create() = Workspace()
 }
 object NoteCreation {
     fun inNotebook(state: Workspace, notebookId: String): Note {

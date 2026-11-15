@@ -20,9 +20,32 @@ class AdaptiveUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(w: Int,h: Int,d: Int) { shell("wm size ${w}x$h"); shell("wm density $d"); Thread.sleep(1200); compose.waitForIdle() }
-    private fun ready() { compose.waitUntil(15000) { val s=compose.activity.vm.state.value; check(s.error.isBlank()){s.error}; s.workspace!=null && !s.loading } }
+    private fun ready(books: Boolean = true) {
+        compose.waitUntil(15000) { val s=compose.activity.vm.state.value; check(s.error.isBlank()){s.error}; s.workspace!=null && !s.loading }
+        // Test fixtures are created explicitly; production starts with no notebooks.
+        if (books) compose.activityRule.scenario.onActivity { a ->
+            NoteMode.entries.forEach { mode -> if (a.vm.state.value.workspace!!.liveBooks.none { it.mode==mode }) a.vm.saveBook(null,"测试${mode.label}",mode,"#75876D") }
+        }
+    }
     private fun hideKeyboard() { compose.activityRule.scenario.onActivity { androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(350); compose.waitForIdle() }
     private fun screenshot(name: String) { compose.waitForIdle(); Thread.sleep(500); val path="/sdcard/Download/moji-native-ui/$name.png"; shell("mkdir -p /sdcard/Download/moji-native-ui"); shell("screencap -p $path"); check((shell("stat -c %s $path").trim().toLongOrNull()?:0)>1024) }
+    @Test fun emptyWorkspaceCreatesOnlyTheNotebookChosenByUser() {
+        ready(false); runBlocking { compose.activity.vm.replaceData(GameSaves.capture(Seed.create())) }
+        compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
+        assertTrue(compose.activity.vm.state.value.workspace!!.notebooks.isEmpty())
+        compose.onNodeWithTag("add-notebook-card").assertIsDisplayed(); screenshot("00-empty-workspace")
+        compose.onAllNodesWithContentDescription("新建记录").onFirst().performClick()
+        compose.onNodeWithText("新建记事本").assertIsDisplayed(); compose.onNodeWithContentDescription("关闭").performClick()
+        compose.onNodeWithTag("add-notebook-card").performClick()
+        compose.onNodeWithTag("notebook-name").performTextInput("My first notebook"); hideKeyboard()
+        compose.onNodeWithText("账号密码",substring=false).performScrollTo().performClick()
+        compose.onNodeWithText("创建记事本").performClick()
+        val book=compose.activity.vm.state.value.workspace!!.notebooks.single()
+        assertEquals("My first notebook",book.name); assertEquals(NoteMode.Password,book.mode)
+        assertTrue(compose.activity.vm.state.value.workspace!!.notes.isEmpty())
+        runBlocking { compose.activity.vm.flush() }; compose.activityRule.scenario.onActivity { it.vm.openLocal() }; ready(false)
+        assertEquals(listOf(book),compose.activity.vm.state.value.workspace!!.notebooks)
+    }
     @Test fun phoneTabletUltrawideAndRotationPreserveNativeEditing() {
         try {
             ready(); compose.activityRule.scenario.onActivity { it.vm.navigate("home") }; compose.onNodeWithTag("home-title").assertIsDisplayed(); screenshot("01-phone-home")
@@ -131,16 +154,20 @@ class AdaptiveUiTest {
         assertEquals("Leaf",current().icon);assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);screenshot("13-custom-notebook-home")
     }
     @Test fun physicalKeyboardBurstPersistsEveryCharacter() {
+        try {
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
         val marker="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115"
+        compose.waitUntil(10000){compose.activity.hasWindowFocus()}
         compose.onNodeWithTag("note-content").performClick()
-        shell("input text $marker")
+        hideKeyboard();compose.onNodeWithTag("note-content").assertIsFocused()
+        InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
         compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
         compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)}
         compose.onNodeWithTag("note-content").assertTextContains(marker,substring=true)
+        }catch(t:Throwable){runCatching{screenshot("failure-physical-keyboard")};throw t}
     }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {
         ready(); compose.activityRule.scenario.onActivity{it.vm.navigate("home")}

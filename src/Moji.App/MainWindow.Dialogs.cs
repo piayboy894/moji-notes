@@ -27,6 +27,7 @@ public partial class MainWindow
     }
     private void ChooseNotebook()
     {
+        if (!VM.State!.LiveBooks.Any()) { NotebookDialog(); return; }
         var panel = new StackPanel { Margin = new Thickness(22) }; Window? dialog = null;
         foreach (var book in VM.State!.LiveBooks) {
             var button = Ui.Button("", () => { dialog!.Close(); AddNote(book.Id); });

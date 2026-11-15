@@ -3,10 +3,10 @@ using Xunit;
 namespace Moji.Tests;
 public class SimplifiedFlowTests
 {
-    [Fact] public void FreshSpaceHasNoSamplesOrPresetRepository() { var w=Seed.Create(); Assert.Empty(w.Notes); Assert.Equal("",w.Sync.Repository); Assert.Equal(3,w.LiveBooks.Count()); }
+    [Fact] public void FreshSpaceHasNoSamplesOrPresetRepository() { var w=Seed.Create(); Assert.Empty(w.Notes); Assert.Equal("",w.Sync.Repository); Assert.Empty(w.Notebooks); }
     [Fact] public void CreationNeverChoosesAnotherNotebookOrCreatesTemplates()
     {
-        var w=Seed.Create(); var second=new Notebook{Mode=NoteMode.Prompt,Name="Another prompt book"}; w=w with{Notebooks=[..w.Notebooks,second]};
+        var w=TestWorkspace.Create() with { Notes = [] }; var second=new Notebook{Mode=NoteMode.Prompt,Name="Another prompt book"}; w=w with{Notebooks=[..w.Notebooks,second]};
         foreach(var b in w.LiveBooks){var n=NoteCreation.InNotebook(w,b.Id);Assert.Equal(b.Id,n.NotebookId);Assert.Empty(n.Content);Assert.Empty(n.Password);}
         Assert.Throws<InvalidOperationException>(()=>NoteCreation.InNotebook(w,"home")); Assert.Empty(w.Notes);
         Assert.Throws<InvalidOperationException>(()=>NoteCreation.InNotebook(w with{Notebooks=[second with{DeletedAt=Clock.Now}]},second.Id));
@@ -40,4 +40,4 @@ public class VisibleSearchTests { [Xunit.Fact] public void RichTextSearchUsesVis
 
 public class UserMessageTests{[Xunit.Fact]public void RuntimeDetailsNeverReachUser(){var error=new InvalidOperationException("WindowInteropHelper.EnsureHandle ShowDialog Close");Xunit.Assert.Equal("操作未完成，请重试。",Moji.Core.UserMessages.For(error));Xunit.Assert.DoesNotContain("WindowInteropHelper",Moji.Core.UserMessages.For(error));}}
 
-public class NotebookStyleTests{[Xunit.Fact]public void AppearanceSurvivesWholeWorkspaceSave(){var w=Moji.Core.Seed.Create();var b=w.Notebooks[0] with{Color="#A1C4FD",ColorEnd="#C2E9FB",Icon="Leaf"};w=w with{Notebooks=[b,..w.Notebooks.Skip(1)]};var next=Moji.Core.GameSaves.Apply(Moji.Core.Seed.Create(),Moji.Core.GameSaves.Capture(w));Xunit.Assert.Equal(b.Color,next.Notebooks[0].Color);Xunit.Assert.Equal(b.Icon,next.Notebooks[0].Icon);Xunit.Assert.Equal(b.ColorEnd,next.Notebooks[0].ColorEnd);Xunit.Assert.Equal(b.Mode,next.Notebooks[0].Mode);}}
+public class NotebookStyleTests{[Xunit.Fact]public void AppearanceSurvivesWholeWorkspaceSave(){var w=TestWorkspace.Create();var b=w.Notebooks[0] with{Color="#A1C4FD",ColorEnd="#C2E9FB",Icon="Leaf"};w=w with{Notebooks=[b,..w.Notebooks.Skip(1)]};var next=Moji.Core.GameSaves.Apply(Moji.Core.Seed.Create(),Moji.Core.GameSaves.Capture(w));Xunit.Assert.Equal(b.Color,next.Notebooks[0].Color);Xunit.Assert.Equal(b.Icon,next.Notebooks[0].Icon);Xunit.Assert.Equal(b.ColorEnd,next.Notebooks[0].ColorEnd);Xunit.Assert.Equal(b.Mode,next.Notebooks[0].Mode);}}

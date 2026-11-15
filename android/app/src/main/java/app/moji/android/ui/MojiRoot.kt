@@ -52,7 +52,7 @@ import java.util.zip.ZipOutputStream
     var plainBackup by remember { mutableStateOf<SyncPayload?>(null) }
     var backup by remember { mutableStateOf<Envelope?>(null) }; var backupPassword by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf("") }; var restoring by remember { mutableStateOf(false) }
     var exportWriter by remember { mutableStateOf<(suspend (OutputStream) -> Unit)?>(null) }
-    fun addRecord() { if (s.workspace?.liveBooks?.any { it.id == s.view } == true) vm.addNote(s.view) else chooseNotebook = true }
+    fun addRecord() { if (s.workspace?.liveBooks.isNullOrEmpty()) newBook = true else if (s.workspace?.liveBooks?.any { it.id == s.view } == true) vm.addNote(s.view) else chooseNotebook = true }
     val keyboardFocus=remember{FocusRequester()}
     LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,chooseNotebook,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!chooseNotebook&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)

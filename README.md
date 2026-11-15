@@ -7,7 +7,7 @@ Windows 与 Android 原生文本管理软件，支持普通文本、提示词、
 - [Windows 1.2.0](https://github.com/piayboy894/moji-notes/releases/tag/v1.2.0)：Intel / AMD 选 x64，Windows ARM 选 ARM64。提供自包含 EXE 和便携 ZIP，无需安装 .NET。
 - [Android 1.1.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v1.1.0)：Android 8.0 及以上，固定发布密钥签名，可覆盖升级。
 
-打开即可使用，无主密码、演示内容、标签或自动锁定。首次升级旧版加密数据时，需要输入一次旧密码完成迁移；之后直接打开。已有记录不会因移除演示功能而被擅自删除。
+打开即可使用，初始没有记事本或记录，点击虚线「＋」创建自己的本子。无主密码、演示内容、标签或自动锁定。首次升级旧版加密数据时，需要输入一次旧密码完成迁移；之后直接打开。已有记录不会因移除演示功能而被擅自删除。
 
 ## 编辑与整理
 
