@@ -14,7 +14,7 @@ Windows 为 .NET 10 / WPF，Android 为 Kotlin / Jetpack Compose。记事本、�
 
 ## 桥接与持久化
 
-JS 在文档更新时提交完整 HTML 和变量给宿主。Windows 使用 WebView2 `WebMessageReceived`，Android 使用带 `@JavascriptInterface` 的固定本地桥接。宿主核验记录 ID、空间代次、长度、文档标记和变量 ID，再执行本地自动保存。切换文档重新建立编辑状态和撤销历史。
+JS 在文档更新时提交完整 HTML 和变量给宿主。Windows 使用 WebView2 `WebMessageReceived`，Android 使用带 `@JavascriptInterface` 的固定本地桥接。宿主核验记录 ID、空间代次、长度、文档标记和变量 ID，再执行本地自动保存。切换文档重新建立编辑状态和撤销历史。正文保存为单向流：原生界面不能因为自动保存或状态变化再次回填 HTML；显式恢复历史版本才建立新的编辑会话，并拒绝旧会话迟到的更改。字号和主题也只在真正变化时更新。
 
 保存、导出、云存档和后台切换先请求编辑器刷新，等待带令牌的确认再采集原生状态；释放 WebView 也等待刷新，避免最后一次输入丢失。读取存档更换空间代次，旧宿主的迟到消息不能覆盖新空间。
 

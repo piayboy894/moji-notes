@@ -159,9 +159,7 @@ class AdaptiveUiTest {
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
         val marker="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115"
         compose.waitUntil(10000){compose.activity.hasWindowFocus()}
-        webReady();js("window.MojiEditor.editor.commands.focus()")
-        hideKeyboard();js("window.MojiEditor.editor.commands.focus()")
-        focusWeb();InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
+        webReady();tapWeb(".tiptap");InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
         compose.waitUntil(5000){jsText().contains(marker)}
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId

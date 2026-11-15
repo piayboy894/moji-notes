@@ -125,7 +125,7 @@ public partial class MainWindow : Window
             case "save": e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } break;
             case "focus": e.Handled = true; ToggleFocus(); break;
 
-            case "undo": case "redo": case "bold": if (sharedEditor != null) { e.Handled = true; _ = sharedEditor.Command(action); } break;
+            case "undo": case "redo": case "bold": if (sharedEditor != null && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase) { e.Handled = true; _ = sharedEditor.Command(action); } break;
         }
 
         if (e.Key == Key.Escape && focusMode) { e.Handled = true; ToggleFocus(); }

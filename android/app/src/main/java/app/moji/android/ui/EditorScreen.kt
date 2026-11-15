@@ -58,7 +58,7 @@ import kotlinx.coroutines.delay
         BasicTextField(note.title,{text->vm.edit(note.id){it.copy(title=text)}},Modifier.fillMaxWidth().padding(23.dp,18.dp).testTag("note-title"),textStyle=MaterialTheme.typography.titleLarge.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),readOnly=note.deletedAt!=null||(book.mode==NoteMode.Password&&!editing))
         if(note.deletedAt!=null)Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Button(onClick={vm.restore(setOf(note.id))}){Text("恢复记录")};TextButton(onClick={purge=true}){Text("永久删除")}}
         else if(book.mode==NoteMode.Password)CredentialEditor(vm,note,activity,editing,Modifier.weight(1f))
-        else key(note.id) { RichNoteEditor(note,book.mode,vm,Modifier.weight(1f)){prompt=true} }
+        else key(note.id,s.editorGeneration) { RichNoteEditor(note,book.mode,vm,Modifier.weight(1f)){prompt=true} }
     }
     if(history)HistoryDialog(note,{history=false},allowRestore=book.mode!=NoteMode.Password||editing){vm.restoreVersion(note.id,it);history=false}
     if(prompt)PromptDialog(note,activity){prompt=false}

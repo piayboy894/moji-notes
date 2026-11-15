@@ -24,31 +24,31 @@ import org.json.JSONObject
 import kotlinx.coroutines.*
 
 /** The Android host owns persistence and file permissions. Tiptap owns the entire document. */
-class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long) {
+class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long,private val generation:Int) {
     private val pending=mutableMapOf<String,CompletableDeferred<Unit>>()
     val flusher:suspend ()->Unit={flush()}
-    private suspend fun flush(){if(ready&&vm.workspaceEpoch==epoch){val token=uid();val done=CompletableDeferred<Unit>();pending[token]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(token)})",null);withTimeout(10000){done.await()}}finally{pending.remove(token)}}}
+    private suspend fun flush(){if(ready&&vm.workspaceEpoch==epoch&&vm.state.value.editorGeneration==generation){val token=uid();val done=CompletableDeferred<Unit>();pending[token]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(token)})",null);withTimeout(10000){done.await()}}finally{pending.remove(token)}}}
     var ready=false
     var loadSent=false
-    var lastContent=""
+    var lastAppearance=""
     var fileResult:ValueCallback<Array<Uri>>?=null
     var onReady:(()->Unit)?=null
     @JavascriptInterface fun postMessage(message:String) {
         if(message.length>30_000_000)return
         web.post {
-            if(vm.workspaceEpoch!=epoch)return@post
             runCatching {
                 val data=json.parseToJsonElement(message).jsonObject
-                when(data["type"]?.jsonPrimitive?.content){
+                val type=data["type"]?.jsonPrimitive?.content
+                if(type=="flushed"){pending.remove(data["token"]?.jsonPrimitive?.content)?.complete(Unit);return@runCatching}
+                if(vm.workspaceEpoch!=epoch||vm.state.value.editorGeneration!=generation)return@runCatching
+                when(type){
                     "ready"->onReady?.invoke()
                     "loaded"->if(data["id"]?.jsonPrimitive?.content==id)ready=true
-                    "flushed"->pending.remove(data["token"]?.jsonPrimitive?.content)?.complete(Unit)
                     "change"->{if(data["id"]?.jsonPrimitive?.content!=id)return@runCatching
                         val content=data.getValue("content").jsonPrimitive.content
                         val variables=json.decodeFromJsonElement<List<PromptVariable>>(data.getValue("variables"))
                         if(!EditorContent.isDocument(content)||variables.any{!Regex("[a-f0-9]{32}").matches(it.id)||it.name.length !in 1..40})return@runCatching
                         val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==id}?:return@runCatching
-                        lastContent=content
                         if(old.content!=content||old.variables!=variables)vm.edit(id){it.copy(content=content,variables=variables)}
                     }
                     "openLink"->{val uri=Uri.parse(data["url"]?.jsonPrimitive?.content?:"");if(uri.scheme in listOf("http","https"))runCatching{web.context.startActivity(Intent(Intent.ACTION_VIEW,uri))}}
@@ -59,7 +59,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
     }
     fun command(action:String,value:String="null"){web.requestFocus();web.evaluateJavascript("window.MojiEditor?.action(${JSONObject.quote(action)},$value)",null)}
     fun load(note:Note,theme:String,fontSize:Double,p:Preferences){
-        loadSent=true;lastContent=note.content
+        loadSent=true
         val payload=buildJsonObject{put("id",id);put("content",note.content);put("variables",json.encodeToJsonElement(note.variables));put("theme",theme);put("fontSize",fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(p,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
         web.evaluateJavascript("window.MojiEditor?window.MojiEditor.load($payload):window.__mojiLoad=$payload",null)
     }
@@ -84,7 +84,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
                 settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 isVerticalScrollBarEnabled=false
                 val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(context)).build()
-                val current=SharedEditorBridge(this,vm,note.id,vm.workspaceEpoch);bridge=current;web=this;vm.editorFlushers.add(current.flusher)
+                val current=SharedEditorBridge(this,vm,note.id,vm.workspaceEpoch,vm.state.value.editorGeneration);bridge=current;web=this;vm.editorFlushers.add(current.flusher)
                 current.onReady={if(!current.loadSent)current.load(note,if(dark)"dark"else"light",prefs.fontSize,prefs)}
                 addJavascriptInterface(current,"MojiNative")
                 webViewClient=object:WebViewClient(){
@@ -100,10 +100,12 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
                 loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")
             }
         },update={view->
-            val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}
+            // The open editor owns its document. Never echo an autosave back into it.
+            // Explicit version restores create a new editor session in EditorScreen.
             val current=bridge
-            if(current?.ready==true&&latest!=null&&latest.content!=current.lastContent)current.load(latest,if(dark)"dark"else"light",prefs.fontSize,prefs)
-            view.evaluateJavascript("window.MojiEditor?.theme({theme:${JSONObject.quote(if(dark)"dark"else"light")},fontSize:${prefs.fontSize}})",null)})
+            val appearance="${if(dark)"dark"else"light"}:${prefs.fontSize}"
+            if(current!=null&&current.lastAppearance!=appearance){current.lastAppearance=appearance;view.evaluateJavascript("window.MojiEditor?.theme({theme:${JSONObject.quote(if(dark)"dark"else"light")},fontSize:${prefs.fontSize}})",null)}
+        })
     }
     DisposableEffect(note.id){onDispose{val old=web;bridge?.fileResult?.onReceiveValue(null);val previous=bridge;if(previous!=null&&old!=null)vm.releaseEditor(previous.flusher){old.removeJavascriptInterface("MojiNative");old.destroy()}}}
     if(variableDialog){var name by remember{mutableStateOf("")};var error by remember{mutableStateOf("")};PanelDialog("插入变量",{variableDialog=false},actions={Button(onClick={try{val variable=PromptVariables.named(vm.selectedNote()?:note,name);bridge?.command("insertVariable",json.encodeToString(variable));variableDialog=false}catch(e:Exception){error=UserMessages.forError(e)}},enabled=name.isNotBlank()){Text("插入")}}){Field("变量名称",name,Modifier.testTag("variable-name")){name=it};if(error.isNotBlank())Text(error)}}

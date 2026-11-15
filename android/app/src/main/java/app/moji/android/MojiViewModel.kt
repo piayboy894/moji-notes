@@ -19,7 +19,7 @@ data class AppState(
     val workspace: Workspace? = null, val loading: Boolean = true, val exists: Boolean = false,
     val busy: Boolean = false, val error: String = "", val saving: Boolean = false,
     val saveError: Boolean = false, val view: String = "home", val selectedId: String? = null,
-    val editingCredentialId: String? = null, val search: String = "", val sort: String = "updated", val update: AndroidUpdate? = null,
+    val editorGeneration:Int=0, val editingCredentialId: String? = null, val search: String = "", val sort: String = "updated", val update: AndroidUpdate? = null,
     val updateChecking: Boolean = false, val updateProgress: Float? = null, val downloadedApk: File? = null,
     val needsMigration: Boolean = false, val textImport:TextImport? = null
 )
@@ -108,7 +108,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     fun purge(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.copy(title = "", content = "", username = "", password = "", url = "", otp = "", tags = emptyList(), variables = emptyList(), history = emptyList(), deletedAt = n.deletedAt ?: now(), purgedAt = now(), revision = uid(), updatedAt = now()) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) } }
     fun duplicate(note: Note) { val copy = note.copy(id = uid(), title = "${note.title} · 副本", createdAt = now(), updatedAt = now(), revision = uid(), history = emptyList()); mutate { it.copy(notes = listOf(copy) + it.notes) }; mutable.update { it.copy(view = copy.notebookId, selectedId = copy.id) } }
     fun checkpoint(id: String) { mutate { w -> w.copy(notes = w.notes.map { if (it.id == id) it.copy(history = (listOf(it.snapshot()) + it.history).take(40), revision = uid(), updatedAt = now()) else it }) }; message("当前版本已保存") }
-    fun restoreVersion(id: String, h: NoteVersion) { edit(id, true) { it.copy(title = h.title, content = h.content, username = h.username, password = h.password, url = h.url, otp = h.otp, tags = h.tags, variables = h.variables) }; message("历史版本已恢复") }
+    fun restoreVersion(id: String, h: NoteVersion) { edit(id, true) { it.copy(title = h.title, content = h.content, username = h.username, password = h.password, url = h.url, otp = h.otp, tags = h.tags, variables = h.variables) }; mutable.update{it.copy(editorGeneration=it.editorGeneration+1)}; message("历史版本已恢复") }
     fun preferences(change: (Preferences) -> Preferences) = mutate { it.copy(preferences = change(it.preferences)) }
     private fun cloudConfig(): SyncSettings {
         val s = mutable.value; require(s.workspace != null) { "本机数据尚未打开" }
