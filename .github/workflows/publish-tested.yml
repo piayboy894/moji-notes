@@ -1,0 +1,72 @@
+name: Publish verified native artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platform
+        type: choice
+        options: [windows, android]
+        required: true
+      run_id:
+        description: Successful build workflow run ID
+        type: string
+        required: true
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publish-verified-${{ inputs.platform }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MOJI_PLATFORM: ${{ inputs.platform }}
+      MOJI_RUN_ID: ${{ inputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a successful native build from this repository
+        run: |
+          [[ "$MOJI_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$MOJI_PLATFORM" == windows || "$MOJI_PLATFORM" == android ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$MOJI_RUN_ID" > "$RUNNER_TEMP/moji-run.json"
+          workflow=release.yml
+          if [[ "$MOJI_PLATFORM" == android ]]; then workflow=android.yml; fi
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg path ".github/workflows/$workflow" '
+            .conclusion == "success" and .head_repository.full_name == $repo and
+            .head_branch == "main" and .path == $path and .event != "pull_request"
+          ' "$RUNNER_TEMP/moji-run.json"
+          sha=$(jq -r '.head_sha' "$RUNNER_TEMP/moji-run.json")
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$sha^{commit}"
+          printf 'MOJI_TESTED_SHA=%s\n' "$sha" >> "$GITHUB_ENV"
+      - name: Download tested Windows packages
+        if: inputs.platform == 'windows'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: Moji-native-Windows
+          path: verified/windows
+      - name: Download tested Android packages
+        if: inputs.platform == 'android'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: Moji-Android-build
+          path: verified/android
+      - name: Download Android native and signed installation results
+        if: inputs.platform == 'android'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: Moji-Android-native-UI
+          path: verified/android-ui
+      - name: Verify and publish exact tested packages
+        run: python3 tools/publish-tested.py
