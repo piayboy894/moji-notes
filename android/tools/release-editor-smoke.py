@@ -45,7 +45,7 @@ try:
     picture=REPORT.parent/'Moji-Editor-Test.png';picture.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>2I5B',2000,1200,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
     adb('push',str(picture),'/sdcard/Download/Moji-Editor-Test.png')
     adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file:///sdcard/Download/Moji-Editor-Test.png')
-    tool('插入图片');tap(wait_node(contains='Moji-Editor-Test'))
+    tool('插入图片');tap(wait_node(description_contains='Moji-Editor-Test.png,'))
     wait_node(description='图片');checks.append('a phone-sized image larger than 2 MB inserts through the system picker');capture('04-image')
     adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'))
     wait_node(description='图片');wait_node(resource='table-cell-0-0',contains='TableValue')

@@ -26,7 +26,7 @@ def hierarchy():
     adb("shell", "uiautomator", "dump", "/sdcard/moji-release-window.xml")
     return ET.fromstring(adb("shell", "cat", "/sdcard/moji-release-window.xml"))
 
-def wait_node(resource=None, text=None, contains=None, description=None, timeout=45):
+def wait_node(resource=None, text=None, contains=None, description=None, description_contains=None, timeout=45):
     until = time.monotonic() + timeout
     while time.monotonic() < until:
         try:
@@ -41,7 +41,9 @@ def wait_node(resource=None, text=None, contains=None, description=None, timeout
                     continue
                 if description is not None and node.attrib.get("content-desc") != description:
                     continue
-                if not resource and text is None and contains is None and description is None:
+                if description_contains is not None and description_contains not in node.attrib.get("content-desc", ""):
+                    continue
+                if not resource and text is None and contains is None and description is None and description_contains is None:
                     continue
                 return node
         except (ET.ParseError, RuntimeError):
@@ -96,7 +98,12 @@ try:
     tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
     tap(wait_node(resource="note-content")); adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
-    adb("shell", "input", "text", MARKER); time.sleep(1.5)
+    # The published legacy editor can lose rapid injected key events. Establish and
+    # verify its original data before testing the migration into the new app.
+    for character in MARKER:
+        adb("shell", "input", "text", character)
+        time.sleep(.12)
+    wait_node(resource="note-content",contains=MARKER);time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch()
     enter("migration-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
