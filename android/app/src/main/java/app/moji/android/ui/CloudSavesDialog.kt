@@ -74,7 +74,7 @@ import java.util.Locale
     }
     if (naming) PanelDialog(if (overwrite) "覆盖存档" else "新建存档", { naming = false }, width = 460, actions = {
         Button(onClick = { val target = if (overwrite) selected else null; naming = false; operate { catalog = vm.writeCloudSave(catalog!!, name, target); if (target == null) selectedId = null; status = if (target == null) "存档已新建" else "存档已覆盖" } }, enabled = name.isNotBlank()) { Text(if (overwrite) "确认覆盖" else "创建") }
-    }) { OutlinedTextField(name, { name = it.take(60) }, Modifier.fillMaxWidth().testTag("save-name"), singleLine = true, enabled = !(overwrite && selected?.legacy == true), label = { Text("存档名称") }); Text(if (overwrite) "用本机全部记事本和记录替换这份云存档。" else "保存本机全部记事本和记录。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }) { OutlinedTextField(name, { name = it.take(60) }, Modifier.fillMaxWidth().testTag("save-name"), singleLine = true, label = { Text("存档名称") }); Text(if (overwrite) "用本机全部记事本和记录替换这份云存档。" else "保存本机全部记事本和记录。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     if (confirmation != null && selected != null) Confirm(if (confirmation == "read") "读取「${selected.name}」？" else "删除「${selected.name}」？", if (confirmation == "read") "将替换本机全部记事本和记录，不合并。" else "删除这份云存档，本机内容保持不变。", { confirmation = null }) {
         val target = selected; val operation = confirmation
         operate { if (operation == "read") { vm.readCloudSave(catalog!!, target); status = "存档已读取" } else { catalog = vm.deleteCloudSave(catalog!!, target); selectedId = null; status = "存档已删除" } }

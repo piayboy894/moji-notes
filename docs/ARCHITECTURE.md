@@ -28,7 +28,7 @@
 
 用户管理整套数据的具名快照：新建、覆盖、读取、删除。没有自动云任务或合并。捕获范围为 notebooks / notes，读取保留当前设备设置和 GitHub 连接。
 
-数据仓库默认空。`moji-notes/<hash40>/index.moji` 与 `<uuid>.moji` 分别保存加密目录和整套数据。AES-GCM 与 PBKDF2 协议沿用旧版；Token 不进入云文件。一次 Git 提交更新目录和数据，使用既有树作为 base tree，保留其他路径；引用仅快进，并发变化时停止，要求用户刷新后重新操作。
+数据仓库默认空。`moji-notes/saves/index.json` 与 `<uuid>.json` 分别保存目录和整套数据，无需存档码。Token 不进入云文件。一次 Git 提交更新目录和数据，使用既有树作为 base tree，保留其他路径；引用仅快进，并发变化时停止，要求用户刷新后重新操作。
 
 ## 窗口与更新
 

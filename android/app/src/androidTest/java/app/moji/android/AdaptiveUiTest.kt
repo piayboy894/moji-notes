@@ -153,6 +153,26 @@ class AdaptiveUiTest {
         val note=compose.activity.vm.selectedNote()!!;runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertExists();compose.activityRule.scenario.onActivity{it.vm.navigate(note.notebookId);it.vm.select(note.id)}
         compose.onNodeWithTag("embedded-image").assertExists();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Cell"));file.delete()
     }
+    @Test fun remainingFormattingLinkAndReplaceToolsPersist() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
+        compose.onNodeWithTag("note-content").performTextInput("Alpha Beta")
+        compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(0,5))
+        compose.onNodeWithContentDescription("斜体").performScrollTo().performClick();compose.onNodeWithContentDescription("删除线").performScrollTo().performClick()
+        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("~~"));assertTrue(compose.activity.vm.selectedNote()!!.content.contains("*"))
+        compose.onNodeWithContentDescription("项目列表").performScrollTo().performClick();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("- "))
+        compose.onNodeWithContentDescription("编号列表").performScrollTo().performClick();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("1. "))
+        compose.onNodeWithContentDescription("标题").performScrollTo().performClick();hideKeyboard()
+        val visible=compose.onNodeWithTag("note-content").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text
+        val alpha=visible.indexOf("Alpha");assertTrue(alpha>=0)
+        compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(alpha,alpha+5))
+        compose.onNodeWithContentDescription("插入链接").performScrollTo().performClick();compose.onNodeWithTag("link-label").performTextReplacement("Example");compose.onNodeWithTag("link-url").performTextReplacement("https://example.com");hideKeyboard();compose.onNodeWithText("插入",substring=false).performClick()
+        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("https://example.com"))
+        compose.onNodeWithContentDescription("查找与替换").performScrollTo().performClick();compose.onNodeWithTag("find-query").performTextInput("Beta");compose.onNodeWithTag("find-replacement").performTextInput("Gamma");hideKeyboard();compose.onNodeWithText("全部替换").performClick();compose.onNodeWithContentDescription("关闭").performClick()
+        assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Gamma"));assertFalse(compose.activity.vm.selectedNote()!!.content.contains("Beta"))
+        val note=compose.activity.vm.selectedNote()!!;compose.activityRule.scenario.onActivity{it.vm.addNote()};compose.onNodeWithTag("note-content").assertTextEquals("")
+        compose.activityRule.scenario.onActivity{it.vm.select(note.id)};compose.onNodeWithTag("note-content").assertTextContains("Gamma",substring=true)
+        compose.onNodeWithTag("note-content").assertTextContains("Example",substring=true)
+    }
     @Test fun notebookAppearanceIsEditableAndSurvivesLocalAndGlobalSaves() {
         ready();compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
         val original=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}

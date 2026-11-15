@@ -39,6 +39,8 @@ else:
     ui = Path("verified/android-ui")
     report_path = ui / "android/app/build/outputs/release-smoke/report.json"
     checked_report(report_path)
+    editor_report=ui / "android/app/build/outputs/editor-smoke/report.json"
+    checked_report(editor_report)
     certificate = (build / "SIGNING-CERTIFICATE-SHA256.txt").read_text().strip().lower()
     if certificate != "4c74ca5b73e47d9435c7f0fcc68edd2e56b9923177b65f33a32e92d67e661198":
         raise RuntimeError("Android publisher certificate mismatch")
@@ -47,9 +49,16 @@ else:
     shutil.copy(build / "app-release.apk", folder / f"Moji-Notes-Android-{version}.apk")
     shutil.copy(build / "SIGNING-CERTIFICATE-SHA256.txt", folder)
     shutil.copy(report_path, folder / "native-release-test-report.json")
+    shutil.copy(editor_report,folder / "native-editor-test-report.json")
     for capture in (ui / "android-ui-screenshots").glob("*.png"):
         shutil.copy(capture, folder)
     subprocess.run(["git", "archive", "--format=zip", f"--output={folder}/Moji-Notes-Android-{version}-source.zip", sha], check=True)
+    import zipfile
+    archive_path=folder / f"Moji-Notes-Android-{version}-source.zip"
+    with zipfile.ZipFile(archive_path) as archive:
+        clean=[(item,archive.read(item.filename)) for item in archive.infolist() if not item.filename.endswith("_wpftmp.csproj")]
+    with zipfile.ZipFile(archive_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+        for item,data in clean:archive.writestr(item,data)
     tag, title, notes = f"android-v{version}", f"墨记 Android {version}", source("android/RELEASE.md")
 
 checksums = [hashlib.sha256(file.read_bytes()).hexdigest() + "  " + file.name for file in sorted(folder.iterdir()) if file.suffix in (".exe", ".apk", ".zip")]
