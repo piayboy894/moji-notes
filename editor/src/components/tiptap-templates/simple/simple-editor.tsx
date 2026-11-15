@@ -213,7 +213,7 @@ export function SimpleEditor() {
       HorizontalRule,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TaskList,
-      TaskItem.configure({ nested: true }),
+      TaskItem.configure({ nested: true, a11y:{checkboxLabel:node=>"待办事项："+(node.textContent||"未填写")} }),
       Highlight.configure({ multicolor: true }),
       Image.configure({allowBase64:true}),
       MojiVariable,

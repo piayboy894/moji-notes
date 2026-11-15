@@ -29,6 +29,7 @@ class AdaptiveUiTest {
     }
     private fun webView():android.webkit.WebView { var result:android.webkit.WebView?=null;compose.activityRule.scenario.onActivity{a->fun find(v:android.view.View){if(v is android.webkit.WebView&&v.tag=="MojiSharedEditor")result=v;else if(v is android.view.ViewGroup)for(i in 0 until v.childCount)find(v.getChildAt(i))};find(a.window.decorView)};return result?:error("Shared editor is not attached") }
     private fun js(code:String):String {val done=java.util.concurrent.CountDownLatch(1);var result="";val web=webView();compose.activityRule.scenario.onActivity{web.evaluateJavascript(code){result=it;done.countDown()}};check(done.await(10,java.util.concurrent.TimeUnit.SECONDS)){"Editor script timed out"};return result}
+    private fun focusWeb(){js("window.MojiEditor.editor.commands.focus()");compose.waitUntil(5000){js("Boolean(document.activeElement?.matches('.tiptap'))")=="true"}}
     private fun jsText():String=org.json.JSONTokener(js("window.MojiEditor.editor.getText() ")).nextValue().toString()
     private fun webReady(){compose.waitForIdle();compose.waitUntil(30000){runCatching{js("Boolean(window.MojiEditor?.editor && window.MojiEditor.editor.isEditable && window.MojiEditor.recordId)")=="true"}.getOrDefault(false)}}
     private fun tapWeb(selector:String){val raw=js("JSON.stringify((()=>{const e=document.querySelector('$selector');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})())");val point=org.json.JSONObject(org.json.JSONTokener(raw).nextValue().toString());val location=IntArray(2);var density=1f;val web=webView();compose.activityRule.scenario.onActivity{web.getLocationOnScreen(location);density=web.resources.displayMetrics.density};shell("input tap ${(location[0]+point.getDouble("x")*density).toInt()} ${(location[1]+point.getDouble("y")*density).toInt()}")}
@@ -106,14 +107,14 @@ class AdaptiveUiTest {
     @Test fun officialQuoteTasksVariablesAndLocalImagesPersist() {
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}.id);a.vm.addNote()};webReady()
         js("window.MojiEditor.editor.chain().focus().toggleBlockquote().insertContent('Quote').run()")
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
+        focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         InstrumentationRegistry.getInstrumentation().sendStringSync("Normal")
         compose.waitUntil(5000){jsText().contains("Normal")};assertTrue(js("window.MojiEditor.editor.getHTML()").contains("</blockquote><p>Normal"))
         js("window.MojiEditor.editor.chain().clearContent().toggleTaskList().insertContent('Task').run()")
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendStringSync("Second")
+        focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendStringSync("Second")
         js("document.querySelector('li input[type=checkbox]').click()")
         compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data-checked=\"true\"")}
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
+        focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         InstrumentationRegistry.getInstrumentation().sendStringSync("Tail {{literal}}")
         hideKeyboard();compose.onNodeWithText("插入变量").performClick();compose.onNodeWithTag("variable-name").performTextInput("Audience");compose.onNodeWithText("插入",substring=false).performClick()
         compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1};assertTrue(jsText().contains("{{literal}}"))
@@ -158,7 +159,7 @@ class AdaptiveUiTest {
         compose.waitUntil(10000){compose.activity.hasWindowFocus()}
         webReady();js("window.MojiEditor.editor.commands.focus()")
         hideKeyboard();js("window.MojiEditor.editor.commands.focus()")
-        InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
+        focusWeb();InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
         compose.waitUntil(5000){jsText().contains(marker)}
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId

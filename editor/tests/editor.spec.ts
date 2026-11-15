@@ -11,7 +11,7 @@ test('quote exits by Enter and Backspace without leaving paragraph indentation',
 })
 test('interactive tasks keep checkbox at first line and exit empty item with Enter',async({page})=>{
  const body=page.getByRole('textbox',{name:'笔记正文'});await body.click();await page.getByRole('button',{name:'列表',exact:true}).click();await page.getByRole('menuitem',{name:'待办事项'}).click();await page.keyboard.insertText('多行待办 '.repeat(35));await page.keyboard.press('Shift+Enter');await page.keyboard.insertText('第二行');
- const label=body.locator('li label').first();const box=await label.boundingBox();const para=await body.locator('li p').first().boundingBox();expect(Math.abs(box!.y-para!.y)).toBeLessThan(10);await label.click();await expect(body.locator('li').first()).toHaveAttribute('data-checked','true');
+ const checkbox=body.locator('li input[type=checkbox]').first();await expect(checkbox).toBeVisible();expect(await checkbox.evaluate(e=>getComputedStyle(e).opacity)).toBe('1');expect((await checkbox.boundingBox())!.width).toBeGreaterThan(12);const label=body.locator('li label').first();const box=await label.boundingBox();const para=await body.locator('li p').first().boundingBox();expect(Math.abs(box!.y-para!.y)).toBeLessThan(10);await label.click();await expect(body.locator('li').first()).toHaveAttribute('data-checked','true');
  await js(page,"window.MojiEditor.editor.chain().focus('end').run()");await page.keyboard.press('Enter');await page.keyboard.press('Enter');await page.keyboard.insertText('普通段落');await expect(body.locator(':scope > p').last()).toHaveText('普通段落');
 })
 test('variables are explicit atomic nodes, literal braces stay text, undo survives insertion',async({page})=>{
@@ -37,5 +37,7 @@ test('native change and flush acknowledgement carry final edit, switch resets hi
 
 test('old archive text stays literal, composition commits Chinese without creating variables',async({page})=>{
  const source='# 标题\n> 引用\n- [x] 待办\n{{原样}}';await load(page,source);expect(await html(page)).not.toContain('<blockquote>');expect(await js(page,"window.MojiEditor.editor.getText({blockSeparator:'\\n'})")).toBe(source);
- await js(page,"window.MojiEditor.editor.chain().focus('end').run()");const cdp=await page.context().newCDPSession(page);await cdp.send('Input.imeSetComposition',{text:'中文输入',selectionStart:4,selectionEnd:4});await cdp.send('Input.insertText',{text:'中文输入'});await expect(page.getByRole('textbox',{name:'笔记正文'})).toContainText('中文输入');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([])
+ await js(page,"window.MojiEditor.editor.chain().focus('end').run()");await expect(page.getByRole('textbox',{name:'笔记正文'})).toBeFocused();const cdp=await page.context().newCDPSession(page);await cdp.send('Input.imeSetComposition',{text:'中文输入',selectionStart:4,selectionEnd:4});await cdp.send('Input.insertText',{text:'中文输入'});await expect(page.getByRole('textbox',{name:'笔记正文'})).toContainText('中文输入');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([])
 })
+
+test('toolbar stays visible after loading, scroll and window resize',async({page})=>{const bar=page.getByRole('toolbar');await expect(bar).toBeInViewport();await js(page,"window.MojiEditor.editor.commands.insertContent('<p>正文</p>'.repeat(100))");await js(page,"window.MojiEditor.editor.chain().focus('end').run()");await expect(bar).toBeInViewport();await page.setViewportSize({width:360,height:420});await expect(bar).toBeInViewport()})
