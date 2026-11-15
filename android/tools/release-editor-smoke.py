@@ -10,6 +10,20 @@ def tool(label):
 def capture(name):
     REPORT.parent.mkdir(parents=True,exist_ok=True)
     (REPORT.parent/(name+'.png')).write_bytes(subprocess.check_output(['adb','exec-out','screencap','-p']))
+def select_picker_file(name):
+    until=time.monotonic()+45
+    while time.monotonic()<until:
+        for n in hierarchy().iter('node'):
+            if name not in n.get('text','') and name not in n.get('content-desc',''):continue
+            tap(n)
+            # DocumentsUI may require confirmation when multiple files are allowed.
+            for button in hierarchy().iter('node'):
+                label=(button.get('text') or button.get('content-desc','')).strip().lower()
+                if button.get('package','').endswith('.documentsui') and button.get('enabled')=='true' and label in ('open','select','done'):
+                    tap(button);break
+            return
+        time.sleep(.5)
+    raise RuntimeError('System picker did not show the published fixture image')
 try:
     if adb('shell','getprop','ro.kernel.qemu').strip()!='1':raise RuntimeError('Emulator only')
     adb('shell','wm','size','1920x1200');adb('shell','wm','density','160');adb('shell','settings','put','secure','show_ime_with_hard_keyboard','0')
@@ -26,14 +40,18 @@ try:
     # Register through MediaStore: adb-pushed files need not appear in Recents.
     # content uses com.android.shell attribution, so execute it as UID 2000
     # even though adbd is root for reading our private synthetic fixture.
-    result=subprocess.run(['adb','shell','su','2000','content','insert','--uri','content://media/external/images/media','--bind','_display_name:s:Moji-Editor-Test.png','--bind','mime_type:s:image/png','--bind','relative_path:s:Pictures/','--bind','is_pending:i:1'],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=70)
-    inserted=result.stdout
-    uri=re.search(r'content://media/[A-Za-z0-9_/]+',inserted)
-    if not uri:raise RuntimeError('MediaStore fixture registration failed: '+(inserted+result.stderr)[:700])
-    uri=uri.group(0)
+    collection='content://media/external_primary/images/media'
+    adb('shell','su','2000','content','insert','--uri',collection,'--bind','_display_name:s:Moji-Editor-Test.png','--bind','mime_type:s:image/png','--bind','relative_path:s:Pictures/')
+    # Android's content insert command deliberately prints no URI. Query the row.
+    rows=adb('shell','su','2000','content','query','--uri',collection,'--projection','_id:_display_name')
+    ids=[int(re.search(r'_id=(\d+)',line).group(1)) for line in rows.splitlines() if 'Moji-Editor-Test.png' in line and re.search(r'_id=(\d+)',line)]
+    if not ids:raise RuntimeError('MediaStore fixture registration failed: '+rows[:700])
+    uri=collection+'/'+str(max(ids))
     with picture.open('rb') as stream:subprocess.run(['adb','shell','-T','su','2000','content','write','--uri',uri],stdin=stream,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=70)
+    stored=subprocess.run(['adb','shell','-T','su','2000','content','read','--uri',uri],stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=70).stdout
+    if stored!=picture.read_bytes():raise RuntimeError('MediaStore fixture bytes do not match the PNG')
     adb('shell','su','2000','content','update','--uri',uri,'--bind','is_pending:i:0')
-    tool('插入图片');tap(wait_node(contains='Moji-Editor-Test.png'));wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
+    tool('插入图片');select_picker_file('Moji-Editor-Test.png');wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
     adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart');capture('04-reopened')
     REPORT.write_text(json.dumps({'success':True,'framework':'Compose / Android WebView / Tiptap 3.34.0','checks':checks},indent=2))
 except Exception as error:
