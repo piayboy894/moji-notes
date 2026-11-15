@@ -55,7 +55,9 @@ def enter(resource, value):
     adb("shell", "input", "text", value)
 
 def launch():
-    adb("shell", "am", "start", "-n", PACKAGE + "/app.moji.android.MainActivity")
+    output = adb("shell", "am", "start", "-W", "-n", PACKAGE + "/app.moji.android.MainActivity")
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    (REPORT.parent / "launch.txt").write_text(output)
 
 try:
     adb("shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", "0")
@@ -65,14 +67,14 @@ try:
     adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
     checks.append("signed production APK installed, launched and created an encrypted space")
-    tap(wait_node(resource="book-Text")); tap(wait_node(text="把生活，写成喜欢的样子"))
+    tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
     tap(wait_node(resource="note-content")); adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
     adb("shell", "input", "text", MARKER); time.sleep(1.5)
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch()
     enter("auth-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
-    tap(wait_node(resource="book-Text")); tap(wait_node(text="把生活，写成喜欢的样子"))
+    tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
     wait_node(resource="note-content", contains=MARKER)
     checks.append("cover installation preserved encrypted project data and the same master password")
     REPORT.parent.mkdir(parents=True, exist_ok=True)
@@ -81,4 +83,13 @@ try:
 except Exception as error:
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps({"success": False, "error": str(error), "checks": checks}, indent=2))
+    for name, command in [
+        ("failure-window.xml", ("shell", "cat", "/sdcard/moji-release-window.xml")),
+        ("failure-runtime.txt", ("logcat", "-d", "-v", "threadtime", "-s", "AndroidRuntime")),
+        ("failure-activity.txt", ("shell", "dumpsys", "activity", "activities")),
+    ]:
+        try:
+            (REPORT.parent / name).write_text(adb(*command))
+        except Exception:
+            pass
     raise

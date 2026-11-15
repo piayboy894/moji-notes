@@ -13,6 +13,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import app.moji.android.data.Records
@@ -23,7 +25,7 @@ import kotlinx.coroutines.launch
 
 data class WindowPosture(val hingeLeft: Int? = null, val hingeTop: Int? = null, val hingeWidth: Int = 0, val hingeHeight: Int = 0, val separating: Boolean = false)
 class MainActivity : FragmentActivity() {
-    val vm: MojiViewModel by viewModels()
+    val vm: MojiViewModel by viewModels { viewModelFactory { initializer { MojiViewModel(application) } } }
     val posture = MutableStateFlow(WindowPosture())
     private var copiedSecret: String? = null
     private val screenOff = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { if (intent?.action == Intent.ACTION_SCREEN_OFF) { clearSecretClipboard(); vm.lock() } } }
