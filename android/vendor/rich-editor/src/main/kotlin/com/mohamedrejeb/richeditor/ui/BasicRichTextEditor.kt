@@ -288,12 +288,12 @@ public fun BasicRichTextEditor(
             singleLine = singleLine,
             maxLines = maxLines,
             minLines = minLines,
-            visualTransformation = androidx.compose.ui.text.input.VisualTransformation { display },
+            visualTransformation = if (inlineLabels.isEmpty()) state.visualTransformation else androidx.compose.ui.text.input.VisualTransformation { renderInlineLabels(state.annotatedString, inlineLabels) },
             onTextLayout = {
                 state.onTextLayout(
                     textLayoutResult = it,
                     density = density,
-                    offsetMapping = display.offsetMapping,
+                    offsetMapping = renderInlineLabels(state.annotatedString, inlineLabels).offsetMapping,
                 )
                 onTextLayout(it)
             },
