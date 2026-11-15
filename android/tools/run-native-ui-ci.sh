@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+moji_emulator=$(adb shell getprop ro.kernel.qemu | tr -d '\r')
+if [ "$moji_emulator" != "1" ]; then
+  echo 'Native CI checks require a disposable Android emulator.'
+  exit 1
+fi
+
 # The CI image's Pixel Launcher can ANR while Google initializes background
 # models, covering the application with an unrelated modal dialog. The launcher
 # is not part of these tests. Disable only that package on the disposable emulator;
