@@ -65,7 +65,7 @@ def launch():
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     (REPORT.parent / "launch.txt").write_text(output)
 
-from native_ui import wait_editor,type_editor_text
+from native_ui import wait_editor,type_editor_text,wait_saved_document
 
 try:
     if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
@@ -99,23 +99,20 @@ try:
     adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="create-vault")); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
-    tap(wait_node(resource="note-content")); adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
-    # The published legacy editor can lose rapid injected key events. Establish and
-    # verify its original data before testing the migration into the new app.
-    for character in MARKER:
-        adb("shell", "input", "text", character)
-        time.sleep(.12)
-    wait_node(resource="note-content",contains=MARKER);time.sleep(1.5)
+    # Test upgrading the published app's original data. Editing in the retired
+    # client is deliberately outside this migration test and can race its IME.
+    legacy_body=wait_node(resource="note-content").attrib.get("text", "")
+    if len(legacy_body)<30:raise RuntimeError("The published legacy fixture has no original body")
     adb("shell", "am", "force-stop", PACKAGE)
     adb("install", "-r", str(APK)); launch()
     enter("migration-password", PASSWORD); adb("shell", "input", "keyevent", "KEYCODE_ENTER"); time.sleep(.5)
     tap(wait_node(resource="migrate")); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
-    wait_editor(contains=MARKER)
-    checks.append("published 1.0.0 upgrades with the same signature; one-time migration preserves old records")
+    wait_editor();wait_saved_document(lambda n:n.get('title')=='把生活，写成喜欢的样子' and n.get('content')==legacy_body)
+    checks.append("published 1.0.0 upgrades with the same signature; migration preserves the complete original record body")
     adb("shell", "am", "force-stop", PACKAGE); launch(); wait_node(resource="home-title")
     tap(wait_node(resource="book-Text")); tap(wait_node(contains="把生活，写成喜欢的样子"))
-    wait_editor(contains=MARKER)
+    wait_editor();wait_saved_document(lambda n:n.get('title')=='把生活，写成喜欢的样子' and n.get('content')==legacy_body)
     checks.append("migrated records reopen without password or automatic locking")
     legacy.unlink()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
