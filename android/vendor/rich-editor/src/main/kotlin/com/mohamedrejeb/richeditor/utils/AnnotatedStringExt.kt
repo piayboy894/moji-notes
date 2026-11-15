@@ -66,6 +66,7 @@ internal fun AnnotatedString.Builder.appendRichSpan(
 
         if (
             previousRichSpan != null &&
+            richSpan.richSpanStyle !is RichSpanStyle.Image &&
             previousRichSpan.spanStyle == richSpan.spanStyle &&
             previousRichSpan.richSpanStyle == richSpan.richSpanStyle &&
             previousRichSpan.children.isEmpty() &&
@@ -131,6 +132,7 @@ internal fun AnnotatedString.Builder.append(
 
         // Ignore setting the background color for the selected text to avoid the selection being hidden
         if (
+            richSpan.richSpanStyle !is RichSpanStyle.Image &&
             !selection.collapsed &&
             selection.min < index + richSpan.text.length &&
             selection.max > index
@@ -158,7 +160,7 @@ internal fun AnnotatedString.Builder.append(
                 append(selectedText)
             }
             append(afterSelection)
-        } else {
+        } else if (richSpan.richSpanStyle !is RichSpanStyle.Image) {
             append(newText)
         }
 
@@ -223,6 +225,7 @@ internal fun AnnotatedString.Builder.append(
     withStyle(richSpan.spanStyle.merge(richSpan.richSpanStyle.spanStyle(richTextConfig))) {
         richSpan.textRange = TextRange(index, index + richSpan.text.length)
         if (
+            richSpan.richSpanStyle !is RichSpanStyle.Image &&
             !selection.collapsed &&
             selection.min < index + richSpan.text.length &&
             selection.max > index
@@ -281,7 +284,7 @@ internal fun AnnotatedString.Builder.append(
 
     withStyle(richSpan.spanStyle.merge(richSpan.richSpanStyle.spanStyle(state.config))) {
         richSpan.textRange = TextRange(index, index + richSpan.text.length)
-        append(richSpan.text)
+        if (richSpan.richSpanStyle !is RichSpanStyle.Image) append(richSpan.text)
         with(richSpan.richSpanStyle) {
             appendCustomContent(
                 richTextState = state,

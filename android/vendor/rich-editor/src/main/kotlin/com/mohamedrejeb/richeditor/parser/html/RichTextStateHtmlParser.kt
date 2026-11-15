@@ -456,7 +456,7 @@ internal object RichTextStateHtmlParser : RichTextStateParser<String> {
         }
 
         // Append text
-        stringBuilder.append(KsoupEntities.encodeHtml(richSpan.text))
+        if (richSpan.richSpanStyle !is RichSpanStyle.Image) stringBuilder.append(KsoupEntities.encodeHtml(richSpan.text))
 
         // Append children
         richSpan.children.fastForEach { child ->

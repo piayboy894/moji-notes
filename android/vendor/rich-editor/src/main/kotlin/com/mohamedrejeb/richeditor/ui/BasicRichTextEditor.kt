@@ -85,6 +85,7 @@ import kotlinx.coroutines.CoroutineScope
 public fun BasicRichTextEditor(
     state: RichTextState,
     onValueChange: (RichTextState) -> Unit = {},
+    inlineLabels: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
@@ -104,6 +105,7 @@ public fun BasicRichTextEditor(
     BasicRichTextEditor(
         state = state,
         onValueChange = onValueChange,
+        inlineLabels = inlineLabels,
         modifier = modifier,
         enabled = enabled,
         readOnly = readOnly,
@@ -179,6 +181,7 @@ public fun BasicRichTextEditor(
 public fun BasicRichTextEditor(
     state: RichTextState,
     onValueChange: (RichTextState) -> Unit = {},
+    inlineLabels: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
@@ -197,6 +200,7 @@ public fun BasicRichTextEditor(
         @Composable { innerTextField -> innerTextField() },
     contentPadding: PaddingValues
 ) {
+    val display = remember(state.annotatedString, inlineLabels) { renderInlineLabels(state.annotatedString, inlineLabels) }
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val clipboardManager = LocalClipboardManager.current
@@ -251,6 +255,7 @@ public fun BasicRichTextEditor(
                 }
                 .drawRichSpanStyle(
                     richTextState = state,
+                    offsetMapping = display.offsetMapping,
                     topPadding = with(density) { contentPadding.calculateTopPadding().toPx() },
                     startPadding = with(density) { contentPadding.calculateStartPadding(layoutDirection).toPx() },
                 )
@@ -283,11 +288,12 @@ public fun BasicRichTextEditor(
             singleLine = singleLine,
             maxLines = maxLines,
             minLines = minLines,
-            visualTransformation = state.visualTransformation,
+            visualTransformation = androidx.compose.ui.text.input.VisualTransformation { display },
             onTextLayout = {
                 state.onTextLayout(
                     textLayoutResult = it,
                     density = density,
+                    offsetMapping = display.offsetMapping,
                 )
                 onTextLayout(it)
             },

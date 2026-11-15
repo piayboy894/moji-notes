@@ -20,11 +20,15 @@ internal class RichSpan(
     val children: MutableList<RichSpan> = mutableListOf(),
     var paragraph: RichParagraph,
     var parent: RichSpan? = null,
-    var text: String = "",
+    text: String = "",
     var textRange: TextRange = TextRange(start = 0, end = 0),
     var spanStyle: SpanStyle = SpanStyle(),
     var richSpanStyle: RichSpanStyle = RichSpanStyle.Default,
 ) {
+    private var storedText: String = text
+    var text: String
+        get() = if (richSpanStyle is RichSpanStyle.Image) "\uFFFC" else storedText
+        set(value) { storedText = value }
     /**
      * Return the full text range of the rich span.
      * It merges the text range of the rich span with the text range of its children.

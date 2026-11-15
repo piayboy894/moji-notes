@@ -85,6 +85,7 @@ public class RichTextState internal constructor(
 
     internal var singleParagraphMode by mutableStateOf(false)
 
+    private var layoutOffsetMapping: OffsetMapping = OffsetMapping.Identity
     internal var textLayoutResult: TextLayoutResult? by mutableStateOf(null)
         private set
 
@@ -3229,7 +3230,9 @@ public class RichTextState internal constructor(
     internal fun onTextLayout(
         textLayoutResult: TextLayoutResult,
         density: Density,
+        offsetMapping: OffsetMapping = OffsetMapping.Identity,
     ) {
+        this.layoutOffsetMapping = offsetMapping
         this.textLayoutResult = textLayoutResult
         adjustRichParagraphLayout(
             density = density,
@@ -3262,12 +3265,12 @@ public class RichTextState internal constructor(
                 ) {
                     val start =
                         textLayoutResult.getHorizontalPosition(
-                            offset = paragraphType.startRichSpan.textRange.min,
+                            offset = layoutOffsetMapping.originalToTransformed(paragraphType.startRichSpan.textRange.min),
                             usePrimaryDirection = true
                         )
                     val end =
                         textLayoutResult.getHorizontalPosition(
-                            offset = paragraphType.startRichSpan.textRange.max,
+                            offset = layoutOffsetMapping.originalToTransformed(paragraphType.startRichSpan.textRange.max),
                             usePrimaryDirection = true
                         )
                     val distanceSp =
@@ -3313,7 +3316,7 @@ public class RichTextState internal constructor(
 
     private fun getRichSpanByOffset(offset: Offset): RichSpan? {
         this.textLayoutResult?.let { textLayoutResult ->
-            val position = textLayoutResult.getOffsetForPosition(offset)
+            val position = layoutOffsetMapping.transformedToOriginal(textLayoutResult.getOffsetForPosition(offset))
             return getRichSpanByTextIndex(position, true)
         }
         return null
@@ -3343,6 +3346,7 @@ public class RichTextState internal constructor(
         pressPosition: Offset,
         newSelection: TextRange? = null,
     ) {
+        if (layoutOffsetMapping !== OffsetMapping.Identity) return // BasicTextField maps atomic labels itself.
         val selection = newSelection ?: this.selection
         var pressX = pressPosition.x
         var pressY = pressPosition.y

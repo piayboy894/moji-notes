@@ -69,7 +69,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         val s = mutable.value; val w = s.workspace ?: return
         if (loadingSave) return
         serial++; mutable.value = s.copy(workspace = change(w), saving = true, saveError = false); touch()
-        saveJob?.cancel(); saveJob = viewModelScope.launch { delay(350); try { flush() } catch (error: Exception) { mutable.update { it.copy(saveError = true, saving = false) }; message("保存失败，请先导出存档") } }
+        saveJob?.cancel(); saveJob = viewModelScope.launch { delay(350); try { flush() } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { mutable.update { it.copy(saveError = true, saving = false) }; message("保存失败，请先导出存档") } }
     }
     fun edit(id: String, checkpoint: Boolean = false, change: (Note) -> Note) = mutate { it.changeNote(id, checkpoint, change) }
     fun content(id: String, text: String, history: Boolean = true) {

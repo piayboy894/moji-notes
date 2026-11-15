@@ -67,7 +67,7 @@ public partial class MainWindow
     }
     private StackPanel BuildLinkTools(){var panel=Ui.Row();panel.Margin=new Thickness(18,5,18,5);panel.Visibility=Visibility.Collapsed;
         var open=Ui.Small("打开链接",()=>{if(ActiveLink()?.NavigateUri is {} uri)OpenUrl(uri.AbsoluteUri);});var edit=Ui.Small("修改链接",InsertLink);var remove=Ui.Small("移除链接",()=>{
-            if(ActiveLink() is not {} link||link.Parent is not Paragraph paragraph)return;textEditor!.BeginChange();try{foreach(var inline in link.Inlines.ToList()){link.Inlines.Remove(inline);paragraph.Inlines.InsertBefore(link,inline);}paragraph.Inlines.Remove(link);}finally{textEditor.EndChange();}SaveRichText();});
+            if(ActiveLink() is not {} link)return;var parent=link.Parent switch{Paragraph p=>p.Inlines,Span s=>s.Inlines,_=>null};if(parent==null)return;textEditor!.BeginChange();try{foreach(var inline in link.Inlines.ToList()){link.Inlines.Remove(inline);parent.InsertBefore(link,inline);}parent.Remove(link);}finally{textEditor.EndChange();}SaveRichText();});
         foreach(var button in new[]{open,edit,remove}){button.Focusable=false;panel.Children.Add(button);}return panel;}
     private StackPanel BuildTableTools()
     {

@@ -217,7 +217,7 @@ public interface RichSpanStyle {
 
             richTextState.usedInlineContentMapKeys.add(id)
 
-            appendInlineContent(id = id)
+            appendInlineContent(id = id, alternateText = "\uFFFC")
 
             return this
         }

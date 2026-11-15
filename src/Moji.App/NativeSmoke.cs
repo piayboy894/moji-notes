@@ -18,6 +18,17 @@ internal static class NativeSmoke
             using var vm = new WorkspaceViewModel(data); var window = new MainWindow(vm,true); Application.Current.MainWindow = window; window.Show();
             if (!await vm.OpenAsync() || vm.State!.Notes.Count != 0 || vm.State.Sync.Repository != "") throw new Exception("Fresh start was not empty and password-free");
             var savedData = GameSaves.Capture(vm.State); await Render(); Capture(window,Path.Combine(output,"01-workspace.png")); checks.Add("password-free start has empty notebooks and no preset repository or samples");
+            var customize=Application.Current.Dispatcher.InvokeAsync(async()=>{
+                await Render();var dialog=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="新建记事本");
+                try{FindNamed<TextBox>(dialog,"NotebookName")!.Text="旅行手记";FindNamed<ComboBox>(dialog,"NotebookMode")!.SelectedIndex=(int)NoteMode.Text;
+                    FindNamed<Button>(dialog,"NotebookColorA5849D")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));FindTool(dialog,"星标")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Render();Capture(dialog,Path.Combine(output,"08-notebook-appearance.png"),490,620);
+                    FindButton(dialog,"创建记事本")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }catch{dialog.Close();throw;}
+            });
+            FindNamed<Button>(window,"AddNotebookCard")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await customize.Task.Unwrap();
+            var customBook=vm.State.LiveBooks.Single(b=>b.Name=="旅行手记");if(customBook.Mode!=NoteMode.Text||customBook.Color!="#A5849D"||customBook.Icon!="Star")throw new Exception("Notebook appearance changed type or failed to save");
+            await vm.SaveAsync();await vm.OpenAsync();if(vm.State!.LiveBooks.First(b=>b.Id==customBook.Id).Icon!="Star")throw new Exception("Notebook appearance was lost on reopen");window.Navigate("home");await Render();Capture(window,Path.Combine(output,"09-custom-notebook-home.png"));
+            await vm.ReplaceDataAsync(savedData);checks.Add("dashed add tile opens notebook creation; chosen color and icon persist independently of notebook type");
             var book = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Text); window.Navigate(book.Id); window.AddNote(); await Render();
             var editor = Find<RichTextBox>(window) ?? throw new Exception("Native editor not created"); new TextRange(editor.Document.ContentStart,editor.Document.ContentEnd).Text = "Native edit\n\nPlain local persistence."; await vm.SaveAsync(); var noteId = vm.SelectedId;
             if (!(await File.ReadAllTextAsync(vm.Store.VaultPath)).Contains("Plain local persistence")) throw new Exception("Local data was not plain text");

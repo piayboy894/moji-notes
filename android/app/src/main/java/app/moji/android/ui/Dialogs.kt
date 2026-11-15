@@ -24,13 +24,14 @@ import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun NotebookDialog(book: Notebook?, vm: MojiViewModel, close: () -> Unit) {
-    var name by remember { mutableStateOf(book?.name ?: "") }; var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }; var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }; var selectedIcon by remember{mutableStateOf(book?.icon?.ifBlank{"Book"}?:"Book")};var customColor by remember{mutableStateOf(false)};var deleting by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(book?.name ?: "") }; var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }; var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }; var selectedIcon by remember{mutableStateOf(book?.let{notebookIconId(it)}?:"Book")};var customColor by remember{mutableStateOf(false)};var deleting by remember { mutableStateOf(false) }
     PanelDialog(if (book == null) "新建记事本" else "编辑记事本", close, actions = { if (book != null) TextButton(onClick = { deleting = true }) { Text("删除", color = MaterialTheme.colorScheme.error) }; Spacer(Modifier.weight(1f)); TextButton(onClick = close) { Text("取消") }; Button(onClick = { vm.saveBook(book, name, mode, selectedColor,selectedIcon); close() }, enabled = name.isNotBlank()) { Text(if (book == null) "创建记事本" else "保存修改") } }) {
-        Field("记事本名称", name) { name = it.take(40) }
+        Field("记事本名称", name, Modifier.testTag("notebook-name")) { name = it.take(40) }
         Text("记录模式", style = MaterialTheme.typography.labelLarge)
         Column { NoteMode.entries.forEach { type -> Row(Modifier.fillMaxWidth().clickable(enabled = book == null) { mode = type }, verticalAlignment = Alignment.CenterVertically) { RadioButton(mode == type, { mode = type }, enabled = book == null); Icon(modeIcon(type), null, Modifier.size(20.dp), tint = modeColor(type)); Spacer(Modifier.width(12.dp)); Text(type.label) } } }
+        Row(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.White,.78f),androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){Icon(notebookIcon(Notebook(icon=selectedIcon)),null,Modifier.size(26.dp),tint=androidx.compose.ui.graphics.lerp(color(selectedColor),androidx.compose.ui.graphics.Color.Black,.32f));Text(name.ifBlank{"新记事本"},color=androidx.compose.ui.graphics.Color(0xFF293226))}
         Text("封面颜色", style = MaterialTheme.typography.labelLarge)
-        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("#75876D", "#B2946E", "#8393AC", "#A5849D", "#BA886C", "#9182A8").forEach { c -> Box(Modifier.size(40.dp).background(color(c), CircleShape).clickable { selectedColor = c }, contentAlignment = Alignment.Center) { if (selectedColor == c) Icon(MojiIcons.Check, "已选颜色", Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White) } } }
+        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("#75876D", "#B2946E", "#8393AC", "#A5849D", "#BA886C", "#9182A8").forEach { c -> Box(Modifier.size(40.dp).testTag("notebook-color-$c").background(color(c), CircleShape).clickable { selectedColor = c }, contentAlignment = Alignment.Center) { if (selectedColor == c) Icon(MojiIcons.Check, "已选颜色", Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White) } } }
         TextButton(onClick={customColor=true}){Text("自定义颜色")}
         Text("图标",style=MaterialTheme.typography.labelLarge)
         FlowRow { notebookIcons.forEach{(id,label)->Tool(notebookIcon(Notebook(icon=id)),label,selected=selectedIcon==id){selectedIcon=id}} }
@@ -90,9 +91,8 @@ import java.util.Locale
 @Composable fun GlobalSearch(s: AppState, vm: MojiViewModel, close: () -> Unit) {
     var query by remember { mutableStateOf("") }; val w = s.workspace ?: return
     val results = w.liveNotes.filter { n -> Records.matches(n, query, w.notebooks.first { it.id == n.notebookId }.mode) }.sortedByDescending { it.updatedAt }.take(50)
-    PanelDialog("搜索你的空间", close, width = 700) {
+    PanelDialog("搜索", close, width = 700) {
         Field("搜索记录", query) { query = it }
-        if (query.isBlank()) Row { TextButton(onClick = { vm.addNote(); close() }) { Icon(MojiIcons.Add, null); Text("新建记录") } }
         Text(if (query.isBlank()) "最近记录" else "${results.size} 条结果", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
         results.forEach { note -> Surface(onClick = { vm.navigate(note.notebookId); vm.select(note.id); close() }, color = androidx.compose.ui.graphics.Color.Transparent) { Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) { Icon(modeIcon(w.notebooks.first { it.id == note.notebookId }.mode), null); Column(Modifier.weight(1f)) { Text(note.title, maxLines = 1); Text(w.notebooks.first { it.id == note.notebookId }.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(MojiIcons.NorthEast, null, Modifier.size(17.dp)) } } }
         if (results.isEmpty()) Text("没有找到相关记录", color = MaterialTheme.colorScheme.onSurfaceVariant)

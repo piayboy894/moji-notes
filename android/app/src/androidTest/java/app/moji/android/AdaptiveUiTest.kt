@@ -20,7 +20,7 @@ class AdaptiveUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(w: Int,h: Int,d: Int) { shell("wm size ${w}x$h"); shell("wm density $d"); Thread.sleep(1200); compose.waitForIdle() }
-    private fun ready() { compose.waitUntil(15000) { val s=compose.activity.vm.state.value; check(s.error.isBlank()){s.error}; s.workspace!=null } }
+    private fun ready() { compose.waitUntil(15000) { val s=compose.activity.vm.state.value; check(s.error.isBlank()){s.error}; s.workspace!=null && !s.loading } }
     private fun hideKeyboard() { compose.activityRule.scenario.onActivity { androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(350); compose.waitForIdle() }
     private fun screenshot(name: String) { compose.waitForIdle(); Thread.sleep(500); val path="/sdcard/Download/moji-native-ui/$name.png"; shell("mkdir -p /sdcard/Download/moji-native-ui"); shell("screencap -p $path"); check((shell("stat -c %s $path").trim().toLongOrNull()?:0)>1024) }
     @Test fun phoneTabletUltrawideAndRotationPreserveNativeEditing() {
@@ -98,9 +98,36 @@ class AdaptiveUiTest {
             compose.onNodeWithText("插入变量").performClick();compose.onNodeWithTag("variable-name").performTextInput("Audience");compose.onNodeWithText("插入",substring=false).performClick()
             compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1}
             val prompt=compose.activity.vm.selectedNote()!!;assertTrue(prompt.content.contains("{{literal}}"));assertEquals("Audience",prompt.variables.single().name)
-            compose.activityRule.scenario.onActivity{it.vm.navigate("home");it.vm.navigate(prompt.notebookId);it.vm.select(prompt.id)}
-            compose.onNodeWithContentDescription("变量：Audience").assertExists();screenshot("11-explicit-variable")
+            compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
+            compose.onNodeWithTag("home-title").assertIsDisplayed()
+            compose.activityRule.scenario.onActivity{it.vm.navigate(prompt.notebookId);it.vm.select(prompt.id)}
+            compose.onNodeWithTag("note-content").assertTextContains("Audience",substring=true);screenshot("11-explicit-variable")
+            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(18))
+            compose.onNodeWithTag("note-content").performTextInput(" tail")
+            assertEquals(1,PromptVariables.used(compose.activity.vm.selectedNote()!!).size)
+            compose.onNodeWithTag("note-content").performTextInputSelection(androidx.compose.ui.text.TextRange(17,18));compose.onNodeWithTag("note-content").performTextInput("")
+            assertTrue(PromptVariables.used(compose.activity.vm.selectedNote()!!).isEmpty())
+            compose.onNodeWithContentDescription("撤销").performScrollTo().performClick()
+            compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1}
         }catch(t:Throwable){runCatching{screenshot("failure-rich-tools")};throw t}
+    }
+    @Test fun notebookAppearanceIsEditableAndSurvivesLocalAndGlobalSaves() {
+        ready();compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
+        val original=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}
+        compose.onNodeWithTag("book-Prompt").performTouchInput{longClick()}
+        compose.onNodeWithText("编辑记事本").assertIsDisplayed()
+        compose.onNodeWithTag("notebook-color-#A5849D").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("星标").performScrollTo().performClick()
+        hideKeyboard();screenshot("12-notebook-appearance")
+        compose.onNodeWithText("保存修改").performClick()
+        fun current()=compose.activity.vm.state.value.workspace!!.notebooks.first{it.id==original.id}
+        assertEquals(original.mode,current().mode);assertEquals("#A5849D",current().color);assertEquals("Star",current().icon)
+        runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready()
+        assertEquals("#A5849D",current().color);assertEquals("Star",current().icon)
+        val payload=GameSaves.capture(compose.activity.vm.state.value.workspace!!)
+        compose.activityRule.scenario.onActivity{it.vm.saveBook(current(),original.name,original.mode,"#75876D","Cloud")}
+        runBlocking{compose.activity.vm.replaceData(payload)}
+        assertEquals("Star",current().icon);assertEquals("#A5849D",current().color);screenshot("13-custom-notebook-home")
     }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {
         ready(); compose.activityRule.scenario.onActivity{it.vm.navigate("home")}

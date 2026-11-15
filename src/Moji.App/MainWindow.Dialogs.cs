@@ -38,11 +38,11 @@ public partial class MainWindow
     }
     private void NotebookDialog(Notebook? book=null)
     {
-        var name=Ui.Input(book?.Name??"");var modes=new ComboBox{ItemsSource=new[]{"普通文本","提示词","账号密码"},SelectedIndex=(int)(book?.Mode??NoteMode.Text),IsEnabled=book==null};
+        var name=Ui.Input(book?.Name??"");name.Name="NotebookName";var modes=new ComboBox{ItemsSource=new[]{"普通文本","提示词","账号密码"},SelectedIndex=(int)(book?.Mode??NoteMode.Text),IsEnabled=book==null,Name="NotebookMode"};
         var chosenColor=book?.Color??"#75876D";var chosenIcon=book==null?"Book":NativeIcon.ForNotebook(book);var palette=new WrapPanel();var icons=new WrapPanel();
         var preview=new Border{Height=46,CornerRadius=new CornerRadius(8),Padding=new Thickness(12),Margin=new Thickness(0,0,0,18)};
         void Refresh(){preview.Background=new SolidColorBrush(NotebookAppearance.Mix(NotebookAppearance.Parse(chosenColor),Colors.White,.75));preview.Child=new NativeIcon{Kind=chosenIcon,Width=24,Height=24,Foreground=Ui.Brush(NotebookAppearance.Ink(chosenColor)),HorizontalAlignment=HorizontalAlignment.Left};foreach(Button button in icons.Children)button.Background=button.Tag?.ToString()==chosenIcon?Ui.Resource("AccentLight"):Brushes.Transparent;foreach(Button button in palette.Children)button.BorderThickness=button.Tag?.ToString()==chosenColor?new Thickness(2):new Thickness(0);}
-        foreach(var value in NotebookAppearance.Colors){var color=value;var button=Ui.Button("",()=>{chosenColor=color;Refresh();},tip:"选择颜色");button.Content=new System.Windows.Shapes.Ellipse{Width=25,Height=25,Fill=Ui.Brush(color)};button.Width=42;button.Height=42;button.Padding=new Thickness(5);button.Margin=new Thickness(3);button.Tag=color;palette.Children.Add(button);}
+        foreach(var value in NotebookAppearance.Colors){var color=value;var button=Ui.Button("",()=>{chosenColor=color;Refresh();},tip:"选择颜色");button.Content=new System.Windows.Shapes.Ellipse{Width=25,Height=25,Fill=Ui.Brush(color)};button.Width=42;button.Height=42;button.Padding=new Thickness(5);button.Margin=new Thickness(3);button.Tag=color;button.Name="NotebookColor"+color.TrimStart('#');palette.Children.Add(button);}
         palette.Children.Add(Ui.Button("自定义",()=>PickNotebookColor(chosenColor,value=>{chosenColor=value;Refresh();})));
         foreach(var(icon,label)in NotebookAppearance.Icons){var value=icon;var button=Ui.Icon(icon,()=>{chosenIcon=value;Refresh();},label);button.Tag=icon;icons.Children.Add(button);}
         var content=Ui.Stack(preview,Ui.Field("记事本名称",name),Ui.Field("记录模式",modes),Ui.Field("封面颜色",palette),Ui.Field("图标",icons));content.Margin=new Thickness(25);Window? dialog=null;

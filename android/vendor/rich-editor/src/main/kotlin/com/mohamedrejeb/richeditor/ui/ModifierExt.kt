@@ -11,6 +11,7 @@ import androidx.compose.ui.util.fastForEach
 @OptIn(ExperimentalRichTextApi::class)
 internal fun Modifier.drawRichSpanStyle(
     richTextState: RichTextState,
+    offsetMapping: androidx.compose.ui.text.input.OffsetMapping = androidx.compose.ui.text.input.OffsetMapping.Identity,
     topPadding: Float = 0f,
     startPadding: Float = 0f,
 ): Modifier {
@@ -39,10 +40,10 @@ internal fun Modifier.drawRichSpanStyle(
                     with(style) {
                         val textLength = richTextState.annotatedString.length
                         val measuredTextLength = textLayoutResult.multiParagraph.intrinsics.annotatedString.length
-                        if (textLength == measuredTextLength) {
+                        if (offsetMapping.originalToTransformed(textLength) == measuredTextLength) {
                             drawCustomStyle(
                                 layoutResult = textLayoutResult,
-                                textRange = textRange,
+                                textRange = TextRange(offsetMapping.originalToTransformed(textRange.start), offsetMapping.originalToTransformed(textRange.end)),
                                 richTextConfig = richTextState.config,
                                 topPadding = topPadding,
                                 startPadding = startPadding
