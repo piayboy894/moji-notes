@@ -39,6 +39,10 @@ if platform == "windows":
     version = re.search(r"<Version>([0-9.]+)</Version>", source("src/Moji.App/Moji.App.csproj")).group(1)
     folder = Path("verified/windows/release")
     checked_report(folder / "native-test-report.json")
+    standard = checked_report(folder / "native-standard-test-report.json")
+    checked_report(folder / "standard-launch-report.json")
+    if standard.get("bootstrapperInvocations") != 0 or standard.get("hasFixedRuntime") is not False:
+        raise RuntimeError("Standard package did not reuse the installed shared runtime")
     sums = json.loads((folder / "SHA256SUMS.json").read_text(encoding="utf-8-sig"))
     for architecture in ("x64", "arm64"):
         name = f"Moji-Notes-{version}-win-{architecture}.exe"

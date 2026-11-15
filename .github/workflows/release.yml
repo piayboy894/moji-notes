@@ -54,6 +54,20 @@ jobs:
           $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/smoke" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Native smoke test failed: $($p.ExitCode)" }
           Get-Content artifacts/smoke/report.json
+      - name: Verify ordinary launch without installing components
+        shell: pwsh
+        run: |
+          $clock = [Diagnostics.Stopwatch]::StartNew()
+          $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/standard-smoke" -PassThru
+          $workspace = "$pwd/artifacts/standard-smoke/01-workspace.png"
+          while (!(Test-Path $workspace) -and !$p.HasExited -and $clock.Elapsed.TotalSeconds -lt 90) { Start-Sleep -Milliseconds 100 }
+          $firstWorkspaceMilliseconds = $clock.Elapsed.TotalMilliseconds
+          if (!(Test-Path $workspace)) { throw 'Standard package did not reach its workspace.' }
+          if (!$p.WaitForExit(120000) -or $p.ExitCode -ne 0) { throw 'Standard launch smoke checks failed.' }
+          $report = Get-Content artifacts/standard-smoke/report.json -Raw | ConvertFrom-Json
+          if (!$report.success -or $report.bootstrapperInvocations -ne 0 -or $report.hasFixedRuntime) { throw 'Standard launch must reuse Evergreen without running setup.' }
+          @{ success = $true; firstWorkspaceMilliseconds = $firstWorkspaceMilliseconds; bootstrapperInvocations = $report.bootstrapperInvocations; note = 'CI machine with Evergreen already installed; not a hardware performance guarantee.' } | ConvertTo-Json | Set-Content artifacts/standard-smoke/launch.json
+          Get-Content artifacts/standard-smoke/launch.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -61,6 +75,8 @@ jobs:
           path: |
             artifacts/smoke/*.png
             artifacts/smoke/report.json
+            artifacts/standard-smoke/report.json
+            artifacts/standard-smoke/launch.json
       - name: Package portable builds
         shell: pwsh
         run: |
@@ -81,6 +97,8 @@ jobs:
           Copy-Item artifacts/smoke/02-editor.png artifacts/release/Moji-Editor.png
           Copy-Item artifacts/smoke/05-dark.png artifacts/release/Moji-Dark.png
           Copy-Item artifacts/smoke/report.json artifacts/release/native-test-report.json
+          Copy-Item artifacts/standard-smoke/report.json artifacts/release/native-standard-test-report.json
+          Copy-Item artifacts/standard-smoke/launch.json artifacts/release/standard-launch-report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
