@@ -25,6 +25,9 @@ for shown in ('0','1'):
         while True:
             r=json.loads(ws.recv())
             if r.get('id')==serial:return r
+    metrics=evaluate('({innerHeight,bodyHeight:document.body.clientHeight,rootHeight:document.getElementById("app").clientHeight,viewport:visualViewport.height})')['result']['result']['value']
+    (folder/('viewport-'+shown+'.json')).write_text(json.dumps(metrics,indent=2));print('VIEWPORT',shown,metrics)
+    assert metrics['innerHeight']>0 and metrics['bodyHeight']>=metrics['innerHeight']*.8
     evaluate("window.probe=[]; ['keydown','beforeinput','input','keyup','selectionchange'].forEach(type=>document.addEventListener(type,e=>probe.push({type,key:e.key,keyCode:e.keyCode,data:e.data,cancelable:e.cancelable,inputType:e.inputType,composing:e.isComposing,sel:window.getSelection()?.anchorOffset,head:MojiEditor.editor.state.selection.head,html:MojiEditor.editor.getHTML()}),true));")
     tap(wait_editor());type_editor_text('ABC123');time.sleep(.5);adb('shell','input','keyevent','KEYCODE_DEL');time.sleep(.2);adb('shell','input','keyevent','KEYCODE_ENTER');time.sleep(.2);type_editor_text('Next');time.sleep(1)
     actual=evaluate('MojiEditor.editor.getHTML()')['result']['result']['value'];print('EDIT',shown,actual);assert '<p>ABC12</p><p>Next</p>' in actual
@@ -34,6 +37,7 @@ for shown in ('0','1'):
     evaluate("MojiEditor.editor.chain().clearContent().focus().toggleTaskList().run()")
     type_editor_text('Task');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Second');adb('shell','input','keyevent','KEYCODE_ENTER');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Tail');time.sleep(1)
     actual=evaluate('MojiEditor.editor.getHTML()')['result']['result']['value'];print('TASK',shown,actual);assert '<p>Tail</p>' in actual and actual.count('data-type="taskItem"')==2
+    (folder/('visible-editor-'+shown+'.png')).write_bytes(subprocess.check_output(['adb','exec-out','screencap','-p']))
     (folder/('events-'+shown+'.json')).write_text(json.dumps(evaluate('probe'),indent=2))
     # Compare a plain browser-managed contenteditable within the same WebView.
     evaluate("document.body.innerHTML='<div contenteditable=true id=plain style=\"min-height:300px\">plain: </div>';document.getElementById('plain').focus();getSelection().selectAllChildren(document.getElementById('plain'));getSelection().collapseToEnd()")
