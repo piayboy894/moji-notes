@@ -15,12 +15,12 @@ import app.moji.android.data.*
 import app.moji.android.security.Crypto
 import kotlinx.coroutines.launch
 
-@Composable fun SettingsDialog(s: AppState, vm: MojiViewModel, activity: MainActivity, initial: String, close: () -> Unit, backup: () -> Unit, exportText: () -> Unit, import: () -> Unit) {
+@Composable fun SettingsDialog(s: AppState, vm: MojiViewModel, activity: MainActivity, initial: String, close: () -> Unit, backup: () -> Unit, exportText: () -> Unit, import: () -> Unit, manageSaves: () -> Unit) {
     val w = s.workspace ?: return; var tab by remember { mutableStateOf(initial) }; val scope = rememberCoroutineScope()
     var repo by remember { mutableStateOf(w.sync.repository) }; var token by remember { mutableStateOf(w.sync.token) }; var code by remember { mutableStateOf(w.sync.code) }
     var old by remember { mutableStateOf("") }; var next by remember { mutableStateOf("") }; var again by remember { mutableStateOf("") }; var status by remember { mutableStateOf("") }; var changing by remember { mutableStateOf(false) }
     PanelDialog("偏好设置", close, width = 720) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("general" to "通用", "sync" to "同步", "security" to "安全", "data" to "数据", "about" to "更新").forEach { (id, title) -> FilterChip(tab == id, { tab = id; status = "" }, label = { Text(title) }) } }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("general" to "通用", "sync" to "存档", "security" to "安全", "data" to "数据", "about" to "更新").forEach { (id, title) -> FilterChip(tab == id, { tab = id; status = "" }, label = { Text(title) }) } }
         when (tab) {
             "general" -> {
                 SectionTitle("通用设置")
@@ -30,18 +30,21 @@ import kotlinx.coroutines.launch
                 Slider(w.preferences.fontSize.toFloat(), { value -> vm.preferences { it.copy(fontSize = value.toInt().toDouble()) } }, valueRange = 11f..28f, steps = 16)
                 SettingRow("显示行号") { Switch(w.preferences.lineNumbers, { checked -> vm.preferences { it.copy(lineNumbers = checked) } }) }
                 HorizontalDivider(); Text("DeX / 键盘快捷键", style = MaterialTheme.typography.titleMedium)
-                listOf("全局搜索" to "Ctrl K", "新建记录" to "Ctrl N", "查找与替换" to "Ctrl F / H", "保存历史版本" to "Ctrl S", "锁定空间" to "Ctrl Shift L", "撤销 / 重做" to "Ctrl Z / Y").forEach { (label, key) -> Row(Modifier.fillMaxWidth()) { Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium); Text(key, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
+                listOf("全局搜索" to "Ctrl K", "新建记录" to "Ctrl N", "查找与替换" to "Ctrl F / H", "保存历史版本" to "Ctrl S", "全局云存档" to "Ctrl Shift S", "锁定空间" to "Ctrl Shift L", "撤销 / 重做" to "Ctrl Z / Y").forEach { (label, key) -> Row(Modifier.fillMaxWidth()) { Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium); Text(key, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall) } }
             }
             "sync" -> {
-                SectionTitle("GitHub 同步")
+                SectionTitle("云存档连接")
                 Field("数据仓库", repo) { repo = it }; Field("GitHub Token", token, secret = true) { token = it.trim() }
                 Text("仅需数据仓库 Contents 读写权限。Token 不会进入云端数据文件。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Field("同步码（12–128 位字母或数字）", code, secret = true) { code = it.trim() }
-                Row { TextButton(onClick = { code = Crypto.password(24, false) }) { Icon(Icons.Outlined.Casino, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("随机生成") }; TextButton(onClick = { activity.copy(code, true) }) { Text("复制同步码") } }
-                SettingRow("每 5 分钟自动同步") { Switch(w.preferences.autoSync, { checked -> vm.preferences { it.copy(autoSync = checked) } }) }
-                fun config() = w.sync.copy(repository = repo.trim(), token = token, code = code, base = if (w.sync.repository != repo.trim() || w.sync.code != code) emptyMap() else w.sync.base)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = { vm.mutate { it.copy(sync = config()) }; vm.message("同步设置已加密保存") }, enabled = !s.demo) { Text("保存设置") }; Button(onClick = { vm.synchronize(config()) }, enabled = !s.demo && !s.syncing && token.isNotBlank() && code.isNotBlank()) { if (s.syncing) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp) else Icon(Icons.Outlined.Sync, null, Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text(if (s.syncing) "正在同步" else "保存并同步") } }
-                Text(if (w.sync.lastSync > 0) "上次同步：${Records.relative(w.sync.lastSync)}" else "尚未连接云端", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Field("存档码（12–128 位字母或数字）", code, secret = true) { code = it.trim() }
+                Row { TextButton(onClick = { code = Crypto.password(24, false) }) { Icon(Icons.Outlined.Casino, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("随机生成") }; TextButton(onClick = { activity.copy(code, true) }) { Text("复制存档码") } }
+                fun config() = w.sync.copy(repository = repo.trim(), token = token, code = code, base = emptyMap())
+                fun saveConnection() { vm.mutate { it.copy(sync = config(), preferences = it.preferences.copy(autoSync = false)) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = { saveConnection(); status = "连接设置已保存" }, enabled = !s.demo) { Text("保存设置") }
+                    Button(onClick = { saveConnection(); manageSaves() }, enabled = !s.demo && token.isNotBlank() && code.isNotBlank()) { Text("打开云存档") }
+                }
+                if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.labelSmall)
                 TextButton(onClick = { activity.openUrl("https://github.com/settings/personal-access-tokens/new") }) { Text("创建 GitHub 授权"); Icon(Icons.Outlined.OpenInNew, null, Modifier.size(15.dp)) }
             }
             "security" -> {

@@ -4,25 +4,13 @@
 
 **原生 Windows 桌面应用：.NET 10 LTS + WPF + AvalonEdit。没有 Electron、Chromium、WebView、网页外壳或后台 Web 服务。**
 
-## 当前开发成果
-
-参考图风格的新界面与原生 Android 客户端已保存在 `main` 分支。当前 Windows `v1.0.1` 稳定下载仍为上一版界面；新版构建保存在 Actions，尚未替换稳定 Release。Android 正式签名和发布暂缓。
-
-- [新版界面预览](docs/INTERFACE.md)
-- [Android 项目与构建方法](android/README.md)
-- [已验证项目与下次继续位置](docs/PROGRESS.md)
-
 ## 下载与启动
 
-从 [Windows v1.0.1 Release](https://github.com/piayboy894/moji-notes/releases/tag/v1.0.1) 下载当前稳定版：
+- [Windows 1.1.0](https://github.com/piayboy894/moji-notes/releases/tag/v1.1.0)：Intel / AMD 电脑下载 `Moji-Notes-1.1.0-win-x64.exe`，Windows ARM 设备下载 `Moji-Notes-1.1.0-win-arm64.exe`；也提供便携 ZIP。
+- [Android 1.0.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v1.0.0)：下载 `Moji-Notes-Android-1.0.0.apk`，使用固定发布密钥签名。
+- [新版界面预览](docs/INTERFACE.md) · [Android 项目](android/README.md) · [进度与验证范围](docs/PROGRESS.md)
 
-- 常见 Intel / AMD Windows 电脑：`Moji-Notes-1.0.1-win-x64.exe`。
-- Windows ARM 设备：`Moji-Notes-1.0.1-win-arm64.exe`。
-- 也提供包含使用说明的 ZIP 压缩包。
-
-EXE 自包含 .NET 运行库，Windows 10 / 11 解压后可直接启动，不需要安装 .NET 或浏览器组件。建议放在用户可写的独立目录，例如 `D:\Apps\Moji`，方便一键更新。首次启动设置至少 10 位的主密码；也可先使用不落盘的演示空间。
-
-当前构建未附 Windows 发行者证书，Windows 可能显示未知发行者。下载页提供 `SHA256SUMS.json`，可用 `Get-FileHash 文件名.exe -Algorithm SHA256` 核对。正式代码签名可以后续接入证书，和应用内更新检查是不同的功能。
+Windows EXE 自包含 .NET 运行库，Windows 10 / 11 可独立运行。Android 最低为 8.0，支持手机、平板和可调整窗口。首次启动设置本机主密码；也可先查看演示。
 
 ## 功能
 
@@ -34,31 +22,32 @@ EXE 自包含 .NET 运行库，Windows 10 / 11 解压后可直接启动，不需
 
 所有模式均支持多个记事本、名称与颜色、标签、全局搜索、当前列表搜索、标题/创建/编辑时间排序、收藏、置顶、归档、同模式移动、复制记录、多选批量操作、40 个历史版本、手动版本快照、回收站、恢复与永久清除。
 
-其他功能包括原生系统文件对话框、TXT/Markdown 导入、加密备份恢复与合并、按记事本导出 Markdown ZIP、单条导出 Markdown/TXT/RTF、系统打印 PDF、浅色/深色/跟随 Windows、专注模式、快捷键、加密本地备份、自动锁定、系统锁屏与休眠锁定、敏感剪贴板 30 秒清除、GitHub 加密同步与冲突副本。
+其他功能包括原生系统文件对话框、TXT/Markdown 导入、加密备份恢复与合并、按记事本导出 Markdown ZIP、单条导出 Markdown/TXT/RTF、系统打印 PDF、浅色/深色/跟随 Windows、专注模式、快捷键、加密本地备份、自动锁定、系统锁屏与休眠锁定、敏感剪贴板 30 秒清除、全局手动云存档。
 
-## GitHub 云同步
+## 全局云存档
 
-源码与数据分开：
+本机编辑继续自动加密保存。云端由用户手动管理，入口位于全局侧栏「云存档」，每份存档包含全部记事本、记录、密码库、标签、收藏、归档、回收站和历史版本。单条记录或单个记事本没有同步按钮。
+
+| 操作 | 结果 |
+| --- | --- |
+| 新建存档 | 为当前整套数据创建一份有名称的新存档，已有存档不变 |
+| 覆盖存档 | 确认后，用当前整套数据替换选中的云存档 |
+| 读取存档 | 确认后，用选中的存档整体替换本机全部项目数据 |
+| 删除存档 | 确认后，删除选中的云存档，本机内容不变 |
+
+不会后台自动同步、判断哪份更新或自动合并。存档列表仅在你点击刷新时读取；读取保留本机主密码、设备偏好和云连接设置。已有旧版单文件可在列表中作为「旧版存档」手动读取、覆盖或删除。
+
+在「设置 → 云存档连接」填写数据仓库、仅有该仓库 **Contents: Read and write** 权限的 GitHub Token，以及 12–128 位数字或字母存档码。其他设备填写相同连接，在全局存档窗口点击刷新，再选择操作。Token 和存档码保存在本机密文中，不要发送到聊天或提交进源码。
 
 ```text
-piayboy894/moji-notes       源码、构建工作流、Releases 和软件更新
+piayboy894/moji-notes             源码、构建和软件更新
 piayboy894/xuxian-data
-└─ moji-notes/
-   └─ <同步码的 SHA-256 前 40 位>.moji   仅加密数据
+└─ moji-notes/<存档码 SHA-256 前 40 位>/
+   ├─ index.moji                  加密的存档名称、时间与列表
+   └─ <存档 ID>.moji              加密的整套项目数据
 ```
 
-在「设置 → GitHub 同步」填写：
-
-1. 数据仓库：默认 `piayboy894/xuxian-data`。
-2. GitHub 精细权限 Token：仅选择数据仓库，授予 **Contents: Read and write**。也可使用具有相应仓库权限的已有 Token。
-3. 12–128 位数字或字母同步码，推荐点击“生成”得到 24 位随机码。
-4. 点击“保存并同步”，其他电脑填写同一个仓库、Token 和同步码。
-
-同步码用于定位和加密云端空间，**不能代替 GitHub 对私有仓库的访问授权**。本机主密码可以与同步码不同。不要将 Token 填入源码、README 或聊天。Token 和同步设置只保存在本机加密文件内，云端数据不包含 Token 或设备偏好。
-
-同步采用记录级合并、删除标记与 SHA 乐观并发保护。同一记录的两端修改会保留“同步副本”，而不是静默覆盖；云端文件在写入前发生变化时停止本次写入，重新同步即可。离线仍可完整编辑，自动同步只在解锁时每 5 分钟执行。
-
-首次同步会合并本地与远端内容，因此新设备的示例记事本可能与已有记事本并存。更换同步码相当于使用新的云端空间，不会自动删除原文件。
+只修改专属目录，支持与其他软件共用数据仓库。数据和目录通过同一次 Git 提交更新，保留其他路径；仓库发生并发变化时停止操作，等待你刷新后重新确认，不自动重试或合并。GitHub 历史提交可能保留被覆盖或删除的旧密文。
 
 ## 自动更新
 
@@ -98,7 +87,7 @@ publish/win-x64/Moji.Notes.exe --smoke-test --output artifacts/smoke
 ## 源码结构
 
 ```text
-src/Moji.Core/   数据模型、加密、原子存储、记录级合并、GitHub 同步、更新、TOTP、模板
+src/Moji.Core/   数据模型、加密、原子存储、手动全局存档、GitHub 存储、更新、TOTP、模板
 src/Moji.App/    WPF 原生视图、工作空间 ViewModel、AvalonEdit、FlowDocument Markdown 渲染
 tests/Moji.Tests/ 加密/同步/更新/持久化/版本/模板测试
 .github/workflows/ Windows 检查与自包含 EXE 发布

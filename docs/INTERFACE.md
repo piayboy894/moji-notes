@@ -34,4 +34,4 @@
 
 截图由 API 35 Android 模拟器直接取得，展示演示数据。原生测试报告与其余旋转、窄窗口和密码模式截图保存在 [Android Actions](https://github.com/piayboy894/moji-notes/actions/runs/43589264457) 的 `Moji-Android-native-UI` 构建附件中。模拟器尺寸验证不代表三星 DeX 真机实测。
 
-正式 Android 签名与发布暂停，详见 [进度记录](PROGRESS.md)。
+全局云存档提供新建、覆盖、读取、删除四个手动操作；本机编辑继续自动保存。正式安装包和验证范围见 [进度记录](PROGRESS.md)。

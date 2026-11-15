@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.moji.android.data.NoteMode
+import app.moji.android.sync.GameSaves
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -48,6 +49,14 @@ class AdaptiveUiTest {
             compose.activityRule.scenario.onActivity { it.onWindowFocusChanged(true); it.vm.clearSelection(); it.vm.navigate("home") }; compose.onNodeWithTag("home-title").assertExists()
         } catch (error: Throwable) { runCatching { screenshot("failure-adaptive") }; throw error } finally { shell("wm size reset"); shell("wm density reset") }
     }
+    @Test fun saveManagementIsGlobalAndHasExactlyTheFourManualActions() {
+        compose.waitUntil(10000) { !compose.activity.vm.state.value.loading }
+        if (compose.activity.vm.state.value.workspace != null) { compose.activityRule.scenario.onActivity { it.vm.lock() }; compose.waitUntil(10000) { compose.activity.vm.state.value.workspace == null } }
+        compose.onNodeWithTag("demo").performClick(); compose.onNodeWithContentDescription("打开导航").performClick()
+        compose.onNodeWithText("云存档").performClick(); compose.onNodeWithTag("global-saves").assertIsDisplayed()
+        listOf("save-create", "save-overwrite", "save-read", "save-delete").forEach { compose.onNodeWithTag(it).assertExists() }
+        compose.onNodeWithText("全部记事本").assertIsDisplayed(); screenshot("09-global-saves")
+    }
     private fun awaitUnlocked() { compose.waitUntil(30000) { val state = compose.activity.vm.state.value; check(state.error.isBlank()) { state.error }; state.workspace != null } }
     @Test fun encryptedPersistenceAndPasswordModeWorkWithNativeFields() {
         try {
@@ -60,6 +69,9 @@ class AdaptiveUiTest {
         compose.activityRule.scenario.onActivity { it.vm.addNote() }; compose.onNodeWithTag("account").performTextInput("native-test@example.com")
         compose.onNodeWithTag("credential-password").performTextInput("Private-Test-2026!"); hideKeyboard()
         runBlocking { compose.activity.vm.flush() }; val raw = compose.activity.vm.store.file.readText(); assertFalse(raw.contains("native-test@example.com")); assertFalse(raw.contains("Private-Test-2026!")); screenshot("08-native-password")
+        val globalSave = GameSaves.capture(compose.activity.vm.state.value.workspace!!)
+        compose.activityRule.scenario.onActivity { it.vm.addNote() }; val extraId = compose.activity.vm.state.value.selectedId
+        runBlocking { compose.activity.vm.replaceData(globalSave) }; assertFalse(compose.activity.vm.state.value.workspace!!.notes.any { it.id == extraId }); assertEquals(globalSave.notes.map { it.id }, compose.activity.vm.state.value.workspace!!.notes.map { it.id })
         compose.activityRule.scenario.onActivity { it.vm.lock() }; compose.waitUntil(10000) { compose.activity.vm.state.value.workspace == null }; assertNull(compose.activity.vm.sessionKey)
         compose.onNodeWithTag("auth-password").performTextInput("Android-Test-Password-2026"); hideKeyboard(); compose.onNodeWithTag("create-vault").performScrollTo().assertIsEnabled().performClick(); awaitUnlocked(); assertTrue(compose.activity.vm.state.value.workspace!!.notes.any { it.username == "native-test@example.com" })
         } catch (error: Throwable) { runCatching { screenshot("failure-persistence") }; throw error }

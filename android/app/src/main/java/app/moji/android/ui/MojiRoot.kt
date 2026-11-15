@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,10 +42,10 @@ import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable fun MojiRoot(vm: MojiViewModel, activity: MainActivity) {
     val s by vm.state.collectAsStateWithLifecycle(); val posture by activity.posture.collectAsStateWithLifecycle()
-    var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var templates by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) }
+    var cloudSaves by remember { mutableStateOf(false) }; var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var templates by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) }
     var backup by remember { mutableStateOf<Envelope?>(null) }; var backupPassword by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf("") }; var restoring by remember { mutableStateOf(false) }
     var exportWriter by remember { mutableStateOf<(suspend (OutputStream) -> Unit)?>(null) }
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -69,14 +70,14 @@ import java.util.zip.ZipOutputStream
         vm.content(note.id, note.content.substring(0, cursor) + "\n![图片](data:$mime;base64,${app.moji.android.security.Crypto.b64(bytes)})\n" + note.content.substring(cursor))
     } catch (error: Exception) { vm.message(error.message ?: "图片导入失败") } } }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
-    LaunchedEffect(s.workspace == null) { if (s.workspace == null) { settings = null; bookDialog = null; newBook = false; templates = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
+    LaunchedEffect(s.workspace == null) { if (s.workspace == null) { cloudSaves = false; settings = null; bookDialog = null; newBook = false; templates = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
     val dark = s.workspace?.preferences?.theme == "dark" || ((s.workspace?.preferences?.theme ?: "system") == "system" && isSystemInDarkTheme())
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences?.theme ?: "system") {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
+            BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) vm.touch()
-                if (s.workspace == null || event.type != KeyEventType.KeyDown || !event.isCtrlPressed) false else when (event.key) { Key.K -> { globalSearch = true; true }; Key.N -> { vm.addNote(); true }; Key.S -> { vm.selectedNote()?.let { vm.checkpoint(it.id) }; true }; Key.L -> if (event.isShiftPressed) { vm.lock(); true } else false; else -> false }
+                if (s.workspace == null || event.type != KeyEventType.KeyDown || !event.isCtrlPressed) false else when (event.key) { Key.K -> { globalSearch = true; true }; Key.N -> { vm.addNote(); true }; Key.S -> { if (event.isShiftPressed) cloudSaves = true else vm.selectedNote()?.let { vm.checkpoint(it.id) }; true }; Key.L -> if (event.isShiftPressed) { vm.lock(); true } else false; else -> false }
             }.pointerInput(Unit) { awaitPointerEventScope { while (true) { val event = awaitPointerEvent(PointerEventPass.Initial); if (event.changes.any { it.pressed }) vm.touch() } } }) {
                 if (s.workspace == null) { AuthScreen(s, vm, activity, backup, { importFile.launch(arrayOf("application/octet-stream", "application/json", "*/*")) }); Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snackbar) }; return@BoxWithConstraints }
                 val wide = maxWidth >= 1100.dp && maxHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && maxHeight >= 480.dp
@@ -84,9 +85,9 @@ import java.util.zip.ZipOutputStream
                 val twoPane = maxWidth - navigationWidth >= 680.dp && maxHeight >= 480.dp
                 val active = s.workspace?.notes?.firstOrNull { it.id == s.selectedId && it.purgedAt == null }
                 BackHandler(enabled = active != null || s.view != "home") { if (active != null) vm.clearSelection() else vm.navigate("home") }
-                ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !wide && !rail, drawerContent = { ModalDrawerSheet(Modifier.width(280.dp), drawerContainerColor = MaterialTheme.colorScheme.surface) { SideNavigation(s, vm, { scope.launch { drawer.close() } }, { settings = "general" }, { newBook = true }, { globalSearch = true }, { settings = "sync" }) } }) {
+                ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !wide && !rail, drawerContent = { ModalDrawerSheet(Modifier.width(280.dp), drawerContainerColor = MaterialTheme.colorScheme.surface) { SideNavigation(s, vm, { scope.launch { drawer.close() } }, { settings = "general" }, { newBook = true }, { globalSearch = true }, { cloudSaves = true }) } }) {
                     Row(Modifier.fillMaxSize().semantics { stateDescription = if (wide && twoPane && s.view != "home") "三栏布局" else if (twoPane && s.view != "home") "双栏布局" else "单栏布局" }.testTag("adaptive-layout")) {
-                        if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surface) { SideNavigation(s, vm, {}, { settings = "general" }, { newBook = true }, { globalSearch = true }, { settings = "sync" }) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
+                        if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surface) { SideNavigation(s, vm, {}, { settings = "general" }, { newBook = true }, { globalSearch = true }, { cloudSaves = true }) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         else if (rail) { CompactNavigation(s, vm, { settings = "general" }, { scope.launch { drawer.open() } }); VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         Scaffold(Modifier.weight(1f).fillMaxHeight(), containerColor = MaterialTheme.colorScheme.background,
                             topBar = { if (twoPane || active == null || s.view == "home") TopAppBar(title = { Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines = 1) }, navigationIcon = { if (!wide && !rail) Tool(Icons.Outlined.Menu, "打开导航") { scope.launch { drawer.open() } } }, actions = { if (s.saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp) else if (s.saveError) Icon(Icons.Outlined.ErrorOutline, "保存失败", tint = MaterialTheme.colorScheme.error) else if (s.demo) Text("演示", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary); Tool(Icons.Outlined.Search, "全局搜索") { globalSearch = true }; Tool(Icons.Outlined.Add, "新建记录") { if (s.view == "home") templates = true else vm.addNote() } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
@@ -110,11 +111,12 @@ import java.util.zip.ZipOutputStream
                         }
                     }
                 }
-                if (settings != null) SettingsDialog(s, vm, activity, settings!!, { settings = null }, ::exportBackup, ::exportTexts, { importFile.launch(arrayOf("text/*", "application/octet-stream", "application/json", "*/*")) })
+                if (settings != null) SettingsDialog(s, vm, activity, settings!!, { settings = null }, ::exportBackup, ::exportTexts, { importFile.launch(arrayOf("text/*", "application/octet-stream", "application/json", "*/*")) }, { settings = null; cloudSaves = true })
+                if (cloudSaves) CloudSavesDialog(vm, s, { cloudSaves = false }, { cloudSaves = false; settings = "sync" })
                 if (newBook || bookDialog != null) NotebookDialog(bookDialog, vm) { newBook = false; bookDialog = null }
                 if (templates) TemplatesDialog(vm) { templates = false }
                 if (globalSearch) GlobalSearch(s, vm) { globalSearch = false }
-                if (backup != null && s.workspace != null) PanelDialog("合并加密备份", { backup = null; backupPassword = "" }, actions = { Button(onClick = { scope.launch { restoring = true; try { vm.mergeBackup(backup!!, backupPassword); backup = null; backupPassword = "" } catch (error: Exception) { backupError = error.message ?: "恢复失败" } finally { restoring = false } } }, enabled = !restoring && backupPassword.isNotBlank()) { Text(if (restoring) "正在恢复…" else "解密并合并") } }) { Text("备份内容会合并到当前空间，冲突时保留副本。", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("备份的主密码", backupPassword, secret = true) { backupPassword = it }; if (backupError.isNotBlank()) Text(backupError, color = MaterialTheme.colorScheme.error) }
+                if (backup != null && s.workspace != null) PanelDialog("读取加密备份", { backup = null; backupPassword = "" }, actions = { Button(onClick = { scope.launch { restoring = true; try { vm.readBackup(backup!!, backupPassword); backup = null; backupPassword = "" } catch (error: Exception) { backupError = error.message ?: "恢复失败" } finally { restoring = false } } }, enabled = !restoring && backupPassword.isNotBlank()) { Text(if (restoring) "正在恢复…" else "确认读取") } }) { Text("将替换本机全部记事本和记录，不合并。", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("备份的主密码", backupPassword, secret = true) { backupPassword = it }; if (backupError.isNotBlank()) Text(backupError, color = MaterialTheme.colorScheme.error) }
             }
         }
     }
@@ -134,7 +136,7 @@ import java.util.zip.ZipOutputStream
         }
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", Icons.Outlined.Archive), Triple("trash", "回收站", Icons.Outlined.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }
-        Surface(Modifier.fillMaxWidth().padding(vertical = 15.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) { Icon(Icons.Outlined.CloudDone, null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary); Text(if (s.demo) "演示空间 · 不保存" else if (w.sync.lastSync > 0) "已同步 · ${Records.relative(w.sync.lastSync)}" else "本地私人空间", style = MaterialTheme.typography.labelSmall) }; TextButton(onClick = { if (w.sync.token.isNotBlank() && w.sync.code.isNotBlank() && !s.demo) vm.synchronize() else sync(); done() }, contentPadding = PaddingValues(0.dp)) { Text(if (s.syncing) "正在同步…" else if (w.sync.lastSync > 0) "立即同步  ↻" else "连接 GitHub  ↗", style = MaterialTheme.typography.labelSmall) } } }
+        Surface(Modifier.fillMaxWidth().padding(vertical = 15.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) { Icon(Icons.Outlined.CloudDone, null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary); Text(if (s.demo) "演示空间 · 不保存" else "本机自动保存", style = MaterialTheme.typography.labelSmall) }; TextButton(onClick = { sync(); done() }, contentPadding = PaddingValues(0.dp)) { Text("云存档", style = MaterialTheme.typography.labelSmall) } } }
         Row(verticalAlignment = Alignment.CenterVertically) { Text(if (s.demo) "Moji 的演示空间" else "我的私人空间", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall); Tool(Icons.Outlined.Settings, "偏好设置", action = settings); Tool(Icons.Outlined.Lock, "锁定空间") { vm.lock() } }
     }
 }

@@ -16,7 +16,7 @@ import java.io.File
 data class AppState(
     val workspace: Workspace? = null, val loading: Boolean = true, val exists: Boolean = false,
     val busy: Boolean = false, val demo: Boolean = false, val error: String = "", val saving: Boolean = false,
-    val saveError: Boolean = false, val syncing: Boolean = false, val view: String = "home", val selectedId: String? = null,
+    val saveError: Boolean = false, val view: String = "home", val selectedId: String? = null,
     val search: String = "", val sort: String = "updated", val update: AndroidUpdate? = null,
     val updateChecking: Boolean = false, val updateProgress: Float? = null, val downloadedApk: File? = null,
     val biometricEnabled: Boolean = false
@@ -32,8 +32,9 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     var sessionKey: VaultKey? = null; private set
     private var saveJob: Job? = null; private var backgroundLock: Job? = null
     private val saveMutex = Mutex(); private var serial = 0L; private var savedSerial = 0L
-    private var epoch = 0L; private var lastInput = now(); private var lastSync = now(); private var lastUpdateCheck = 0L
+    private var epoch = 0L; private var lastInput = now(); private var lastUpdateCheck = 0L
     private var locking = false
+    private var loadingSave = false
     val cursors = mutableMapOf<String, Pair<Int, Int>>()
     val undo = mutableMapOf<String, ArrayDeque<String>>()
     val redo = mutableMapOf<String, ArrayDeque<String>>()
@@ -42,7 +43,6 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { try { mutable.update { it.copy(exists = store.read() != null, loading = false) } } catch (_: Exception) { mutable.update { it.copy(loading = false, error = "本地数据无法读取，请从加密备份恢复") } } }
         viewModelScope.launch { while (isActive) { delay(1000); val s = mutable.value; val w = s.workspace ?: continue
             if (now() - lastInput > w.preferences.autoLockMinutes * 60_000L && !locking) lock()
-            if (w.preferences.autoSync && w.sync.token.isNotBlank() && w.sync.code.isNotBlank() && !s.demo && now() - lastSync > 300_000L) { lastSync = now(); synchronize() }
         } }
     }
     fun message(text: String) { notices.tryEmit(text) }
@@ -70,13 +70,13 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     private fun open(workspace: Workspace, key: VaultKey) {
         sessionKey?.close(); sessionKey = key; epoch++; serial = 0; savedSerial = 0
         mutable.value = AppState(workspace = workspace, loading = false, exists = true, biometricEnabled = biometric.enabled)
-        touch(); lastSync = now()
+        touch()
         pendingImport?.let { pendingImport = null; importText("接收的文字", it) }
         if (now() - lastUpdateCheck > 6 * 3_600_000) { lastUpdateCheck = now(); checkUpdate(false) }
     }
     fun mutate(change: (Workspace) -> Workspace) {
         val s = mutable.value; val w = s.workspace ?: return
-        if (locking) return
+        if (locking || loadingSave) return
         serial++; mutable.value = s.copy(workspace = change(w), saving = !s.demo, saveError = false); touch()
         saveJob?.cancel(); if (!s.demo) saveJob = viewModelScope.launch { delay(350); try { flush() } catch (error: Exception) { mutable.update { it.copy(saveError = true, saving = false) }; message("保存失败，请先导出加密备份") } }
     }
@@ -129,18 +129,39 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     fun checkpoint(id: String) { mutate { w -> w.copy(notes = w.notes.map { if (it.id == id) it.copy(history = (listOf(it.snapshot()) + it.history).take(40), revision = uid(), updatedAt = now()) else it }) }; message("当前版本已保存") }
     fun restoreVersion(id: String, h: NoteVersion) { edit(id, true) { it.copy(title = h.title, content = h.content, username = h.username, password = h.password, url = h.url, otp = h.otp, tags = h.tags) }; message("历史版本已恢复") }
     fun preferences(change: (Preferences) -> Preferences) = mutate { it.copy(preferences = change(it.preferences)) }
-    fun synchronize(config: SyncSettings? = null) = viewModelScope.launch {
-        val s = mutable.value; if (s.syncing || s.workspace == null) return@launch
-        if (s.demo) { message("创建私人空间后可连接同步"); return@launch }
-        config?.let { c -> mutate { it.copy(sync = c) } }
-        val source = mutable.value.workspace ?: return@launch; val capturedEpoch = epoch; val baseline = WorkspaceMerge.revisions(source)
-        mutable.update { it.copy(syncing = true) }; lastSync = now()
-        try { val (remote, conflicts) = GitHubSync().synchronize(source); if (epoch != capturedEpoch || mutable.value.workspace == null) return@launch
-            mutate { current -> val merged = WorkspaceMerge.merge(current, remote.payload(), baseline); current.copy(notes = merged.notes, notebooks = merged.notebooks, sync = remote.sync) }; flush(); message(if (conflicts > 0) "同步完成，保留了 $conflicts 份冲突副本" else "所有记录已同步")
-        } catch (error: Exception) { if (epoch == capturedEpoch) message(error.message ?: "同步失败，请检查网络") } finally { mutable.update { it.copy(syncing = false) } }
+    private fun cloudConfig(): SyncSettings {
+        val s = mutable.value; require(s.workspace != null && !s.demo && sessionKey != null) { "请先创建或解锁本机空间" }
+        CloudSaveService.validateConfig(s.workspace.sync); return s.workspace.sync
+    }
+    suspend fun listCloudSaves(): SaveCatalog = CloudSaveService().list(cloudConfig())
+    suspend fun writeCloudSave(catalog: SaveCatalog, name: String, overwrite: SaveEntry? = null): SaveCatalog {
+        val config = cloudConfig(); flush(); return CloudSaveService().write(config, catalog, mutable.value.workspace ?: error("空间已锁定"), name, overwrite)
+    }
+    suspend fun deleteCloudSave(catalog: SaveCatalog, entry: SaveEntry): SaveCatalog = CloudSaveService().delete(cloudConfig(), catalog, entry)
+    suspend fun readCloudSave(catalog: SaveCatalog, entry: SaveEntry) {
+        val config = cloudConfig(); val capturedEpoch = epoch; val payload = CloudSaveService().read(config, catalog, entry); replaceData(payload, capturedEpoch)
+    }
+    suspend fun replaceData(payload: SyncPayload, expectedEpoch: Long = epoch) {
+        require(mutable.value.workspace != null && sessionKey != null && !mutable.value.demo) { "请先创建或解锁本机空间" }
+        loadingSave = true
+        try {
+            saveJob?.cancelAndJoin(); flush()
+            saveMutex.withLock {
+                val state = mutable.value; val key = sessionKey ?: error("空间已锁定")
+                require(epoch == expectedEpoch) { "空间已变化，请重新读取存档" }
+                val candidate = GameSaves.apply(state.workspace ?: error("空间已锁定"), payload)
+                store.save(candidate, key); epoch++; serial++; savedSerial = serial; cursors.clear(); undo.clear(); redo.clear()
+                mutable.value = state.copy(workspace = candidate, saving = false, saveError = false, view = "home", selectedId = null, search = "")
+            }
+        } finally { loadingSave = false }
+        touch()
     }
     fun importText(name: String, text: String) { val w = mutable.value.workspace ?: run { pendingImport = text; return }; var books = w.notebooks; val book = w.liveBooks.firstOrNull { it.id == mutable.value.view && it.mode != NoteMode.Password } ?: w.liveBooks.firstOrNull { it.mode == NoteMode.Text } ?: Notebook(name = "导入文本").also { books = books + it }; val note = Note(notebookId = book.id, title = name, content = text); mutate { it.copy(notebooks = books, notes = it.notes + note) }; mutable.update { it.copy(view = book.id, selectedId = note.id) } }
-    suspend fun mergeBackup(envelope: Envelope, password: String) { val source = withContext(Dispatchers.Default) { Crypto.derive(password, envelope.salt, envelope.iterations).use { Crypto.decrypt<Workspace>(envelope, it).validate() } }; mutate { current -> val merged = WorkspaceMerge.merge(current, source.payload(), emptyMap()); current.copy(notes = merged.notes, notebooks = merged.notebooks) }; flush(); message("备份已合并") }
+    suspend fun readBackup(envelope: Envelope, password: String) {
+        val capturedEpoch = epoch
+        val source = withContext(Dispatchers.Default) { Crypto.derive(password, envelope.salt, envelope.iterations).use { Crypto.decrypt<Workspace>(envelope, it).validate() } }
+        replaceData(GameSaves.capture(source), capturedEpoch); message("备份已读取")
+    }
     suspend fun encryptedBackup(): String { val w = mutable.value.workspace ?: error("请先解锁"); val key = sessionKey ?: error("演示空间不导出加密备份"); return saveMutex.withLock { withContext(Dispatchers.Default) { json.encodeToString(Crypto.encrypt(w, key)) } } }
     suspend fun changePassword(old: String, next: String) { require(next.length >= 10) { "新主密码至少需要 10 个字符" }; flush(); val e = store.read() ?: error("本地文件不存在"); withContext(Dispatchers.Default) { Crypto.derive(old, e.salt, e.iterations).use { Crypto.decrypt<Workspace>(e, it) } }; val fresh = withContext(Dispatchers.Default) { Crypto.newKey(next) }; saveMutex.withLock { try { store.save(mutable.value.workspace ?: error("空间已锁定"), fresh); sessionKey?.close(); sessionKey = fresh; biometric.disable(); mutable.update { it.copy(biometricEnabled = false) } } catch (error: Exception) { fresh.close(); throw error } }; message("主密码已更换") }
     fun biometricChanged() { mutable.update { it.copy(biometricEnabled = biometric.enabled) } }

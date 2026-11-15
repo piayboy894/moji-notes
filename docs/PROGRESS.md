@@ -1,48 +1,35 @@
-# 当前进度与下次继续位置
+# 当前进度与验证范围
 
-## 用户最新决定
+## 本次决定
 
-- 正式 Android 签名与 APK 发布暂停，用户暂不配置 GitHub Actions Secrets。
-- 参考提供的笔记本界面重做视觉：保持简约，删除首页标语、插画、灵感卡片及多余文案。
-- 完成视觉修改后保留全部成果。
+- 用户已配置安卓发布签名 Secrets，继续生成正式 APK。
+- 云端改为全局手动存档，包含软件全部记事本和记录；本机继续自动加密保存。
+- 四个操作：新建存档、覆盖存档、读取存档、删除存档。无后台云同步、自动合并或新旧判断；单条记录和单个记事本不放同步按钮。
 
-## 已保存的实现
+## 实现
 
-- Windows：.NET 10 + WPF 原生应用；新版首页包含绿色、米色、蓝色布纹笔记本，书脊、绑带、书签、纸张边缘与轻阴影；最近记录表格与统一线性图标。
-- Android：Kotlin + Jetpack Compose 原生客户端；同样的笔记本封面风格，手机双列卡片，平板/宽窗口分栏。按实际窗口尺寸布局，支持旋转、三星分屏/弹窗及 DeX 的调整窗口规则。
-- 三种模式、密码库、提示词变量、Markdown 原生预览、标签/收藏/归档/回收站、版本、导入导出、设备验证解锁、GitHub 加密同步均已接入安卓项目。
-- Windows/Android 加密协议一致：PBKDF2-SHA256 310,000 次、AES-256-GCM、相同 JSON 字段与同步目录。
+- Windows 1.1.0：.NET 10 + WPF 原生应用、自包含 x64 / ARM64 EXE 和便携 ZIP。
+- Android 1.0.0：Kotlin + Jetpack Compose 原生应用，使用固定项目发布密钥签名。
+- 三色布纹笔记本界面、原生编辑和预览、提示词变量、密码库、TOTP、历史、归档、回收站与导入导出均保留。
+- 云存档目录与整套数据分别加密，以一次 Git 提交原子更新；保留共用数据仓库其他路径。
+- 读取整体替换项目数据，保留本机主密码、设备偏好与云连接。旧版单文件由用户明确选择操作。
 
-## 已完成的验证
+## 已验证
 
-- Windows 原生项目本地编译通过，21 项核心测试与 x64 发布版 WPF 原生界面测试通过；实际验证编辑、加密落盘、锁定/解锁、密码模式、提示词模式和深色主题。
-- Android 调试 APK 和原生仪器测试 APK 本地编译通过。
-- Android JVM 核心测试 20 项通过，包括 Windows 实际生成的中文加密数据测试向量、合并/删除冲突、SHA 并发保护、TOTP、密文备份与恢复。
-- Android API 35 模拟器的 2 项原生仪器测试通过，覆盖加密保存/解锁、手机旋转、1600×2560 与 2560×1600 平板、3440×1440 超宽比例、720×1280 窄窗口和失去焦点后保持解锁。
-- 最终 Android 工作流完整通过：调试/未签名正式构建、20 项核心测试、2 项原生仪器测试及 8 张原生截图全部保存；宽屏首页进入记事本、回到编辑器后内容保持不变。
-- Windows ARM64 已交叉编译，尚未在 ARM64 真机实测。
-- 三星真机、实际 DeX 外接显示器和真实双屏设备尚未实测，不将模拟器尺寸测试视为这些设备的实测。
+- Windows 核心测试 23 项通过，原生项目本地编译通过。
+- Android JVM 核心测试 22 项通过，原生调试 APK 与仪器测试 APK 编译通过。
+- C# 实际生成的全局存档目录与数据向量在 Kotlin 解密通过，包含中文、密码模式和历史。
+- 已在私有 `xuxian-data` 的隔离测试目录实际完成新建、读取、覆盖、刷新与删除；其他所有文件 blob SHA 保持不变，测试目录已清理。
+- 发布流水线额外运行 Windows 原生界面、Android 多尺寸/旋转/全局存档界面、正式 APK 证书、安装与覆盖安装保留数据检查；只有全部通过才发布。
 
-## 预览与构建
+## 下载与保留
 
-- [新版界面预览](INTERFACE.md)保存到源码仓库，后续不依赖 Actions 附件保留期。
-- [Windows 原生构建与测试](https://github.com/piayboy894/moji-notes/actions/runs/43587865514)已通过，包含独立 EXE、便携 ZIP 和原生截图；没有发布稳定版本。
-- [Android 最新构建与原生测试](https://github.com/piayboy894/moji-notes/actions/runs/43589264457)已通过。
-- 可下载附件：[Windows EXE / 便携 ZIP](https://github.com/piayboy894/moji-notes/actions/runs/43587865514/artifacts/14110932480)、[Android 调试 APK / 未签名正式构建](https://github.com/piayboy894/moji-notes/actions/runs/43589264457/artifacts/14111412393)。
-- Actions 附件按 GitHub 的保留期保存；源码、界面预览和进度说明作为 Git 提交保留。
+- [Windows 1.1.0](https://github.com/piayboy894/moji-notes/releases/tag/v1.1.0)
+- [Android 1.0.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v1.0.0)
+- [界面预览](INTERFACE.md) · [架构](ARCHITECTURE.md) · [Android 签名说明](../android/SIGNING.md)
 
-## 发布状态
+发布版提供完整源码、校验值与原生测试结果；截图和进度说明保存在 Git 提交中。私钥及密码不进入源码或公开附件。
 
-- GitHub 的 Windows `v1.0.1` 为此前已发布版本，新界面尚未发布到稳定 Release。
-- Android 正式 APK 尚未发布；调试构建使用调试应用 ID，与正式包分开。
-- 工作流可保存可下载构建和原生测试截图，无需提供签名 Secrets。
-- 未配置 Secrets 时，Android 正式构建产物为未签名文件，不能将它称为可安装的正式发布包。
+## 尚需真机验证
 
-## 下次继续
-
-1. 用户配置 `ANDROID_KEYSTORE_BASE64` 和 `ANDROID_KEYSTORE_PASSWORD`。说明与本机生成脚本在 [android/SIGNING.md](../android/SIGNING.md)。不要在聊天中索取或输出私钥值。
-2. 使用用户固定签名密钥构建正式 APK，再验证签名、安装与覆盖更新。
-3. 在三星手机、平板或 DeX 上补充真机验证。
-4. 用户需要时，再发布 Android 稳定版本及包含新 UI 的 Windows 版本。
-
-开发环境中曾生成临时 Android 测试签名材料，仅保存在工作区私有目录，没有提交到源码或公开附件。用户本机脚本生成的签名密钥将用于后续正式发布。
+Windows ARM64 已交叉编译，尚未在 ARM64 真机运行。安卓模拟器尺寸检查不代表三星分屏、DeX 外接显示器或真实双屏设备实测。用户可在自己的设备试用后反馈具体窗口与交互问题。

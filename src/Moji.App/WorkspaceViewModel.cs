@@ -24,7 +24,6 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     private readonly SemaphoreSlim saveGate = new(1, 1);
     private bool dirty;
     private long epoch;
-    private bool syncing;
     public WorkspaceViewModel(string? directory = null)
     { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(); } catch (Exception e) { Notice?.Invoke("保存失败，请导出备份：" + e.Message); } }; }
     public async Task CreateAsync(string password)
@@ -53,10 +52,36 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         notes = notes.Where(n => RecordTools.Matches(n, Search, books[n.NotebookId].Mode));
         return Sort switch { "name" => notes.OrderByDescending(n => n.Pinned).ThenBy(n => n.Title, StringComparer.CurrentCulture), "created" => notes.OrderByDescending(n => n.Pinned).ThenByDescending(n => n.CreatedAt), _ => notes.OrderByDescending(n => n.Pinned).ThenByDescending(n => n.UpdatedAt) };
     }
-    public async Task SyncAsync()
+    private SyncSettings CloudConfig()
     {
-        if (State == null || syncing) return; if (Demo) throw new InvalidOperationException("演示空间不连接云端"); syncing = true; var capturedEpoch = epoch; var source = State; var baseline = WorkspaceMerge.Revisions(source);
-        try { var (remote, conflicts) = await new SyncService().SynchronizeAsync(source); if (epoch != capturedEpoch || State == null) return; var merged = WorkspaceMerge.Merge(State, new(1, remote.Id, remote.Notebooks, remote.Notes), baseline); Change(v => v with { Notes = merged.Notes, Notebooks = merged.Notebooks, Sync = remote.Sync }); await SaveAsync(); Notice?.Invoke(conflicts > 0 ? $"同步完成，保留了 {conflicts} 份冲突副本" : "所有记录已同步"); } finally { syncing = false; }
+        if (State == null || Key == null || Demo) throw new InvalidOperationException("请先创建或解锁本机空间");
+        CloudSaveService.ValidateConfig(State.Sync); return State.Sync;
+    }
+    public async Task<SaveCatalog> ListCloudSavesAsync()
+    { var config = CloudConfig(); return await Task.Run(() => new CloudSaveService().ListAsync(config)); }
+    public async Task<SaveCatalog> WriteCloudSaveAsync(SaveCatalog catalog, string name, SaveEntry? overwrite = null)
+    { var config = CloudConfig(); await SaveAsync(); var state = State!; return await Task.Run(() => new CloudSaveService().WriteAsync(config, catalog, state, name, overwrite)); }
+    public async Task<SaveCatalog> DeleteCloudSaveAsync(SaveCatalog catalog, SaveEntry entry)
+    { var config = CloudConfig(); return await Task.Run(() => new CloudSaveService().DeleteAsync(config, catalog, entry)); }
+    public async Task ReadCloudSaveAsync(SaveCatalog catalog, SaveEntry entry)
+    {
+        var config = CloudConfig(); var capturedEpoch = epoch;
+        var payload = await Task.Run(() => new CloudSaveService().ReadAsync(config, catalog, entry));
+        await ReplaceDataAsync(payload, capturedEpoch);
+    }
+    public async Task ReplaceDataAsync(SyncPayload payload, long? expectedEpoch = null)
+    {
+        if (State == null || Key == null || Demo) throw new InvalidOperationException("请先创建或解锁本机空间");
+        await SaveAsync(); await saveGate.WaitAsync();
+        try
+        {
+            if (State == null || Key == null || (expectedEpoch != null && epoch != expectedEpoch)) throw new InvalidOperationException("空间已变化，请重新读取存档");
+            var candidate = GameSaves.Apply(State, payload); var key = Key;
+            await Task.Run(() => Store.SaveAsync(candidate, key));
+            State = candidate; dirty = false; epoch++; View = "home"; SelectedId = ""; Search = ""; SaveStatus = "已加密保存";
+        }
+        finally { saveGate.Release(); }
+        PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); DataChanged?.Invoke("structure");
     }
     public async Task ChangePasswordAsync(string oldPassword, string nextPassword)
     { if (Demo || State == null || Key == null) throw new InvalidOperationException("演示空间不更换密码"); if (nextPassword.Length < 10) throw new InvalidOperationException("新主密码至少需要 10 个字符"); await SaveAsync(); var envelope = await Store.ReadAsync() ?? throw new InvalidDataException("本地文件不存在"); using var oldKey = await Task.Run(() => CryptoService.Derive(oldPassword, envelope.Salt, envelope.Iterations)); _ = CryptoService.Decrypt<Workspace>(envelope, oldKey); var next = await Task.Run(() => CryptoService.NewKey(nextPassword)); await saveGate.WaitAsync(); try { await Task.Run(() => Store.SaveAsync(State, next)); Key.Dispose(); Key = next; } catch { next.Dispose(); throw; } finally { saveGate.Release(); } }

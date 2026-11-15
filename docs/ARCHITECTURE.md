@@ -1,6 +1,6 @@
 # Windows 与 Android 原生架构
 
-墨记由两个原生客户端组成，共用数据格式、加密协议和 GitHub 同步目录。Windows 10/11 使用 .NET 10 LTS、WPF 与 AvalonEdit；Android 8.0 及以上使用 Kotlin、Jetpack Compose 和 Android 系统接口。两端均离线运行，Markdown 预览使用原生视图。
+墨记由两个原生客户端组成，共用数据格式、加密协议和 GitHub 存档目录。Windows 10/11 使用 .NET 10 LTS、WPF 与 AvalonEdit；Android 8.0 及以上使用 Kotlin、Jetpack Compose 和 Android 系统接口。两端均离线运行，Markdown 预览使用原生视图。
 
 | 层次 | Windows | Android |
 | --- | --- | --- |
@@ -10,13 +10,13 @@
 | 系统集成 | 文件对话框、剪贴板、打印、锁屏事件 | SAF、BiometricPrompt、分享、WindowManager、安装器 |
 | 发布 | 自包含 x64/ARM64 EXE、ZIP | 固定发布密钥签名 APK |
 
-共用协议通过实际 Windows 密文测试向量验证，原生界面分别适配平台。维护时需要同步审查两个客户端的数据格式与合并规则；这是保留各自系统交互能力的成本。
+共用协议通过实际 Windows 密文测试向量验证，原生界面分别适配平台。维护时需要同步审查两个客户端的数据格式与存档协议；这是保留各自系统交互能力的成本。
 
 ## 分层
 
-`Moji.Core` 不依赖 WPF，处理不可变记录、版本、AES-GCM、密钥生命周期、原子存储、TOTP、搜索、模板、同步和更新。`Moji.App` 的 `WorkspaceViewModel` 管理会话、异步存储与状态；视图分为工作台、编辑器、账户字段和模态操作。AvalonEdit 提供原生文本缓冲、选区、撤销与查找；Markdig 只解析 Markdown AST，由 `MarkdownDocument` 生成原生 FlowDocument，不生成网页。
+`Moji.Core` 不依赖 WPF，处理不可变记录、版本、AES-GCM、密钥生命周期、原子存储、TOTP、搜索、模板、存档和更新。`Moji.App` 的 `WorkspaceViewModel` 管理会话、异步存储与状态；视图分为工作台、编辑器、账户字段和模态操作。AvalonEdit 提供原生文本缓冲、选区、撤销与查找；Markdig 只解析 Markdown AST，由 `MarkdownDocument` 生成原生 FlowDocument，不生成网页。
 
-Android 的 `MojiViewModel` 负责解锁会话、记录操作、防抖保存与同步；`VaultStore` 只保存密文；`GitHubSync` 负责 Contents API 的条件写入。Compose 按窗口约束选择导航、列表与编辑面板；Markwon 解析后输出原生 TextView，不执行 HTML。AndroidKeyStore 仅保存设备验证所需的包装密钥，不替代空间主密码。
+Android 的 `MojiViewModel` 负责解锁会话、记录操作、防抖保存与存档；`VaultStore` 只保存密文；`CloudSaveService` 负责 Contents API 的条件写入。Compose 按窗口约束选择导航、列表与编辑面板；Markwon 解析后输出原生 TextView，不执行 HTML。AndroidKeyStore 仅保存设备验证所需的包装密钥，不替代空间主密码。
 
 ## 状态与持久化
 
@@ -24,11 +24,15 @@ UI 修改产生新的 Workspace / Note 记录。350 ms 防抖写入经过单写�
 
 密钥只在解锁会话保留，以不可重新导出的字节数组包装；锁定时清零。设备上只存密文，演示空间不落盘。每次加密使用新的 nonce。
 
-## 多端同步
+## 全局手动云存档
 
-一个同步码对应私有数据仓库 `moji-notes/<hash>.moji`。远端只接收 notebooks、notes 和 schema，不接收 GitHub Token、同步配置与设备偏好。
+本机仍以 350 ms 防抖自动加密保存。用户在全局窗口选择新建、覆盖、读取或删除，存档包含整套 notebooks / notes（含密码、标签、收藏、归档、回收站和历史），不受当前选中的记事本或记录影响。后台没有云同步任务，也没有合并算法或方向判断。
 
-每条记录有稳定 ID、修改版本和删除标记。本地保存上次成功同步的版本基线。单端编辑更新原记录；双端编辑保留副本；删除不会被未修改的旧设备复活。记事本删除会将关联记录纳入回收站。GitHub Contents API 的内容 SHA 提供并发写入条件；不匹配时失败，避免覆盖别人刚提交的密文。同步进行期间产生的本地修改还会与返回结果合并。
+`GameSaves.Capture` 仅输出项目数据，不带本机授权和设备偏好；`GameSaves.Apply` 用存档整体替换项目数据，保留本机主密码、设备偏好和连接。读取前确认，验证完成后先原子写入密文，再切换内存状态。加密备份恢复同样采用明确的整库读取。
+
+私有数据仓库的 `moji-notes/<hash40>/index.moji` 保存加密的名称、时间、数量和 blob SHA，`<uuid>.moji` 保存加密的完整数据。使用既有仓库树作为 base_tree，一次 Git 提交更新目录和数据；引用只允许快进，并发变化时停止等待用户刷新，绝不强制覆盖、重试或合并。其他软件的目录不参与改写。旧版单文件作为虚拟的「旧版存档」由用户明确选择读取、覆盖或删除。
+
+最多 500 份具名存档。列表只在点击刷新时请求；读取按选中条目的不可变 blob SHA 取得所预览的那一份。每次新建或覆盖使用新 nonce 和派生盐，名称与目录同样加密。
 
 ## 安卓窗口与输入
 

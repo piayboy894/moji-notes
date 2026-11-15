@@ -34,15 +34,22 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MOJI_PUBLISH_REQUESTED: ${{ contains(github.event.head_commit.message, '[android-release]') }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$MOJI_KEYSTORE_PASSWORD" ]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/moji-android-release.p12"
             chmod 600 "$RUNNER_TEMP/moji-android-release.p12"
             printf 'MOJI_KEYSTORE_PATH=%s\n' "$RUNNER_TEMP/moji-android-release.p12" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/android-v* || "$MOJI_PUBLISH_REQUESTED" == "true" ]]; then
+            echo 'Both Android publisher signing Secrets must be configured.'
+            exit 1
           fi
       - run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon
         env:
           MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Verify fixed Android publisher certificate
+        if: env.MOJI_KEYSTORE_PATH != ''
+        run: bash tools/verify-publisher-apk.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -58,6 +65,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Run native phone, tablet and desktop-window UI checks
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         with:
           api-level: 35
           target: google_apis
@@ -75,6 +84,7 @@ jobs:
             android-ui-screenshots/
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
+            android/app/build/outputs/release-smoke/
       - name: Publish signed Android release
         if: (startsWith(github.ref, 'refs/tags/android-v') || contains(github.event.head_commit.message, '[android-release]')) && env.MOJI_KEYSTORE_PATH != ''
         env:
@@ -85,5 +95,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "../artifacts/android-release/Moji-Notes-Android-$version.apk"
           cp ../android-ui-screenshots/*.png ../artifacts/android-release/ 2>/dev/null || true
           git -C .. archive --format=zip --output="artifacts/android-release/Moji-Notes-Android-$version-source.zip" HEAD
-          sha256sum "../artifacts/android-release/Moji-Notes-Android-$version.apk" > ../artifacts/android-release/SHA256SUMS.txt
-          gh release create "android-v$version" ../artifacts/android-release/* --target "$GITHUB_SHA" --title "墨记 Android $version" --notes-file README.md
+          cp app/build/outputs/apk/release/SIGNING-CERTIFICATE-SHA256.txt ../artifacts/android-release/
+          cp app/build/outputs/release-smoke/report.json ../artifacts/android-release/native-release-test-report.json
+          (cd ../artifacts/android-release && sha256sum "Moji-Notes-Android-$version.apk" > SHA256SUMS.txt)
+          gh release create "android-v$version" ../artifacts/android-release/* --target "$GITHUB_SHA" --title "墨记 Android $version" --notes-file RELEASE.md

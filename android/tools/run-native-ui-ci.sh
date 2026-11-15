@@ -10,4 +10,9 @@ moji_capture_status=$?
 if [ "$moji_test_status" -ne 0 ]; then
   exit "$moji_test_status"
 fi
-exit "$moji_capture_status"
+if [ "$moji_capture_status" -ne 0 ]; then
+  exit "$moji_capture_status"
+fi
+if [ -n "${MOJI_KEYSTORE_PATH:-}" ]; then
+  python3 tools/release-install-smoke.py
+fi

@@ -19,7 +19,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer sessionTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer previewTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private long lastInput = Clock.Now;
-    private long lastAutoSync;
     private bool locking, closing, loadingEditor, focusMode;
     private ListBox? noteList;
     private readonly ObservableCollection<NoteRow> noteRows = [];
@@ -57,13 +56,12 @@ public partial class MainWindow : Window
         if (!string.IsNullOrEmpty(clipboardSecret) && Clock.Now - clipboardAt >= 30000) ClearSecretClipboard();
         var note = CurrentNote();
         if (otpText != null && note?.Otp.Length > 0) { try { otpText.Text = RecordTools.Totp(note.Otp) + $"    {30 - DateTimeOffset.Now.ToUnixTimeSeconds() % 30}s"; } catch { otpText.Text = "密钥格式不正确"; } }
-        if (VM.State.Preferences.AutoSync && !VM.Demo && !string.IsNullOrEmpty(VM.State.Sync.Token) && Clock.Now - lastAutoSync >= 300000) { lastAutoSync = Clock.Now; try { await VM.SyncAsync(); } catch (Exception e) { Toast(e.Message); } }
     }
     private void DataChanged(string kind)
     {
         if (kind == "lock") { Shell.Visibility = Visibility.Collapsed; AuthHost.Visibility = Visibility.Visible; Body.Content = null; noteRows.Clear(); textEditor = null; preview = null; titleBox = null; otpText = null; renderedId = ""; foreach (var window in OwnedWindows.Cast<Window>().ToList()) window.Close(); Ui.Theme("light"); _ = ShowAuthAsync(); return; }
         if (kind == "unlock")
-        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; lastInput = Clock.Now; lastAutoSync = Clock.Now; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked && !VM.Demo) await CheckUpdates(false); }; timer.Start(); return; }
+        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; lastInput = Clock.Now; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked && !VM.Demo) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }
         RefreshShell();
     }
@@ -97,8 +95,8 @@ public partial class MainWindow : Window
         AllNav.Content = NavContent("Document", "全部记录", VM.State.LiveNotes.Count(n => !n.Archived));
         StarNav.Content = NavContent("Star", "我的收藏", VM.State.LiveNotes.Count(n => n.Favorite && !n.Archived));
         TrashNav.Content = NavContent("Trash", "回收站", VM.State.Notes.Count(n => n.DeletedAt != null && n.PurgedAt == null));
-        CloudStatus.Text = VM.Demo ? "演示空间" : VM.State.Sync.LastSync > 0 ? "已同步 · " + RecordTools.Relative(VM.State.Sync.LastSync) : "本地私人空间";
-        SyncButton.Content = VM.State.Sync.LastSync > 0 ? "立即同步  ↻" : "连接 GitHub  ↗";
+        CloudStatus.Text = VM.Demo ? "演示空间" : "本机自动保存";
+        SyncButton.Content = "云存档  ↗";
         SaveText.Text = VM.Demo ? "演示模式" : VM.SaveStatus;
         ProfileName.Text = VM.Demo ? "演示空间" : "我的私人空间";
     }
@@ -114,7 +112,7 @@ public partial class MainWindow : Window
     private async void ClosingHandler(object? sender, CancelEventArgs e)
     { if (closing) return; e.Cancel = true; IsEnabled = false; try { await VM.SaveAsync(); closing = true; ClearSecretClipboard(); sessionTimer.Stop(); previewTimer.Stop(); InputManager.Current.PreProcessInput -= InputReceived; SystemEvents.SessionSwitch -= SessionSwitch; SystemEvents.PowerModeChanged -= PowerModeChanged; VM.Dispose(); Close(); } catch (Exception error) { IsEnabled = true; Toast("保存失败，程序已保留打开。" + error.Message); } }
     private void KeyDownHandler(object sender, KeyEventArgs e)
-    { if (!VM.IsUnlocked) return; var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control); if (ctrl && e.Key == Key.K) { e.Handled = true; SearchDialog(); } else if (ctrl && e.Key == Key.N) { e.Handled = true; AddNote(); } else if (ctrl && e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; _ = LockWorkspace(); } else if (ctrl && e.Key == Key.S) { e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } } else if (e.Key == Key.F11) { e.Handled = true; ToggleFocus(); } else if (e.Key == Key.Escape && focusMode) { ToggleFocus(); } }
+    { if (!VM.IsUnlocked) return; var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control); if (ctrl && e.Key == Key.K) { e.Handled = true; SearchDialog(); } else if (ctrl && e.Key == Key.N) { e.Handled = true; AddNote(); } else if (ctrl && e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; _ = LockWorkspace(); } else if (ctrl && e.Key == Key.S && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; ShowCloudSaves(); } else if (ctrl && e.Key == Key.S) { e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } } else if (e.Key == Key.F11) { e.Handled = true; ToggleFocus(); } else if (e.Key == Key.Escape && focusMode) { ToggleFocus(); } }
     private void HomeClick(object sender, RoutedEventArgs e) => Navigate("home");
     private void AllClick(object sender, RoutedEventArgs e) => Navigate("all");
     private void StarClick(object sender, RoutedEventArgs e) => Navigate("star");
@@ -125,7 +123,7 @@ public partial class MainWindow : Window
     private void NewNoteClick(object sender, RoutedEventArgs e) { if (VM.View == "home") TemplateDialog(); else AddNote(); }
     private void SettingsClick(object sender, RoutedEventArgs e) => SettingsDialog();
     private void LockClick(object sender, RoutedEventArgs e) => _ = LockWorkspace();
-    private async void SyncClick(object sender, RoutedEventArgs e) { if (VM.State?.Sync.Token.Length == 0 || VM.Demo) { SettingsDialog("sync"); return; } SyncButton.IsEnabled = false; try { await VM.SyncAsync(); } catch (Exception error) { Toast(error.Message); } finally { SyncButton.IsEnabled = true; } }
+    private void SyncClick(object sender, RoutedEventArgs e) => ShowCloudSaves();
     private void ImportClick(object sender, RoutedEventArgs e) => _ = ImportFiles();
     private MenuItem MenuItem(string title, Action action) { var item = new MenuItem { Header = title }; item.Click += (_, _) => action(); return item; }
     private void ToggleFocus() { focusMode = !focusMode; Shell.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 270); if (Body.Content is Grid grid && grid.ColumnDefinitions.Count > 1) grid.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 285); }
