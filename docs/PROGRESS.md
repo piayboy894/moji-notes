@@ -1,9 +1,13 @@
-# 当前进度：2.0.0 编辑器替换
+# 2.0.0 编辑器替换交付
 
-用户已确认采用软件内嵌 WebView，优先稳定和两端一致。除提示词变量外，不保留旧编辑器功能或旧排版兼容；旧存档继续读取，旧正文原样显示为普通文本。
+Windows / Android 均采用 Tiptap 3.34.0 官方 MIT Simple Editor，打包同一份离线资源。保留显式提示词变量；不保留旧编辑器排版兼容。旧存档继续读取，旧正文按普通文本原样显示。
 
-已替换为 Tiptap 3.34.0 官方 MIT Simple Editor，删除 WPF 的自制正文工具、Android 的分块编辑器和 vendored Compose Rich Editor。两端打包同一份本地资源；提示词变量是唯一新增文档节点。旧的表格和查找替换工具移除。资料与构建源码见 editor/。
+共享编辑器 33 项检查通过，覆盖桌面、手机和平板尺寸的引用、待办、变量、图片、撤销、文档切换、旧文本读取、中文组合输入和旧版 WebView 光标回退。Windows 35 项核心测试及 9 项 WPF / WebView2 原生检查通过；Android 33 项单元测试及 9 项原生检查通过，包含两种硬件键盘/软键盘状态、退格换行、引用和待办退出、窗口缩放、旋转、数据保存与重开。
 
-本地 Windows 构建成功，35 项核心测试通过；Android 单元测试及仪器测试 APK 编译成功。共享编辑器已完成桌面、手机和平板尺寸的引用退出、待办、变量、图片、样式、撤销、切换文档、旧文本载入和中文组合输入检查。最终发行还须以本次提交的 Windows 原生测试及 Android 原生/真实签名 APK 测试结果为准。
+正式签名 APK 已在全新模拟器完成安装、覆盖重装、已发布 1.0.0 的完整原始正文迁移、变量插入、取消选图、系统文件选择器插入大图片及进程重启后的数据核对。图片、变量和正文重开后的实际截图已核对。原子变量和图片不会全部出现在 Android 可编辑文字无障碍值中，因此另核对实际保存节点、图片数据和截图。
 
-发行版本计划为 Windows / Android 2.0.0；未完成原生验证前不替换公开下载。旧 1.2.1 / 1.1.1 发行及此前保留目录仍在。
+- Windows 构建与原生验证：[43710974666](https://github.com/piayboy894/moji-notes/actions/runs/43710974666)。x64 使用包内固定 WebView2 Runtime 验证；ARM64 构建完成。
+- Android 原始构建、单元与原生验证：[43713396038](https://github.com/piayboy894/moji-notes/actions/runs/43713396038)。
+- 同一 APK 的最终独立签名包验证：[43718784283](https://github.com/piayboy894/moji-notes/actions/runs/43718784283)。应用、原生测试、编辑器、资源和构建配置与原编译完全一致；仅修正验证脚本，未重新生成 APK。
+
+Android 沿用原发行证书，可覆盖安装。发布工作流发布实际验证的二进制并附校验值、源码和来源记录。Windows 发行见 [v2.0.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.0.0)，Android 见 [android-v2.0.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.0.0)。
