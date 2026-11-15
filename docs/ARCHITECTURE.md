@@ -24,7 +24,13 @@ Windows 使用本地虚拟域名映射，Android 使用 WebViewAssetLoader 的�
 
 ## 发行
 
-Windows 单文件 EXE 内含 .NET、编辑器和经过 Microsoft 签名校验的离线 WebView2 CAB；优先使用已安装的 Evergreen，缺失时解压到本地应用目录，不要求另装浏览器。Runtime 下载地址和版本在 `assets/webview-runtime.json`，可以在后续发行更新。x64 原生冒烟测试强制使用包内 Runtime，ARM64 完成构建。
+Windows 标准单文件 EXE 内含 .NET 与编辑器，使用 `EnableCompressionInSingleFile` 压缩，不启用 WPF 不支持的 trimming。优先使用系统共享 Evergreen WebView2；缺失时执行嵌入的 Microsoft 官方小型 bootstrapper，首次联网补装，失败可重试或使用完整离线包。构建时核验安装程序的 Authenticode 签名。共享 Runtime 由 Microsoft 维护安全更新，应用不删除现有 Runtime 或缓存。
+
+完整离线包继续保留已经独立验证的 .NET / 编辑器 / Fixed WebView2 CAB 全包。Runtime 地址和版本在 `assets/webview-runtime.json`。标准 x64 原生检查强制执行一次官方 bootstrapper，再验证后续编辑器实例直接复用系统 Evergreen；CI 系统本身已有 Evergreen，此检查不等同于在缺少 Runtime 的全新 Windows 上测试下载安装。ARM64 完成构建，不宣称在 ARM64 真机运行过。压缩只改变分发，首次加载需要解压，内存与磁盘使用不会按下载体积同比缩小。
+
+同版本替换先暂存并核验新资产，再保留原完整包、来源与测试报告并替换默认名称。下载校验值对应实际新字节。Git 标签不重写；新源码归档、构建提交和校验值随发行一起提供。同版本客户端不会自动收到更新提示。
+
+Android 编辑器在侧栏开始展开、或上层对话框出现时，结束原生选择 ActionMode 并向 WebView 传递失焦，收起独立弹窗中的选区手柄；不清空文档或重建编辑器。Compose 文本框也在侧栏展开时退出焦点。全局消息宿主放在导航遮罩上方；打开 Dialog 后，只在最上层 Dialog 的 Android 窗口中显示消息，避免主窗口 Snackbar 被 Dialog 的暗幕遮挡。
 
 Android 继续沿用固定发行证书，后续 APK 可覆盖升级。系统 WebView 属于 Android 系统组件。数据采用同一文档格式，通过手动全局云存档跨端交换。发布工作流只发布验证成功的原始产物，不在发布时重新构建。
 

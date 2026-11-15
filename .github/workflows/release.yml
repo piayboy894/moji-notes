@@ -23,13 +23,9 @@ jobs:
           cache-dependency-path: editor/package-lock.json
       - run: npm ci --prefix editor
       - run: npm run build --prefix editor
-      - uses: actions/cache@v4
-        with:
-          path: webview-runtime
-          key: webview-fixed-157.0.4341.60
-      - name: Bundle verified offline editor runtime
+      - name: Bundle Microsoft-signed Evergreen setup
         shell: pwsh
-        run: ./tools/prepare-webview.ps1
+        run: ./tools/prepare-webview-bootstrapper.ps1
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -43,13 +39,16 @@ jobs:
       - name: Publish standalone native Windows app
         shell: pwsh
         run: |
-          dotnet publish src/Moji.App -c Release -r win-x64 --self-contained true -p:MojiWebViewRuntimeCab="$pwd/webview-runtime/x64.cab" -o publish/win-x64
+          dotnet publish src/Moji.App -c Release -r win-x64 --self-contained true -p:MojiWebViewBootstrapper="$pwd/webview-bootstrapper/MicrosoftEdgeWebview2Setup.exe" -o publish/win-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet publish src/Moji.App -c Release -r win-arm64 --self-contained true -p:MojiWebViewRuntimeCab="$pwd/webview-runtime/arm64.cab" -o publish/win-arm64
+          dotnet publish src/Moji.App -c Release -r win-arm64 --self-contained true -p:MojiWebViewBootstrapper="$pwd/webview-bootstrapper/MicrosoftEdgeWebview2Setup.exe" -o publish/win-arm64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($arch in @('x64','arm64')) {
+            if ((Get-Item publish/win-$arch/Moji.Notes.exe).Length -gt 100MB) { throw 'Standard EXE unexpectedly exceeds 100 MiB.' }
+          }
       - name: Native WPF smoke test
         env:
-          MOJI_FORCE_FIXED_WEBVIEW: 1
+          MOJI_FORCE_WEBVIEW_BOOTSTRAP: 1
         shell: pwsh
         run: |
           $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/smoke" -Wait -PassThru

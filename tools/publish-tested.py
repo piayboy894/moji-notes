@@ -6,12 +6,25 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
 
 platform = os.environ["MOJI_PLATFORM"]
 reused = {}
 sha = os.environ["MOJI_TESTED_SHA"]
 run_id = os.environ["MOJI_RUN_ID"]
 repository = os.environ["GITHUB_REPOSITORY"]
+replace_existing = os.environ.get("MOJI_REPLACE_EXISTING") == "true"
+
+def api(endpoint, method="GET", data=None):
+    command = ["gh", "api", endpoint, "--method", method]
+    if data is not None:
+        command += ["--input", "-"]
+    result = subprocess.check_output(command, input=json.dumps(data) if data is not None else None, text=True)
+    return json.loads(result) if result.strip() else None
+
+def digest(file):
+    with file.open("rb") as stream:
+        return hashlib.file_digest(stream,"sha256").hexdigest()
 
 def source(path):
     return subprocess.check_output(["git", "show", f"{sha}:{path}"], text=True)
@@ -65,9 +78,73 @@ else:
         for item,data in clean:archive.writestr(item,data)
     tag, title, notes = f"android-v{version}", f"墨记 Android {version}", source("android/RELEASE.md")
 
-checksums = [hashlib.sha256(file.read_bytes()).hexdigest() + "  " + file.name for file in sorted(folder.iterdir()) if file.suffix in (".exe", ".apk", ".zip")]
-(folder / "SHA256SUMS.txt").write_text("\n".join(checksums) + "\n")
-(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform, **reused}, indent=2) + "\n")
+preserved = []
+release = None
+if replace_existing:
+    release = api(f"repos/{repository}/releases/tags/{tag}")
+    if release.get("immutable") or release["draft"] or release["prerelease"]:
+        raise RuntimeError("Only an existing mutable public release can be replaced")
+    assets = {asset["name"]: asset for asset in release["assets"]}
+    if platform == "windows":
+        preserve_names = {
+            f"Moji-Notes-{version}-win-{arch}.{ext}": f"Moji-Notes-{version}-win-{arch}-offline.{ext}"
+            for arch in ("x64","arm64") for ext in ("exe","zip")
+        }
+        preserve_names.update({f"Moji-Notes-{version}-source.zip": f"Moji-Notes-{version}-offline-source.zip",
+            "native-test-report.json": "native-test-report-offline.json", "BUILD-PROVENANCE.json": "BUILD-PROVENANCE-offline.json"})
+        for arch in ("x64","arm64"):
+            name=f"Moji-Notes-{version}-win-{arch}.exe"
+            old=assets.get(preserve_names[name],assets.get(name))
+            if old is None or old["size"] < 200_000_000:
+                raise RuntimeError("Expected the verified complete offline package before replacing it")
+    else:
+        preserve_names = {f"Moji-Notes-Android-{version}.{ext}": f"Moji-Notes-Android-{version}-previous.{ext}" for ext in ("apk",)}
+        preserve_names.update({f"Moji-Notes-Android-{version}-source.zip": f"Moji-Notes-Android-{version}-previous-source.zip",
+            "native-release-test-report.json": "native-release-test-report-previous.json", "native-editor-test-report.json": "native-editor-test-report-previous.json",
+            "BUILD-PROVENANCE.json": "BUILD-PROVENANCE-previous.json"})
+    for old_name, saved_name in preserve_names.items():
+        asset=assets.get(saved_name,assets.get(old_name))
+        if asset is not None:
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}",asset.get("digest") or ""):
+                raise RuntimeError("Existing asset has no verifiable GitHub digest")
+            preserved.append({"id":asset["id"],"name":saved_name,"original_name":asset["name"],"size":asset["size"],"sha256":asset["digest"][7:]})
+
+all_sums={file.name:digest(file) for file in sorted(folder.iterdir()) if file.suffix in (".exe", ".apk", ".zip")}
+all_sums.update({asset["name"]:asset["sha256"] for asset in preserved if Path(asset["name"]).suffix in (".exe",".apk",".zip")})
+(folder / "SHA256SUMS.txt").write_text("".join(f"{value}  {name}\n" for name,value in sorted(all_sums.items())))
+if platform == "windows":
+    (folder / "SHA256SUMS.json").write_text(json.dumps(all_sums,indent=2)+"\n")
+(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform, "preserved_assets":preserved, **reused}, indent=2) + "\n")
 notes_file = Path(os.environ["RUNNER_TEMP"]) / "moji-release-notes.txt"
 notes_file.write_text(notes)
-subprocess.run(["gh", "release", "create", tag, *[str(file) for file in sorted(folder.iterdir()) if file.is_file()], "--target", sha, "--title", title, "--notes-file", str(notes_file)], check=True)
+files=[file for file in sorted(folder.iterdir()) if file.is_file()]
+if not replace_existing:
+    subprocess.run(["gh", "release", "create", tag, *map(str,files), "--target", sha, "--title", title, "--notes-file", str(notes_file)], check=True)
+else:
+    # Upload and verify everything before touching any current download. Keep
+    # the original tag and the independently tested complete/previous packages.
+    with tempfile.TemporaryDirectory(prefix="moji-release-stage-") as temporary:
+        staged={file.name:Path(temporary)/f"repack-{run_id}-{file.name}" for file in files}
+        for file in files:shutil.copyfile(file,staged[file.name])
+        subprocess.run(["gh","release","upload",tag,*map(str,staged.values()),"--clobber"],check=True)
+        uploaded={asset["name"]:asset for asset in api(f"repos/{repository}/releases/{release['id']}/assets?per_page=100")}
+        for file in files:
+            asset=uploaded[staged[file.name].name]
+            if asset["size"]!=file.stat().st_size or asset["digest"]!="sha256:"+digest(file):
+                raise RuntimeError("Staged release asset does not match the tested local bytes")
+        for asset in preserved:
+            if asset["original_name"]!=asset["name"]:
+                api(f"repos/{repository}/releases/assets/{asset['id']}","PATCH",{"name":asset["name"]})
+        current={asset["name"]:asset for asset in api(f"repos/{repository}/releases/{release['id']}/assets?per_page=100")}
+        # Publish checksums last. A download spanning the brief rename window
+        # may fail validation and retry; unverified bytes are never executable.
+        for file in sorted(files,key=lambda file:file.name.startswith("SHA256SUMS")):
+            if file.name in current:api(f"repos/{repository}/releases/assets/{current[file.name]['id']}","DELETE")
+            api(f"repos/{repository}/releases/assets/{uploaded[staged[file.name].name]['id']}","PATCH",{"name":file.name})
+        subprocess.run(["gh","release","edit",tag,"--title",title,"--notes-file",str(notes_file)],check=True)
+        final={asset["name"]:asset for asset in api(f"repos/{repository}/releases/{release['id']}/assets?per_page=100")}
+        for file in files:
+            if final[file.name]["digest"]!="sha256:"+digest(file):raise RuntimeError("Final release verification failed")
+        for asset in preserved:
+            if final[asset["name"]]["digest"]!="sha256:"+asset["sha256"]:raise RuntimeError("Preserved asset changed")
+    print(f"Verified replacement of {tag}; preserved {len(preserved)} original assets. Tag commit unchanged.")

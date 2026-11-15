@@ -11,6 +11,10 @@ on:
         description: Successful build workflow run ID
         type: string
         required: true
+      replace_existing:
+        description: Replace this version's assets after staging and verification; retain previous packages
+        type: boolean
+        default: false
 permissions:
   actions: read
   contents: write
@@ -25,6 +29,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       MOJI_PLATFORM: ${{ inputs.platform }}
       MOJI_RUN_ID: ${{ inputs.run_id }}
+      MOJI_REPLACE_EXISTING: ${{ inputs.replace_existing }}
     steps:
       - uses: actions/checkout@v4
         with:

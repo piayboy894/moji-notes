@@ -72,6 +72,10 @@ try:
     adb('shell','su','2000','content','update','--uri',uri,'--bind','is_pending:i:0')
     tool('插入图片');select_picker_file('Moji-Editor-Test.png');wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
     adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart');capture('04-reopened')
+    tap(wait_node(description='偏好设置'));tap(wait_node(text='更新'));tap(wait_node(text='检查更新'))
+    wait_node(text='你已在使用最新版本',timeout=45);capture('05-update-feedback')
+    checks.append('signed APK check-update feedback is visible inside the foreground settings window')
+    tap(wait_node(description='关闭'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png')
     REPORT.write_text(json.dumps({'success':True,'framework':'Compose / Android WebView / Tiptap 3.34.0','checks':checks},indent=2))
 except Exception as error:
     REPORT.parent.mkdir(parents=True,exist_ok=True);REPORT.write_text(json.dumps({'success':False,'error':str(error),'checks':checks},indent=2));capture('failure-screen')

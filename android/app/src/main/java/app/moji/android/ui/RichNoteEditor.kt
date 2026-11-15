@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.webkit.*
 import android.view.View
+import android.view.ActionMode
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -22,6 +23,25 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import org.json.JSONObject
 import kotlinx.coroutines.*
+
+/** Chromium's selection handles are popup windows, outside Compose's z-order.
+ * Treat a covering drawer/dialog as focus loss, without changing the document
+ * or the editor's saved selection (used when inserting a prompt variable). */
+class EditorWebView(context: android.content.Context) : WebView(context) {
+    private var obscured = false
+    private var selectionMode: ActionMode? = null
+    override fun startActionMode(callback: ActionMode.Callback): ActionMode? =
+        if (obscured) null else super.startActionMode(callback).also { selectionMode = it }
+    override fun startActionMode(callback: ActionMode.Callback, type: Int): ActionMode? =
+        if (obscured) null else super.startActionMode(callback, type).also { selectionMode = it }
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) { super.onWindowFocusChanged(hasWindowFocus && !obscured) }
+    fun cover(covered: Boolean) {
+        if (obscured == covered) return
+        obscured = covered
+        if (covered) { selectionMode?.finish(); selectionMode = null; clearFocus() }
+        super.onWindowFocusChanged(hasWindowFocus() && !covered)
+    }
+}
 
 /** The Android host owns persistence and file permissions. Tiptap owns the entire document. */
 class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long,private val generation:Int) {
@@ -71,6 +91,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
 @Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier,usePrompt:()->Unit) {
     val prefs=vm.state.value.workspace!!.preferences
     val dark=MaterialTheme.colorScheme.background.red<.5f
+    val obscured=LocalEditorObscured.current
     var bridge by remember(note.id){mutableStateOf<SharedEditorBridge?>(null)}
     var web by remember(note.id){mutableStateOf<WebView?>(null)}
     var variableDialog by remember(note.id){mutableStateOf(false)}
@@ -83,7 +104,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
         if(failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
         AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
             if(BuildConfig.DEBUG)WebView.setWebContentsDebuggingEnabled(true)
-            WebView(context).apply {
+            EditorWebView(context).apply {
                 layoutParams=android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT,android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                 tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
                 setOnTouchListener { view,event->if(event.actionMasked==android.view.MotionEvent.ACTION_DOWN)view.requestFocus();false }
@@ -106,6 +127,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
                 loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")
             }
         },update={view->
+            view.cover(obscured)
             // The open editor owns its document. Never echo an autosave back into it.
             // Explicit version restores create a new editor session in EditorScreen.
             val current=bridge

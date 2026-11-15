@@ -24,6 +24,8 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -57,6 +59,15 @@ import java.util.zip.ZipOutputStream
     val keyboardFocus=remember{FocusRequester()}
     LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
+    val layers = remember { FeedbackLayers(snackbar) }
+    val density = LocalDensity.current
+    val drawerVisible by remember(density) { derivedStateOf {
+        drawer.isOpen || drawer.targetValue == DrawerValue.Open ||
+            (drawer.currentOffset.isFinite() && drawer.currentOffset > -with(density) { 280.dp.toPx() } + 1f)
+    } }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(drawerVisible) { if (drawerVisible) { focusManager.clearFocus(force = true); keyboard?.hide() } }
     fun name(uri: Uri): String = runCatching { activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } }.getOrNull() ?: "导入记录"
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
         try { val fileName = name(uri); val text = withContext(Dispatchers.IO) { activity.contentResolver.openInputStream(uri)?.use { readLimited(it, 30_000_000).toString(Charsets.UTF_8) } ?: error("无法读取文件") }
@@ -77,6 +88,7 @@ import java.util.zip.ZipOutputStream
     val dark = s.workspace?.preferences?.theme == "dark" || ((s.workspace?.preferences?.theme ?: "system") == "system" && isSystemInDarkTheme())
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences?.theme ?: "system") {
+        CompositionLocalProvider(LocalFeedbackLayers provides layers, LocalEditorObscured provides (drawerVisible || layers.dialogOpen)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize().focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
                 if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || backup != null) false
@@ -88,7 +100,7 @@ import java.util.zip.ZipOutputStream
                     else -> false
                 }
             }.focusable()) {
-                if (s.workspace == null) { StartupScreen(s, vm); Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snackbar) }; return@BoxWithConstraints }
+                if (s.workspace == null) { StartupScreen(s, vm); ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter)); return@BoxWithConstraints }
                 val wide = maxWidth >= 1100.dp && maxHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && maxHeight >= 480.dp
                 val navigationWidth = if (wide) 224.dp else if (rail) 72.dp else 0.dp
                 val twoPane = maxWidth - navigationWidth >= 680.dp && maxHeight >= 480.dp
@@ -100,7 +112,6 @@ import java.util.zip.ZipOutputStream
                         else if (rail) { CompactNavigation(s, vm, { settings = "general" }, { scope.launch { drawer.open() } }); VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         Scaffold(Modifier.weight(1f).fillMaxHeight(), containerColor = MaterialTheme.colorScheme.background,
                             topBar = { if (twoPane || active == null || s.view == "home") TopAppBar(title = { Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines = 1) }, navigationIcon = { if (!wide && !rail) Tool(MojiIcons.Menu, "打开导航") { scope.launch { drawer.open() } } }, actions = { if (s.saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp) else if (s.saveError) Icon(MojiIcons.ErrorOutline, "保存失败", tint = MaterialTheme.colorScheme.error) ; Tool(MojiIcons.Search, "全局搜索") { globalSearch = true }; if (twoPane && canCreateRecord) Tool(MojiIcons.Add, "新建记录") { addRecord() } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
-                            snackbarHost = { SnackbarHost(snackbar) },
                             floatingActionButton = { if (!twoPane && active == null && canCreateRecord) FloatingActionButton(onClick = { addRecord() }, containerColor = MaterialTheme.colorScheme.primary) { Icon(MojiIcons.Add, "新建记录", tint = MaterialTheme.colorScheme.onPrimary) } }
                         ) { padding ->
                             Box(Modifier.padding(padding).fillMaxSize()) {
@@ -120,6 +131,7 @@ import java.util.zip.ZipOutputStream
                         }
                     }
                 }
+                ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter))
                 exportTarget?.let { note -> PanelDialog("导出记录",{exportTarget=null}) {
                     TextButton(onClick={exportTarget=null;val text=visibleText(activity,note);createDocument(Records.safeName(note.title)+".txt","text/plain"){it.write(text.toByteArray(Charsets.UTF_8))}}){Text("普通文本 (.txt)")}
                     TextButton(onClick={exportTarget=null;val text="<!doctype html><meta charset=\"utf-8\">"+EditorContent.html(PromptVariables.fill(note,note.variables.associate{it.id to it.name}));createDocument(Records.safeName(note.title)+".html","text/html"){it.write(text.toByteArray(Charsets.UTF_8))}}){Text("HTML (.html)")}
@@ -135,6 +147,7 @@ import java.util.zip.ZipOutputStream
                 if (plainBackup != null) Confirm("读取这份存档？","将替换本机全部记事本和记录。",{plainBackup=null}) { val payload=plainBackup!!;scope.launch{try{vm.replaceData(payload)}catch(error:Exception){vm.message(UserMessages.forError(error,"读取失败"))}} }
                 if (backup != null && s.workspace != null) PanelDialog("读取旧版备份", { backup = null; backupPassword = "" }, actions = { Button(onClick = { scope.launch { restoring = true; try { vm.readBackup(backup!!, backupPassword); backup = null; backupPassword = "" } catch (error: Exception) { backupError = UserMessages.forError(error,"恢复失败") } finally { restoring = false } } }, enabled = !restoring && backupPassword.isNotBlank()) { Text(if (restoring) "正在恢复…" else "确认读取") } }) { Text("将替换本机全部记事本和记录，不合并。", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("旧备份密码", backupPassword, secret = true) { backupPassword = it }; if (backupError.isNotBlank()) Text(backupError, color = MaterialTheme.colorScheme.error) }
             }
+        }
         }
     }
 }

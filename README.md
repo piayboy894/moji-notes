@@ -4,7 +4,7 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.0.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.0.0)：x64 / ARM64 的独立 EXE 与便携 ZIP。
+- [Windows 2.0.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.0.0)：x64 / ARM64 的独立 EXE 与便携 ZIP；另保留文件名含 `offline` 的完整离线包。
 - [Android 2.0.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.0.0)：固定发行密钥签名的 APK。
 
 ## 编辑器
@@ -42,6 +42,10 @@ cd android
 ./gradlew :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Windows 完整离线发行包另运行 `tools/prepare-webview.ps1` 获取并核验 Microsoft 签名的固定 WebView2 Runtime，发布时传入 `-p:MojiWebViewRuntimeCab=绝对路径`。使用系统 Evergreen Runtime 时会由系统维护更新，未安装时使用包内离线组件。Android 的 WebView 由系统提供。
+Windows 标准包内含 .NET，启用官方单文件压缩，不裁剪 WPF 或编辑器功能。使用系统共享的 Evergreen WebView2；缺失时运行包内约 2 MB 的 Microsoft 签名安装引导程序，首次需要联网，安装后可离线使用。源码构建标准包先运行 `tools/prepare-webview-bootstrapper.ps1`，发布时传入 `-p:MojiWebViewBootstrapper=安装引导程序绝对路径`。
+
+完整离线包在没有 WebView2、没有网络的电脑上也可使用。自行构建时运行 `tools/prepare-webview.ps1` 获取并核验 Microsoft 签名的固定 Runtime，发布时传入 `-p:MojiWebViewRuntimeCab=CAB绝对路径`。Android 的 WebView 由系统提供。
+
+2.0.0 同版本重新打包不会触发已安装 2.0.0 的更新通知。关闭软件，重新下载并覆盖 EXE / 安装 APK；本机数据与云存档格式不变。发行附带的源码 ZIP 和 `BUILD-PROVENANCE.json` 对应重新打包来源；原 Git 标签不移动。
 
 发布工作流分别验证 Windows 内嵌编辑器、Android 手机/平板窗口、真实签名 APK 的输入、变量、图片选择与重开。完整设计和边界见 [架构说明](docs/ARCHITECTURE.md)，开源来源见 [editor/UPSTREAM.md](editor/UPSTREAM.md)。

@@ -13,10 +13,16 @@ internal static class NativeSmoke
     public static async Task Run(string[] args)
     {
         var index=Array.IndexOf(args,"--output");var output=index>=0?Path.GetFullPath(args[index+1]):Path.Combine(Path.GetTempPath(),"moji-shared-editor-test");Directory.CreateDirectory(output);var checks=new List<string>();
+        var startup=System.Diagnostics.Stopwatch.StartNew();double editorReadyMilliseconds=0;
         try {
             using var vm=new WorkspaceViewModel(Path.Combine(output,"test-data"));var window=new MainWindow(vm,true);Application.Current.MainWindow=window;window.Width=1200;window.Height=850;window.Show();
             if(!await vm.OpenAsync()||vm.State!.Notebooks.Count!=0)throw new Exception("Fresh workspace is not empty");await Render();Capture(window,Path.Combine(output,"01-workspace.png"));checks.Add("empty workspace; only notebooks can own new records");
             var book=new Notebook{Name="编辑测试",Mode=NoteMode.Prompt,Color="#75876D"};vm.Change(w=>w with{Notebooks=[book]},"edit");window.Navigate(book.Id);await Render();window.AddNote();var editor=await window.ReadyEditor();
+            editorReadyMilliseconds=startup.Elapsed.TotalMilliseconds;
+            if(Environment.GetEnvironmentVariable("MOJI_FORCE_WEBVIEW_BOOTSTRAP")=="1"){
+                if(!EditorFiles.HasBootstrapper||EditorFiles.HasFixedRuntime||EditorFiles.BootstrapperInvocations!=1)throw new Exception("Light package must execute the embedded bootstrapper once without a fixed runtime");
+                checks.Add("Microsoft-signed setup executes; standard package embeds no fixed WebView2 runtime");
+            }
             await Script(editor,"window.MojiEditor.editor.commands.insertContent('Hello 世界')");await Render();var id=vm.SelectedId;
             if(!EditorContent.IsDocument(vm.State!.Notes.First(n=>n.Id==id).Content)||!EditorContent.Plain(vm.State.Notes.First(n=>n.Id==id).Content).Contains("Hello 世界"))throw new Exception("WebView bridge did not save the actual editor document");
             checks.Add("bundled Tiptap editor loads inside WPF and saves through the native bridge");
@@ -35,7 +41,8 @@ internal static class NativeSmoke
             vm.Change(w=>w with{Preferences=w.Preferences with{Theme="dark"}},"edit");window.Navigate(book.Id,id);editor=await window.ReadyEditor();await Render();await using(var stream=File.Create(Path.Combine(output,"05-dark.png")))await editor.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream);
             var saves=window.BuildCloudSavesWindow();saves.Show();await Render();foreach(var label in new[]{"新建存档","覆盖存档","读取存档","删除存档"})if(!HasButton(saves,label))throw new Exception("Missing global cloud action");Capture(saves,Path.Combine(output,"06-global-saves.png"));saves.Close();checks.Add("four global manual cloud-save actions remain separate from the editor");
             Application.Current.ShutdownMode=ShutdownMode.OnExplicitShutdown;await editor.Flush();await vm.SaveAsync();window.Close();await Render();checks.Add("closing waits for the shared editor bridge and local save");
-            await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / WebView2 / Tiptap 3.34.0 official Simple Editor",embeddedBrowser=true,checks}));Application.Current.Shutdown(0);
+            if(Environment.GetEnvironmentVariable("MOJI_FORCE_WEBVIEW_BOOTSTRAP")=="1"&&EditorFiles.BootstrapperInvocations!=1)throw new Exception("Reopening editors must reuse the shared Evergreen runtime");
+            await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / WebView2 / Tiptap 3.34.0 official Simple Editor",embeddedBrowser=true,editorReadyMilliseconds,bootstrapperInvocations=EditorFiles.BootstrapperInvocations,hasFixedRuntime=EditorFiles.HasFixedRuntime,sharedRuntime=CoreWebView2Environment.GetAvailableBrowserVersionString(),checks}));Application.Current.Shutdown(0);
         } catch(Exception e){await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=false,error=e.ToString(),checks}));Application.Current.Shutdown(1);}
     }
     private static async Task Script(SharedEditorView editor,string code){await editor.Browser.CoreWebView2.ExecuteScriptAsync("(()=>{"+code+"})()");await Render();}

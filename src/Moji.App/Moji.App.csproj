@@ -3,10 +3,12 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>Moji.Notes</AssemblyName><RootNamespace>Moji.App</RootNamespace><Version>2.0.0</Version><ApplicationIcon>../../assets/icon.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile><SelfContained>true</SelfContained><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract><PublishTrimmed>false</PublishTrimmed>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages><RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../Moji.Core/Moji.Core.csproj"/><PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35"/></ItemGroup>
   <ItemGroup><Resource Include="../../assets/icon.png" Link="Assets/icon.png"/></ItemGroup>
   <ItemGroup><Content Include="../../assets/icons/LICENSE" Link="LICENSE-LUCIDE.txt" CopyToOutputDirectory="PreserveNewest"/></ItemGroup>
   <ItemGroup><EmbeddedResource Include="../../assets/editor/*" LogicalName="Moji.Editor.%(Filename)%(Extension)"/><EmbeddedResource Include="$(MojiWebViewRuntimeCab)" LogicalName="Moji.WebViewRuntime.cab" Condition="Exists('$(MojiWebViewRuntimeCab)')"/></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="$(MojiWebViewBootstrapper)" LogicalName="Moji.WebViewBootstrapper.exe" Condition="Exists('$(MojiWebViewBootstrapper)')"/></ItemGroup>
 </Project>

@@ -203,4 +203,32 @@ class AdaptiveUiTest {
         assertEquals(before+1,compose.activity.vm.state.value.workspace!!.notes.size)
         assertEquals(book.id,compose.activity.vm.selectedNote()!!.notebookId)
     }
+    @Test fun drawerDismissesEditorHandlesAndFeedbackUsesTheForegroundWindow() {
+        try {
+            ready(); compose.activityRule.scenario.onActivity { a -> a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first { it.mode==NoteMode.Text }.id); a.vm.addNote() }
+            webReady(); js("window.MojiEditor.editor.commands.insertContent('Selection remains editable after navigation')")
+            tapWeb(".tiptap")
+            js("window.MojiEditor.editor.chain().focus().setTextSelection({from:1,to:10}).run()")
+            val body=jsText()
+            screenshot("14-editor-selection")
+            compose.onNodeWithTag("adaptive-layout").performTouchInput {
+                swipe(start=androidx.compose.ui.geometry.Offset(1f,height*.55f),end=androidx.compose.ui.geometry.Offset(width*.85f,height*.55f),durationMillis=650)
+            }
+            compose.onNodeWithContentDescription("偏好设置").assertIsDisplayed()
+            compose.waitUntil(5000) { !webView().hasFocus() }
+            compose.activityRule.scenario.onActivity { it.vm.message("侧栏消息可见") }
+            compose.onNodeWithText("侧栏消息可见").assertIsDisplayed()
+            screenshot("15-drawer-feedback-no-handles")
+            compose.onNodeWithContentDescription("偏好设置").performClick()
+            compose.onNodeWithText("更新",substring=false).performClick()
+            compose.activityRule.scenario.onActivity { it.vm.message("你已在使用最新版本") }
+            compose.waitUntil(8000) { compose.onAllNodesWithText("你已在使用最新版本").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasText("你已在使用最新版本") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+            screenshot("16-update-feedback-above-dialog")
+            compose.onNodeWithContentDescription("关闭").performClick()
+            webReady(); assertEquals(body,jsText())
+            tapWeb(".tiptap"); js("window.MojiEditor.editor.commands.insertContent(' Still editable')")
+            compose.waitUntil(5000) { jsText().contains("Still editable") }
+        } catch(t:Throwable) { runCatching { screenshot("failure-overlay-layers") }; throw t }
+    }
 }
