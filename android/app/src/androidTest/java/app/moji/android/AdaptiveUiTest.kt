@@ -45,6 +45,7 @@ class AdaptiveUiTest {
     }
     @Test fun newRecordRequiresExplicitNotebookAndCloudSavesRemainGlobal() {
         ready(); compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
+        compose.onNodeWithTag("add-notebook-card").performScrollTo().performClick();compose.onNodeWithText("新建记事本").assertIsDisplayed();compose.onNodeWithContentDescription("关闭").performClick()
         val before=compose.activity.vm.state.value.workspace!!.notes.size
         compose.onAllNodesWithContentDescription("新建记录").onFirst().performClick(); compose.onNodeWithText("选择记事本").assertIsDisplayed()
         assertEquals(before,compose.activity.vm.state.value.workspace!!.notes.size)
@@ -109,7 +110,7 @@ class AdaptiveUiTest {
         compose.onNodeWithText("保存").performClick()
         assertEquals("Ctrl+Shift+N",compose.activity.vm.state.value.workspace!!.preferences.shortcuts["new"])
         compose.onNodeWithContentDescription("关闭").performClick()
-        compose.onNodeWithTag("adaptive-layout").performKeyInput { keyDown(Key.CtrlLeft); keyDown(Key.ShiftLeft); pressKey(Key.N); keyUp(Key.ShiftLeft); keyUp(Key.CtrlLeft) }
+        compose.waitForIdle();compose.onNodeWithTag("adaptive-layout").performKeyInput { keyDown(Key.CtrlLeft); keyDown(Key.ShiftLeft); pressKey(Key.N); keyUp(Key.ShiftLeft); keyUp(Key.CtrlLeft) }
         compose.onNodeWithText("选择记事本").assertIsDisplayed()
     }
 }

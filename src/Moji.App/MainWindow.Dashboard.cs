@@ -10,25 +10,28 @@ public partial class MainWindow
 {
     private void RenderDashboard()
     {
-        textEditor = null; otpText = null;
+        textEditor = null;
         var state = VM.State!;
         var content = new StackPanel { Margin = new Thickness(45, 43, 45, 38) };
         var title = new DockPanel { Margin = new Thickness(0, 0, 0, 30) };
-        var create = Ui.Button("+  新建记事本", () => NotebookDialog()); create.Padding = new Thickness(17, 10, 17, 10); create.FontSize = 13; DockPanel.SetDock(create, Dock.Right); title.Children.Add(create);
         title.Children.Add(Ui.Text($"我的记事本   {state.LiveBooks.Count()}", 27, null, true)); content.Children.Add(title);
-        var cards = new UniformGrid { Columns = 3, Margin = new Thickness(-13, 0, -13, 0) };
+        var cards = new WrapPanel { Margin = new Thickness(-10,0,-10,0) };
         foreach (var book in state.LiveBooks)
         {
-            var face = new Grid { Width = 300, Height = 342, Margin = new Thickness(0, 0, 0, 14) };
-            face.Children.Add(new NotebookCover { Mode = book.Mode, Dark = state.Preferences.Theme == "dark", IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
-            var contents = new StackPanel { Margin = new Thickness(43, 45, 61, 42), IsHitTestVisible = false };
-            contents.Children.Add(new NativeIcon { Kind = NativeIcon.ForMode(book.Mode), Width = 33, Height = 33, Foreground = Ui.Brush(book.Mode == NoteMode.Prompt ? "#8C7857" : book.Mode == NoteMode.Password ? "#5D7380" : "#53664A"), HorizontalAlignment = HorizontalAlignment.Left });
-            var name = Ui.Text(book.Name, 28, "#283025", true); name.Margin = new Thickness(0, 35, 0, 11); name.MaxHeight = 77; name.TextTrimming = TextTrimming.CharacterEllipsis; contents.Children.Add(name);
-            contents.Children.Add(Ui.Text($"{state.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived):D2} 条记录", 14, "#53604C"));
-            contents.Children.Add(new NativeIcon { Kind = "Arrow", Width = 23, Height = 23, Foreground = Ui.Brush("#57654F"), Margin = new Thickness(0, 23, 0, 0), HorizontalAlignment = HorizontalAlignment.Left }); face.Children.Add(contents);
-            var button = Ui.Button("", () => Navigate(book.Id)); button.Background = Brushes.Transparent; button.BorderThickness = new Thickness(0); button.Padding = new Thickness(0); button.Margin = new Thickness(13, 0, 13, 11); button.Content = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both };
+            var face = new Grid { Width = 210, Height = 250, Margin = new Thickness(0, 0, 0, 14) };
+            face.Children.Add(new NotebookCover { Mode = book.Mode, CoverColor=book.Color, Dark = state.Preferences.Theme == "dark", IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
+            var contents = new StackPanel { Margin = new Thickness(28,28,42,25), IsHitTestVisible = false };
+            contents.Children.Add(new NativeIcon { Kind = NativeIcon.ForNotebook(book), Width = 27, Height = 27, Foreground = Ui.Brush(NotebookAppearance.Ink(book.Color)), HorizontalAlignment = HorizontalAlignment.Left });
+            var name = Ui.Text(book.Name, 21, "#283025", true); name.Margin = new Thickness(0,22,0,8); name.MaxHeight = 60; name.TextTrimming = TextTrimming.CharacterEllipsis; contents.Children.Add(name);
+            contents.Children.Add(Ui.Text($"{state.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived):D2} 条记录", 12, "#53604C"));
+            contents.Children.Add(new NativeIcon { Kind = "Arrow", Width = 20, Height = 20, Foreground = Ui.Brush("#57654F"), Margin = new Thickness(0,14,0,0), HorizontalAlignment = HorizontalAlignment.Left }); face.Children.Add(contents);
+            var button = Ui.Button("", () => Navigate(book.Id)); button.Background = Brushes.Transparent; button.BorderThickness = new Thickness(0); button.Padding = new Thickness(0); button.Width=210;button.Height=264;button.Margin = new Thickness(10,0,10,12); button.Content = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly };
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); button.ContextMenu = menu; cards.Children.Add(button);
         }
+        var addFace=new Grid{Width=210,Height=250};
+        addFace.Children.Add(new System.Windows.Shapes.Rectangle { Stroke=Ui.Resource("Sub"),StrokeThickness=1.4,StrokeDashArray=new DoubleCollection{4,4},RadiusX=14,RadiusY=14,Margin=new Thickness(3,1,5,25) });
+        addFace.Children.Add(new NativeIcon{Kind="Plus",Width=32,Height=32,Foreground=Ui.Resource("Accent"),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,0,24)});
+        var add=Ui.Button("",()=>NotebookDialog(),tip:"新建记事本");add.Name="AddNotebookCard";add.Content=addFace;add.Width=210;add.Height=264;add.Padding=new Thickness(0);add.Margin=new Thickness(10,0,10,12);add.Background=Brushes.Transparent;add.BorderThickness=new Thickness(0);System.Windows.Automation.AutomationProperties.SetName(add,"新建记事本");cards.Children.Add(add);
         content.Children.Add(cards);
         content.Children.Add(new Separator { Margin = new Thickness(0, 33, 0, 28) });
         var recentHeading = new DockPanel { Margin = new Thickness(0, 0, 0, 19) };

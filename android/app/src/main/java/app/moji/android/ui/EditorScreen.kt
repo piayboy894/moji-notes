@@ -30,7 +30,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.moji.android.*
 import app.moji.android.data.*
 import app.moji.android.security.Crypto
-import app.moji.android.security.Totp
 import io.noties.markwon.*
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
@@ -95,15 +94,11 @@ import kotlinx.coroutines.delay
     }
 }
 @Composable private fun CredentialEditor(vm: MojiViewModel, note: Note, activity: MainActivity, editing: Boolean, modifier: Modifier = Modifier) {
-    var generator by remember { mutableStateOf(false) }; var otp by remember(note.id) { mutableStateOf("") }; var remaining by remember { mutableIntStateOf(30) }
-    LaunchedEffect(note.otp) { while (true) { remaining = 30 - ((now() / 1000) % 30).toInt(); otp = if (note.otp.isBlank()) "" else runCatching { Totp.code(note.otp) }.getOrDefault("密钥格式不正确"); delay(1000) } }
+    var generator by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(23.dp, 20.dp), verticalArrangement = Arrangement.spacedBy(19.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Field("账号 / 邮箱", note.username, Modifier.weight(1f).testTag("account"), readOnly = !editing) { text -> vm.edit(note.id) { it.copy(username = text) } }; Tool(MojiIcons.ContentCopy, "复制账号") { activity.copy(note.username) } }
-        Row(verticalAlignment = Alignment.CenterVertically) { Field("密码", note.password, Modifier.weight(1f).testTag("credential-password"), secret = true, readOnly = !editing) { text -> vm.edit(note.id) { it.copy(password = text) } }; Tool(MojiIcons.ContentCopy, "复制密码") { activity.copy(note.password, true) }; if (editing) Tool(MojiIcons.Casino, "生成强密码") { generator = true } }
-        if (note.password.isNotBlank()) { val strength = Records.strength(note.password); LinearProgressIndicator(progress = { strength / 4f }, Modifier.fillMaxWidth(), color = if (strength < 2) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary); Text("密码强度：${listOf("较弱", "一般", "良好", "很强", "很强")[strength]}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Row(verticalAlignment = Alignment.CenterVertically) { Field("密码", note.password, Modifier.weight(1f).testTag("credential-password"), sensitive = true, readOnly = !editing) { text -> vm.edit(note.id) { it.copy(password = text) } }; Tool(MojiIcons.ContentCopy, "复制密码") { activity.copy(note.password, true) }; if (editing) Tool(MojiIcons.Casino, "生成强密码") { generator = true } }
         Row(verticalAlignment = Alignment.CenterVertically) { Field("网站", note.url, Modifier.weight(1f), readOnly = !editing) { text -> vm.edit(note.id) { it.copy(url = text) } }; Tool(MojiIcons.OpenInNew, "打开网站") { activity.openUrl(note.url) } }
-        if (editing) Field("动态验证码密钥（TOTP，可选）", note.otp, secret = true, readOnly = !editing) { text -> vm.edit(note.id) { it.copy(otp = text) } }
-        if (otp.isNotBlank()) Surface(shape = RoundedCornerShape(13.dp), color = MaterialTheme.colorScheme.surfaceVariant) { Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) { Text(otp, fontSize = 26.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f)); Text("${remaining}s", style = MaterialTheme.typography.labelSmall); Tool(MojiIcons.ContentCopy, "复制动态验证码") { if (otp.all(Char::isDigit)) activity.copy(otp, true) } } }
         Field("备注", note.content, lines = 4, readOnly = !editing) { text -> vm.edit(note.id) { it.copy(content = text) } }
     }
     if (generator) PasswordDialog(activity, { generator = false }) { password -> vm.edit(note.id) { it.copy(password = password) }; generator = false }

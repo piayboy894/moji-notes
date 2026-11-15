@@ -20,6 +20,7 @@ public sealed class NativeIcon : FrameworkElement
         dc.DrawGeometry(null, pen, Paths.GetValueOrDefault(Kind,Paths["Document"])); dc.Pop();
         dc.Pop();
     }
+    public static string ForNotebook(Notebook book)=>IconPaths.Data.ContainsKey(book.Icon)?book.Icon:ForMode(book.Mode);
     public static string ForMode(NoteMode mode) => mode switch { NoteMode.Prompt => "Prompt", NoteMode.Password => "Lock", _ => "Document" };
 }
 
@@ -27,18 +28,14 @@ public sealed class NotebookCover : FrameworkElement
 {
     public NoteMode Mode { get; set; }
     public bool Dark { get; set; }
+    public string CoverColor { get; set; } = "#75876D";
     private static Color C(string value) => (Color)ColorConverter.ConvertFromString(value);
     private static Brush Gradient(params string[] colors)
     { var brush = new LinearGradientBrush { StartPoint = new Point(0, .1), EndPoint = new Point(1, .9) }; for (var i = 0; i < colors.Length; i++) brush.GradientStops.Add(new(C(colors[i]), i / (double)(colors.Length - 1))); return brush; }
     protected override void OnRender(DrawingContext dc)
     {
         var w = ActualWidth; var h = ActualHeight; if (w < 20 || h < 20) return;
-        var (top, bottom, edge, band) = Mode switch
-        {
-            NoteMode.Prompt => ("#F2EBE1", "#E7DBC9", "#A89A7E", "#B1A181"),
-            NoteMode.Password => ("#E6EDF2", "#CBD7E1", "#82929C", "#7E98A9"),
-            _ => ("#E7ECDD", "#CCD8BA", "#7C8B69", "#80965D")
-        };
+        var chosen=NotebookAppearance.Parse(CoverColor);var top=NotebookAppearance.Mix(chosen,Colors.White,.78).ToString();var bottom=NotebookAppearance.Mix(chosen,Colors.White,.58).ToString();var edge=NotebookAppearance.Mix(chosen,Colors.Black,.15).ToString();var band=chosen.ToString();
         var pageTop = h - 31;
         dc.DrawRoundedRectangle(Ui.Brush(edge), null, new Rect(4, pageTop - 8, w - 9, 23), 13, 13);
         dc.DrawRoundedRectangle(Gradient("#F4F1E6", "#DDDACA"), new Pen(Ui.Brush(edge), .65), new Rect(8, pageTop - 6, w - 18, 17), 9, 9);

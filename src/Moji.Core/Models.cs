@@ -10,6 +10,7 @@ public record Notebook
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string Name { get; init; } = "新记事本";
     public NoteMode Mode { get; init; }
+    public string Icon { get; init; } = "";
     public string Color { get; init; } = "#73866A";
     public long CreatedAt { get; init; } = Clock.Now;
     public long UpdatedAt { get; init; } = Clock.Now;
@@ -81,7 +82,7 @@ public record Workspace
     public void Validate()
     {
         if (Schema != 1 || Notebooks == null || Notes == null || Preferences == null || Sync == null || Notebooks.Count > 5000 || Notes.Count > 100000) throw new InvalidDataException("数据格式不受支持");
-        if (Notebooks.Any(b => b == null || string.IsNullOrWhiteSpace(b.Id) || b.Name == null || !Enum.IsDefined(b.Mode) || b.Revision == null) || Notebooks.Select(b => b.Id).Distinct().Count() != Notebooks.Count) throw new InvalidDataException("记事本数据损坏");
+        if (Notebooks.Any(b => b == null || string.IsNullOrWhiteSpace(b.Id) || b.Name == null || b.Icon == null || b.Color == null || !Enum.IsDefined(b.Mode) || b.Revision == null) || Notebooks.Select(b => b.Id).Distinct().Count() != Notebooks.Count) throw new InvalidDataException("记事本数据损坏");
         if (Notes.Any(n => n == null || string.IsNullOrWhiteSpace(n.Id) || string.IsNullOrWhiteSpace(n.Revision) || !Notebooks.Any(b => b.Id == n.NotebookId) || n.Title == null || n.Content == null || n.Password == null || n.Username == null || n.Url == null || n.Otp == null || n.Variables == null || n.Variables.Any(v => v == null || !System.Text.RegularExpressions.Regex.IsMatch(v.Id, "^[a-f0-9]{32}$") || string.IsNullOrWhiteSpace(v.Name) || v.Name.Length > 40) || n.Variables.Select(v => v.Id).Distinct().Count() != n.Variables.Count || n.Tags == null || n.Tags.Any(t => t == null) || n.History == null || n.History.Any(h => h == null || h.Title == null || h.Content == null || h.Tags == null)) || Notes.Select(n => n.Id).Distinct().Count() != Notes.Count) throw new InvalidDataException("记录数据损坏");
         if (Preferences.FontSize is < 11 or > 32 || !new[] { "light", "dark", "system" }.Contains(Preferences.Theme) || Sync.Base == null) throw new InvalidDataException("设置数据损坏");
     }

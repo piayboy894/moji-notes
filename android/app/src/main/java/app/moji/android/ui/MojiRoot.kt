@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
@@ -50,20 +53,22 @@ import java.util.zip.ZipOutputStream
     var backup by remember { mutableStateOf<Envelope?>(null) }; var backupPassword by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf("") }; var restoring by remember { mutableStateOf(false) }
     var exportWriter by remember { mutableStateOf<(suspend (OutputStream) -> Unit)?>(null) }
     fun addRecord() { if (s.workspace?.liveBooks?.any { it.id == s.view } == true) vm.addNote(s.view) else chooseNotebook = true }
+    val keyboardFocus=remember{FocusRequester()}
+    LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,chooseNotebook,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!chooseNotebook&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
     fun name(uri: Uri): String = runCatching { activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } }.getOrNull() ?: "导入记录"
     val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
         try { val fileName = name(uri); val text = withContext(Dispatchers.IO) { activity.contentResolver.openInputStream(uri)?.use { readLimited(it, 30_000_000).toString(Charsets.UTF_8) } ?: error("无法读取文件") }
             if (fileName.endsWith(".moji", true) || fileName.endsWith(".mojibak", true) || fileName.endsWith(".json", true)) { if (json.parseToJsonElement(text).jsonObject["format"]?.jsonPrimitive?.content == "moji-encrypted") { backup = VaultStore.decodeEnvelope(text); backupPassword = ""; backupError = "" } else { val payload = json.decodeFromString<SyncPayload>(text); app.moji.android.sync.GameSaves.apply(Workspace(),payload); plainBackup = payload } }
             else if (s.workspace == null) vm.message("本机数据尚未打开") else vm.importText(fileName.substringBeforeLast('.', fileName),text,markdown=fileName.endsWith(".md",true)||fileName.endsWith(".markdown",true))
-        } catch (error: Exception) { vm.message(error.message ?: "导入失败") }
+        } catch (error: Exception) { vm.message(UserMessages.forError(error,"导入失败")) }
     } }
     val createFile = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result -> val writer = exportWriter; exportWriter = null; val uri = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && uri != null && writer != null) scope.launch { try { withContext(Dispatchers.IO) { activity.contentResolver.openOutputStream(uri)?.use { writer(it) } ?: error("无法写入目标文件") }; vm.message("导出完成") } catch (error: Exception) { vm.message(error.message ?: "导出失败") } }
+        if (result.resultCode == Activity.RESULT_OK && uri != null && writer != null) scope.launch { try { withContext(Dispatchers.IO) { activity.contentResolver.openOutputStream(uri)?.use { writer(it) } ?: error("无法写入目标文件") }; vm.message("导出完成") } catch (error: Exception) { vm.message(UserMessages.forError(error,"导出失败")) } }
     }
     fun createDocument(fileName: String, mime: String, writer: suspend (OutputStream) -> Unit) { exportWriter = writer; createFile.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, fileName)) }
     fun exportNote(note: Note) { exportTarget = note }
-    fun exportBackup() { scope.launch { try { val content = vm.localBackup(); createDocument("墨记-存档-${java.time.LocalDate.now()}.moji", "application/octet-stream") { it.write(content.toByteArray(Charsets.UTF_8)) } } catch (error: Exception) { vm.message(error.message ?: "备份失败") } } }
+    fun exportBackup() { scope.launch { try { val content = vm.localBackup(); createDocument("墨记-存档-${java.time.LocalDate.now()}.moji", "application/octet-stream") { it.write(content.toByteArray(Charsets.UTF_8)) } } catch (error: Exception) { vm.message(UserMessages.forError(error,"备份失败")) } } }
     fun exportTexts() { val w = s.workspace ?: return; createDocument("墨记-文本集-${java.time.LocalDate.now()}.zip", "application/zip") { stream -> ZipOutputStream(stream).use { zip -> w.liveNotes.forEach { note -> val b = w.notebooks.first { it.id == note.notebookId }; if (b.mode != NoteMode.Password) { zip.putNextEntry(ZipEntry("${Records.safeName(b.name)}/${Records.safeName(note.title)}-${note.id.take(6)}.md")); zip.write("# ${RichMarkdown.escape(note.title)}\n\n${PromptVariables.fill(note,note.variables.associate{it.id to RichMarkdown.escape(it.name)})}".toByteArray(Charsets.UTF_8)); zip.closeEntry() } } } } }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(s.workspace == null) { if (s.workspace == null) { cloudSaves = false; settings = null; bookDialog = null; newBook = false; chooseNotebook = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
@@ -71,7 +76,7 @@ import java.util.zip.ZipOutputStream
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences?.theme ?: "system") {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
+            BoxWithConstraints(Modifier.fillMaxSize().focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
                 if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || chooseNotebook || globalSearch || backup != null) false
                 else when (Shortcuts.resolve(s.workspace!!.preferences, keyChord(event))) {
                     "search" -> { globalSearch = true; true }
@@ -80,7 +85,7 @@ import java.util.zip.ZipOutputStream
                     "save" -> { vm.selectedNote()?.let { vm.checkpoint(it.id) }; true }
                     else -> false
                 }
-            }) {
+            }.focusable()) {
                 if (s.workspace == null) { StartupScreen(s, vm); Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snackbar) }; return@BoxWithConstraints }
                 val wide = maxWidth >= 1100.dp && maxHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && maxHeight >= 480.dp
                 val navigationWidth = if (wide) 224.dp else if (rail) 72.dp else 0.dp
@@ -126,8 +131,8 @@ import java.util.zip.ZipOutputStream
                     s.workspace!!.liveBooks.filter{it.mode!=NoteMode.Password}.forEach{book->TextButton(onClick={vm.importText(s.textImport!!.name,s.textImport!!.text,book.id,s.textImport!!.markdown)}){Text(book.name)}}
                     if(s.workspace!!.liveBooks.none{it.mode!=NoteMode.Password})Text("请先新建文本或提示词记事本")
                 }
-                if (plainBackup != null) Confirm("读取这份存档？","将替换本机全部记事本和记录。",{plainBackup=null}) { val payload=plainBackup!!;scope.launch{try{vm.replaceData(payload)}catch(error:Exception){vm.message(error.message?:"读取失败")}} }
-                if (backup != null && s.workspace != null) PanelDialog("读取旧版备份", { backup = null; backupPassword = "" }, actions = { Button(onClick = { scope.launch { restoring = true; try { vm.readBackup(backup!!, backupPassword); backup = null; backupPassword = "" } catch (error: Exception) { backupError = error.message ?: "恢复失败" } finally { restoring = false } } }, enabled = !restoring && backupPassword.isNotBlank()) { Text(if (restoring) "正在恢复…" else "确认读取") } }) { Text("将替换本机全部记事本和记录，不合并。", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("旧备份密码", backupPassword, secret = true) { backupPassword = it }; if (backupError.isNotBlank()) Text(backupError, color = MaterialTheme.colorScheme.error) }
+                if (plainBackup != null) Confirm("读取这份存档？","将替换本机全部记事本和记录。",{plainBackup=null}) { val payload=plainBackup!!;scope.launch{try{vm.replaceData(payload)}catch(error:Exception){vm.message(UserMessages.forError(error,"读取失败"))}} }
+                if (backup != null && s.workspace != null) PanelDialog("读取旧版备份", { backup = null; backupPassword = "" }, actions = { Button(onClick = { scope.launch { restoring = true; try { vm.readBackup(backup!!, backupPassword); backup = null; backupPassword = "" } catch (error: Exception) { backupError = UserMessages.forError(error,"恢复失败") } finally { restoring = false } } }, enabled = !restoring && backupPassword.isNotBlank()) { Text(if (restoring) "正在恢复…" else "确认读取") } }) { Text("将替换本机全部记事本和记录，不合并。", color = MaterialTheme.colorScheme.onSurfaceVariant); Field("旧备份密码", backupPassword, secret = true) { backupPassword = it }; if (backupError.isNotBlank()) Text(backupError, color = MaterialTheme.colorScheme.error) }
             }
         }
     }
@@ -140,7 +145,7 @@ import java.util.zip.ZipOutputStream
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             listOf(Triple("home", "工作台", MojiIcons.Dashboard), Triple("all", "全部记录", MojiIcons.Description), Triple("star", "我的收藏", MojiIcons.StarOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.bodyMedium) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(19.dp)) }, modifier = Modifier.padding(vertical = 2.dp)) }
             Row(Modifier.padding(start = 14.dp, top = 20.dp), verticalAlignment = Alignment.CenterVertically) { Text("我的记事本", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Tool(MojiIcons.Add, "新建记事本", action = newBook) }
-            w.liveBooks.forEach { book -> NavigationDrawerItem(label = { Text(book.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1) }, selected = s.view == book.id, onClick = { vm.navigate(book.id); done() }, icon = { Icon(modeIcon(book.mode), null, Modifier.size(19.dp), tint = color(book.color)) }, badge = { Text("${w.liveNotes.count { it.notebookId == book.id && !it.archived }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }, modifier = Modifier.padding(vertical = 2.dp)) }
+            w.liveBooks.forEach { book -> NavigationDrawerItem(label = { Text(book.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1) }, selected = s.view == book.id, onClick = { vm.navigate(book.id); done() }, icon = { Icon(notebookIcon(book), null, Modifier.size(19.dp), tint = color(book.color)) }, badge = { Text("${w.liveNotes.count { it.notebookId == book.id && !it.archived }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }, modifier = Modifier.padding(vertical = 2.dp)) }
         }
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }
@@ -152,7 +157,7 @@ import java.util.zip.ZipOutputStream
     NavigationRail(containerColor = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxHeight().width(72.dp).verticalScroll(rememberScrollState()), header = { Tool(MojiIcons.Menu, "打开导航", action = menu) }) {
         NavigationRailItem(s.view == "home", { vm.navigate("home") }, icon = { Icon(MojiIcons.Dashboard, "工作台") })
         NavigationRailItem(s.view == "all", { vm.navigate("all") }, icon = { Icon(MojiIcons.Description, "全部记录") })
-        s.workspace?.liveBooks?.take(8)?.forEach { book -> NavigationRailItem(s.view == book.id, { vm.navigate(book.id) }, icon = { Icon(modeIcon(book.mode), book.name) }) }
+        s.workspace?.liveBooks?.take(8)?.forEach { book -> NavigationRailItem(s.view == book.id, { vm.navigate(book.id) }, icon = { Icon(notebookIcon(book), book.name) }) }
         Spacer(Modifier.height(20.dp)); Tool(MojiIcons.Settings, "偏好设置", action = settings)
     }
 }

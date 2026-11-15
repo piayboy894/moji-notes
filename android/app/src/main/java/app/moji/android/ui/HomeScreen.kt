@@ -27,14 +27,15 @@ import app.moji.android.data.*
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 600.dp
         val padding = if (compact) 22.dp else 38.dp
-        LazyVerticalGrid(modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().align(Alignment.TopCenter), columns = GridCells.Fixed(if (compact) 2 else 3), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        LazyVerticalGrid(modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().align(Alignment.TopCenter), columns = if(compact)GridCells.Fixed(2) else GridCells.Adaptive(180.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("我的记事本  ${w.liveBooks.size}", fontSize = if (compact) 24.sp else 30.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).testTag("home-title"))
-                    OutlinedButton(onClick = newBook, shape = RoundedCornerShape(11.dp), contentPadding = PaddingValues(11.dp, 8.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Icon(MojiIcons.Add, "新建记事本", Modifier.size(17.dp)); if (!compact) { Spacer(Modifier.width(6.dp)); Text("新建记事本") } }
+
                 }
             }
             items(w.liveBooks, key = { it.id }) { book -> NotebookCard(book, w.liveNotes.count { it.notebookId == book.id && !it.archived }, { vm.navigate(book.id) }, { editBook(book) }) }
+            item(key="add-notebook"){AddNotebookCard(newBook)}
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.padding(top = 14.dp)) {
                     HorizontalDivider(Modifier.padding(bottom = 23.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -47,8 +48,8 @@ import app.moji.android.data.*
             items(w.liveNotes.filter { !it.archived }.sortedByDescending { it.updatedAt }.take(6), key = { "recent-${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { note ->
                 val book = w.notebooks.first { it.id == note.notebookId }
                 Surface(onClick = { vm.navigate(book.id); vm.select(note.id) }, color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                    Surface(shape = RoundedCornerShape(10.dp), color = modeColor(book.mode).copy(alpha = .08f)) { Icon(modeIcon(book.mode), null, Modifier.padding(10.dp).size(19.dp), tint = modeColor(book.mode)) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text(note.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge); Text(book.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Surface(shape = RoundedCornerShape(10.dp), color = modeColor(book.mode).copy(alpha = .08f)) { Icon(notebookIcon(book), null, Modifier.padding(10.dp).size(19.dp), tint = modeColor(book.mode)) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text(note.title,fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge); Text(book.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     if (note.favorite) Icon(MojiIcons.Star, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.secondary)
                     Text(Records.relative(note.updatedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } }
@@ -83,7 +84,7 @@ import app.moji.android.data.*
                     Row(Modifier.padding(15.dp, 17.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (selected.isNotEmpty()) Checkbox(note.id in selected, { selected = if (note.id in selected) selected - note.id else selected + note.id }, Modifier.padding(end = 6.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) { Text(note.title.ifBlank { "未命名记录" }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium); if (note.pinned) Icon(MojiIcons.PushPin, null, Modifier.size(13.dp)); if (note.favorite) Icon(MojiIcons.Star, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.secondary) }
+                            Row(verticalAlignment = Alignment.CenterVertically) { Text(note.title.ifBlank { "未命名记录" }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); if (note.pinned) Icon(MojiIcons.PushPin, null, Modifier.size(13.dp)); if (note.favorite) Icon(MojiIcons.Star, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.secondary) }
                             Text(if (mode == NoteMode.Password) note.username else Records.plain(PromptVariables.display(note)).take(100), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Row { Text(Records.relative(note.updatedAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }

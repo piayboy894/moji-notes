@@ -102,6 +102,7 @@
     "Title": "heading-2",
     "Undo": "undo-2",
     "Visibility": "eye",
-    "VisibilityOff": "eye-off"
+    "VisibilityOff": "eye-off",
+    "Notebook": "notebook"
   }
 }

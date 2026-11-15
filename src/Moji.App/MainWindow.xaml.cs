@@ -17,14 +17,13 @@ public partial class MainWindow : Window
     public WorkspaceViewModel VM { get; }
     private readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(4) };
     private readonly DispatcherTimer sessionTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private bool closing, loadingEditor, focusMode;
+    private bool closing, closePending, loadingEditor, focusMode;
     private ListBox? noteList;
     private readonly ObservableCollection<NoteRow> noteRows = [];
     private ContentControl? editorHost;
     private RichTextBox? textEditor;
     private TextBox? titleBox;
     private TextBlock? editorStatus;
-    private TextBlock? otpText;
     private string renderedId = "";
     private string editingCredentialId = "";
     private string clipboardSecret = "";
@@ -39,17 +38,18 @@ public partial class MainWindow : Window
         toastTimer.Tick += (_, _) => { ToastBorder.Visibility = Visibility.Collapsed; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
+        Closed += (_,_) => { ClearSecretClipboard(); sessionTimer.Stop(); toastTimer.Stop(); VM.Dispose(); };
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
     private void SessionTick()
     {
         if (!VM.IsUnlocked) return;
         if (!string.IsNullOrEmpty(clipboardSecret) && Clock.Now - clipboardAt >= 30000) ClearSecretClipboard();
-        var note = CurrentNote();
-        if (otpText != null && note?.Otp.Length > 0) { try { otpText.Text = RecordTools.Totp(note.Otp) + $"    {30 - DateTimeOffset.Now.ToUnixTimeSeconds() % 30}s"; } catch { otpText.Text = "密钥格式不正确"; } }
+
     }
     private void DataChanged(string kind)
     {
+        if(kind is "open" or "replace"){richUndo.Clear();richRedo.Clear();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }
@@ -64,7 +64,7 @@ public partial class MainWindow : Window
         {
             var button = Ui.Button("", () => Navigate(book.Id)); button.Style = (Style)FindResource("NavButton");
             var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
-            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForMode(book.Mode), Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
+            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); button.ContextMenu = menu;
             button.AllowDrop = true; button.DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; BooksPanel.Children.Add(button);
         }
@@ -93,8 +93,23 @@ public partial class MainWindow : Window
     public void Copy(string value, bool secret = false)
     { try { Clipboard.SetText(value); if (secret) { clipboardSecret = value; clipboardAt = Clock.Now; } Toast(secret ? "已复制，30 秒后清除剪贴板" : "已复制"); } catch { Toast("复制失败，剪贴板正被其他应用使用"); } }
     private void ClearSecretClipboard() { try { if (Clipboard.ContainsText() && Clipboard.GetText() == clipboardSecret) Clipboard.Clear(); } catch { } clipboardSecret = ""; }
-    private async void ClosingHandler(object? sender, CancelEventArgs e)
-    { if (closing) return; e.Cancel = true; IsEnabled = false; try { await VM.SaveAsync(); closing = true; ClearSecretClipboard(); sessionTimer.Stop(); VM.Dispose(); Close(); } catch (Exception error) { IsEnabled = true; Toast("保存失败，程序已保留打开。" + error.Message); } }
+    private void ClosingHandler(object? sender, CancelEventArgs e)
+    {
+        if(closing)return;e.Cancel=true;if(closePending)return;closePending=true;IsEnabled=false;
+        // Even a completed SaveAsync must resume after WPF has left its Closing callback.
+        Dispatcher.BeginInvoke(new Action(async()=>{
+            try{await VM.SaveAsync();closing=true;closePending=false;Close();}
+            catch(Exception){closing=false;closePending=false;IsEnabled=true;ShowSaveFailure();}
+        }),DispatcherPriority.Background);
+    }
+    private void ShowSaveFailure()
+    {
+        var panel=Ui.Stack(Ui.Text("内容仍在当前窗口中。请重试保存，或先导出一份存档。",13));panel.Margin=new Thickness(24);Window? dialog=null;
+        var status=Ui.Text("",12);panel.Children.Add(Ui.Spaced(status,new Thickness(0,14,0,14)));
+        var retry=Ui.Button("重试保存",async()=>{try{await VM.SaveAsync();dialog!.Close();Close();}catch(Exception){status.Text="暂时无法保存，请导出存档到其他位置。";}},true);
+        panel.Children.Add(Ui.Row(Ui.Button("继续编辑",()=>dialog!.Close()),Ui.Button("导出存档",()=>_ = ExportBackup()),retry));
+        dialog=Ui.Dialog(this,"暂时无法保存",panel,560);dialog.ShowDialog();
+    }
     private void KeyDownHandler(object sender, KeyEventArgs e)
     {
         if (!VM.IsUnlocked || e.IsRepeat) return;

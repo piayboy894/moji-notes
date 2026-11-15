@@ -23,7 +23,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     private bool dirty;
     private long epoch;
     public WorkspaceViewModel(string? directory = null)
-    { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(); } catch (Exception e) { Notice?.Invoke("保存失败，请导出备份：" + e.Message); } }; }
+    { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(); } catch (Exception) { Notice?.Invoke("暂时无法保存，可重试或导出存档。"); } }; }
     public async Task<bool> OpenAsync()
     {
         var state = await Store.ReadAsync();
@@ -88,7 +88,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
             State = candidate; dirty = false; epoch++; View = "home"; SelectedId = ""; Search = ""; SaveStatus = "已保存";
         }
         finally { saveGate.Release(); }
-        PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); DataChanged?.Invoke("structure");
+        PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); DataChanged?.Invoke("replace");
     }
     public void Checkpoint(string id) => Change(v => v with { Notes = v.Notes.Select(n => n.Id == id ? n with { History = new[] { n.Snapshot() }.Concat(n.History).Take(40).ToList(), UpdatedAt = Clock.Now, Revision = Clock.Id } : n).ToList() }, "edit");
     public void Dispose() { saveTimer.Stop(); State = null; }

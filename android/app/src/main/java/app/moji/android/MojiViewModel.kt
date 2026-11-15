@@ -45,10 +45,10 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         mutable.update { it.copy(loading = true, error = "") }
         try {
             val stored = store.read()
-            if (stored == null && store.legacyFile.exists()) { mutable.update { it.copy(loading = false, exists = true, needsMigration = true) }; return@launch }
+            if (stored == null && store.hasLegacy) { mutable.update { it.copy(loading = false, exists = true, needsMigration = true) }; return@launch }
             val workspace = stored ?: Seed.create().also { store.save(it) }
             open(workspace); if (store.recoveredBackup) message("已恢复上一份本地备份")
-        } catch (error: Exception) { mutable.update { it.copy(loading = false, error = error.message ?: "本地数据无法读取") } }
+        } catch (error: Exception) { mutable.update { it.copy(loading = false, error = UserMessages.forError(error,"本地数据无法读取")) } }
     }
     fun migrate(password: String) = viewModelScope.launch {
         if (mutable.value.busy) return@launch
@@ -57,7 +57,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
             val envelope = store.readLegacy()
             val workspace = withContext(Dispatchers.Default) { Crypto.derive(password, envelope.salt, envelope.iterations).use { Crypto.decrypt<Workspace>(envelope, it).validate() } }
             store.save(workspace); open(workspace)
-        } catch (error: Exception) { mutable.update { it.copy(busy = false, error = error.message ?: "迁移失败") } }
+        } catch (error: Exception) { mutable.update { it.copy(busy = false, error = UserMessages.forError(error,"迁移失败")) } }
     }
     private fun open(workspace: Workspace) {
         epoch++; serial = 0; savedSerial = 0
@@ -105,7 +105,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         mutate { it.copy(notes = listOf(note) + it.notes) }
         mutable.update { it.copy(view = note.notebookId, selectedId = note.id, editingCredentialId = if (w.liveBooks.first { b -> b.id == notebookId }.mode == NoteMode.Password) note.id else null, search = "") }
     }
-    fun saveBook(existing: Notebook?, name: String, mode: NoteMode, color: String) { if (name.isBlank()) return; if (existing == null) { val b = Notebook(name = name.trim(), mode = mode, color = color); mutate { it.copy(notebooks = it.notebooks + b) }; navigate(b.id) } else mutate { it.copy(notebooks = it.notebooks.map { b -> if (b.id == existing.id) b.copy(name = name.trim(), color = color, revision = uid(), updatedAt = now()) else b }) } }
+    fun saveBook(existing: Notebook?, name: String, mode: NoteMode, color: String, icon:String="") { if (name.isBlank()) return; if (existing == null) { val b = Notebook(name = name.trim(), mode = mode, color = color, icon=icon); mutate { it.copy(notebooks = it.notebooks + b) }; navigate(b.id) } else mutate { it.copy(notebooks = it.notebooks.map { b -> if (b.id == existing.id) b.copy(name = name.trim(), color = color, icon=icon, revision = uid(), updatedAt = now()) else b }) } }
     fun deleteBook(book: Notebook) { mutate { it.copy(notebooks = it.notebooks.map { b -> if (b.id == book.id) b.copy(deletedAt = now(), updatedAt = now(), revision = uid()) else b }, notes = it.notes.map { n -> if (n.notebookId == book.id && n.deletedAt == null) n.edited(n.copy(deletedAt = now())) else n }) }; navigate("home") }
     fun trash(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = now())) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) }; message("已移到回收站") }
     fun restore(ids: Set<String>) { mutate { w -> val books = w.notes.filter { it.id in ids }.map { it.notebookId }.toSet(); w.copy(notebooks = w.notebooks.map { b -> if (b.id in books && b.deletedAt != null) b.copy(deletedAt = null, updatedAt = now(), revision = uid()) else b }, notes = w.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = null)) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) }; message("记录已恢复") }
@@ -155,6 +155,6 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
         replaceData(GameSaves.capture(source), capturedEpoch); message("备份已读取")
     }
     fun localBackup():String=json.encodeToString(GameSaves.capture(mutable.value.workspace?:error("本机数据尚未打开")))
-    fun checkUpdate(notify: Boolean = true) = viewModelScope.launch { mutable.update { it.copy(updateChecking = true) }; try { val update = updater.check(); mutable.update { it.copy(update = update) }; if (notify) message(if (update == null) "你已在使用最新版本" else "发现新版本 ${update.version}") } catch (error: Exception) { if (notify) message(error.message ?: "检查更新失败") } finally { mutable.update { it.copy(updateChecking = false) } } }
-    fun downloadUpdate() = viewModelScope.launch { val update = mutable.value.update ?: return@launch; mutable.update { it.copy(updateProgress = 0f) }; try { val file = updater.download(update) { progress -> mutable.update { it.copy(updateProgress = progress) } }; mutable.update { it.copy(downloadedApk = file) }; message("签名与 SHA-256 校验通过，可以安装") } catch (error: Exception) { message(error.message ?: "更新下载失败") } finally { mutable.update { it.copy(updateProgress = null) } } }
+    fun checkUpdate(notify: Boolean = true) = viewModelScope.launch { mutable.update { it.copy(updateChecking = true) }; try { val update = updater.check(); mutable.update { it.copy(update = update) }; if (notify) message(if (update == null) "你已在使用最新版本" else "发现新版本 ${update.version}") } catch (error: Exception) { if (notify) message(UserMessages.forError(error,"检查更新失败")) } finally { mutable.update { it.copy(updateChecking = false) } } }
+    fun downloadUpdate() = viewModelScope.launch { val update = mutable.value.update ?: return@launch; mutable.update { it.copy(updateProgress = 0f) }; try { val file = updater.download(update) { progress -> mutable.update { it.copy(updateProgress = progress) } }; mutable.update { it.copy(downloadedApk = file) }; message("签名与 SHA-256 校验通过，可以安装") } catch (error: Exception) { message(UserMessages.forError(error,"更新下载失败")) } finally { mutable.update { it.copy(updateProgress = null) } } }
 }

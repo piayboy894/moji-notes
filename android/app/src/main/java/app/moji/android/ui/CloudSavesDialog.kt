@@ -1,5 +1,7 @@
 package app.moji.android.ui
 
+import app.moji.android.data.UserMessages
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,7 +31,7 @@ import java.util.Locale
     var naming by remember { mutableStateOf(false) }; var overwrite by remember { mutableStateOf(false) }; var name by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope(); val selected = catalog?.entries?.firstOrNull { it.id == selectedId }
-    fun operate(action: suspend () -> Unit) { scope.launch { busy = true; failed = false; status = ""; try { action() } catch (cancel: CancellationException) { throw cancel } catch (error: Exception) { failed = true; status = error.message ?: "操作失败" } finally { busy = false } } }
+    fun operate(action: suspend () -> Unit) { scope.launch { busy = true; failed = false; status = ""; try { action() } catch (cancel: CancellationException) { throw cancel } catch (error: Exception) { failed = true; status = UserMessages.forError(error,"操作失败") } finally { busy = false } } }
     PanelDialog("云存档", { if (!busy) close() }, width = 820) {
         Row(Modifier.fillMaxWidth().testTag("global-saves"), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text("全部记事本", style = MaterialTheme.typography.titleMedium); Text("${workspace.liveBooks.size} 本 · ${workspace.liveNotes.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

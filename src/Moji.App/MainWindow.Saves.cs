@@ -48,7 +48,7 @@ public partial class MainWindow
         {
             busy = true; status.Text = "正在处理…"; Enable();
             try { await action(); status.Foreground = Ui.Resource("Sub"); }
-            catch (Exception error) { status.Text = error.Message; status.Foreground = Ui.Brush("#B17458"); }
+            catch (Exception error) { status.Text = UserMessages.For(error); status.Foreground = Ui.Brush("#B17458"); }
             finally { busy = false; Enable(); }
         }
         string? AskName(SaveEntry? previous)

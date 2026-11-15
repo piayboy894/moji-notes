@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
                 DataOption("本地存档", "全部记事本与记录。", MojiIcons.Shield, true, backup)
                 DataOption("Markdown 文本集", "按记事本导出 ZIP，不包含密码库。", MojiIcons.FolderZip, true, exportText)
                 DataOption("导入与恢复", "支持 Markdown、TXT 与墨记存档。", MojiIcons.FileUpload, true, import)
-                PasswordAudit(w, vm, close)
             }
             else -> {
                 SectionTitle("墨记  M O J I", "Android ${BuildConfig.VERSION_NAME}")
@@ -67,4 +66,3 @@ import kotlinx.coroutines.launch
 }
 @Composable private fun SettingRow(title: String, trailing: @Composable () -> Unit) { Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) { Text(title, Modifier.weight(1f)); trailing() } }
 @Composable private fun DataOption(title: String, hint: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean, action: () -> Unit) { OutlinedCard(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary); Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(MojiIcons.ChevronRight, null) } } }
-@Composable private fun PasswordAudit(w: Workspace, vm: MojiViewModel, close: () -> Unit) { val notes = w.liveNotes.filter { n -> w.notebooks.first { it.id == n.notebookId }.mode == NoteMode.Password && n.password.isNotBlank() }; val weak = notes.filter { Records.strength(it.password) < 2 }; val duplicates = notes.filter { n -> notes.any { it.id != n.id && it.password == n.password } }; HorizontalDivider(); Text("密码健康", style = MaterialTheme.typography.titleMedium); Text("${weak.size} 个需要加强 · ${duplicates.size} 个使用重复密码", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); (weak + duplicates).distinctBy { it.id }.forEach { note -> TextButton(onClick = { vm.navigate(note.notebookId); vm.select(note.id); close() }) { Icon(MojiIcons.Key, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)); Text(note.title) } } }

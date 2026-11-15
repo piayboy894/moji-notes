@@ -16,6 +16,7 @@ class VaultStore(private val directory: File) {
     private val mutex = Mutex()
     val file get() = File(directory, "workspace.json")
     val legacyFile get() = File(directory, "vault.moji")
+    val hasLegacy get() = legacyFile.exists() || File(legacyFile.path+".bak").exists()
     var recoveredBackup = false; private set
     suspend fun read(): Workspace? = withContext(Dispatchers.IO) {
         recoveredBackup = false
@@ -32,11 +33,12 @@ class VaultStore(private val directory: File) {
             directory.mkdirs(); val content = json.encodeToString(state); require(content.toByteArray().size < 100_000_000) { "本地数据过大，请先导出图片" }
             val tmp = File(file.path + ".tmp")
             FileOutputStream(tmp).use { out -> out.write(content.toByteArray(Charsets.UTF_8)); out.fd.sync() }
-            if (file.exists()) {
+            if (file.exists() && !recoveredBackup) {
                 val backupTmp = File(file.path + ".bak.tmp"); file.copyTo(backupTmp, overwrite = true)
                 Files.move(backupTmp.toPath(), File(file.path + ".bak").toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
             }
             Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            recoveredBackup=false
         }
     }
     companion object {

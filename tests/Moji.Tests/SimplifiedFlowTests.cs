@@ -37,3 +37,7 @@ public class ExplicitVariableTests
 }
 
 public class VisibleSearchTests { [Xunit.Fact] public void RichTextSearchUsesVisibleWords(){Xunit.Assert.Equal("Hello world left|right #literal",Moji.Core.RecordTools.Plain("**Hello** world left\\|right \\#literal"));} }
+
+public class UserMessageTests{[Xunit.Fact]public void RuntimeDetailsNeverReachUser(){var error=new InvalidOperationException("WindowInteropHelper.EnsureHandle ShowDialog Close");Xunit.Assert.Equal("操作未完成，请重试。",Moji.Core.UserMessages.For(error));Xunit.Assert.DoesNotContain("WindowInteropHelper",Moji.Core.UserMessages.For(error));}}
+
+public class NotebookStyleTests{[Xunit.Fact]public void AppearanceSurvivesWholeWorkspaceSave(){var w=Moji.Core.Seed.Create();var b=w.Notebooks[0] with{Color="#6543C2",Icon="Star"};w=w with{Notebooks=[b,..w.Notebooks.Skip(1)]};var next=Moji.Core.GameSaves.Apply(Moji.Core.Seed.Create(),Moji.Core.GameSaves.Capture(w));Xunit.Assert.Equal(b.Color,next.Notebooks[0].Color);Xunit.Assert.Equal("Star",next.Notebooks[0].Icon);Xunit.Assert.Equal(b.Mode,next.Notebooks[0].Mode);}}

@@ -39,10 +39,10 @@ internal static class NativeSmoke
             var copied=RichDocument.PlainText(savedRich);if(copied.Contains("**")||copied.Contains("moji-variable:")||!copied.Contains("受众")||!copied.Contains("{{原样保留}}"))throw new Exception("Copy full text leaked source or lost literal text");
             Capture(window,Path.Combine(output,"07-rich-tools.png"));checks.Add("table add-column, undo, redo, literal pipe round-trip and plain full-text copy work in native controls");
             var passwordBook = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Password); window.Navigate(passwordBook.Id); window.AddNote(); await Render();
-            if (vm.State.Notes.First(n=>n.Id==vm.SelectedId).NotebookId!=passwordBook.Id || Find<PasswordBox>(window)==null) throw new Exception("New password did not open in its own notebook editor");
+            if (vm.State.Notes.First(n=>n.Id==vm.SelectedId).NotebookId!=passwordBook.Id || FindNamed<TextBox>(window,"PasswordEdit")?.IsReadOnly!=false) throw new Exception("New password did not open in its own notebook editor");
             var credentialId=vm.SelectedId; vm.EditNote(credentialId,n=>n with { Username="test@example.com",Password="Test-only-2026!" }); window.Navigate(passwordBook.Id,credentialId); await Render();
             var readAccount=FindNamed<TextBox>(window,"AccountValue"); if(readAccount?.IsReadOnly!=true || FindNamed<Button>(window,"EditCredential")?.Content?.ToString()!="编辑密码")throw new Exception("Password view must be read-only with an edit action");
-            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(Find<PasswordBox>(window)==null)throw new Exception("Edit button did not enable password editor");
+            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(FindNamed<TextBox>(window,"PasswordEdit")?.IsReadOnly!=false)throw new Exception("Edit button did not enable password editor");
             FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(FindNamed<TextBox>(window,"AccountValue")?.IsReadOnly!=true)throw new Exception("Done did not return to read-only");
             await Render(); Capture(window,Path.Combine(output,"03-password.png")); checks.Add("password records open read-only; Edit password and Done change the editing state");
             window.Navigate(vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Prompt).Id); window.AddNote(); await Render(); Capture(window,Path.Combine(output,"04-prompt.png"));
@@ -62,7 +62,8 @@ internal static class NativeSmoke
             using(var oldKey=CryptoService.NewKey("Legacy-test-password"))await File.WriteAllTextAsync(Path.Combine(oldDirectory,"vault.moji"),Json.Serialize(CryptoService.Encrypt(oldState,oldKey)));
             using(var migration=new WorkspaceViewModel(oldDirectory)) { if(await migration.OpenAsync())throw new Exception("Encrypted legacy file was skipped"); await migration.MigrateAsync("Legacy-test-password"); if(!await migration.OpenAsync()||migration.State!.Id!=oldState.Id)throw new Exception("Migration did not preserve old data"); }
             checks.Add("legacy data migrates once and then reopens without password or key");
-            await vm.SaveAsync();await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / .NET 10",embeddedBrowser=false,checks}));Application.Current.Shutdown(0);
+            Application.Current.ShutdownMode=ShutdownMode.OnExplicitShutdown;await vm.SaveAsync();var didClose=false;window.Closed+=(_,_)=>didClose=true;window.Close();await Render();if(!didClose)throw new Exception("Clean close did not complete without a recursive Closing call");checks.Add("already-saved window closes without reentrant callbacks or error prompts");
+            await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=true,framework="WPF / .NET 10",embeddedBrowser=false,checks}));Application.Current.Shutdown(0);
         }
         catch(Exception error){await File.WriteAllTextAsync(Path.Combine(output,"report.json"),Json.Serialize(new{success=false,error=error.ToString(),checks}));Application.Current.Shutdown(1);}
     }

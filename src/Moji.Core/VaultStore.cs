@@ -6,7 +6,7 @@ public sealed class VaultStore(string directory)
     public string DirectoryPath { get; } = directory;
     public string VaultPath => Path.Combine(DirectoryPath, "workspace.json");
     public string LegacyPath => Path.Combine(DirectoryPath, "vault.moji");
-    public bool HasLegacy => File.Exists(LegacyPath);
+    public bool HasLegacy => File.Exists(LegacyPath) || File.Exists(LegacyPath+".bak");
     public bool RecoveredBackup { get; private set; }
     public async Task<Workspace?> ReadAsync()
     {
@@ -29,7 +29,7 @@ public sealed class VaultStore(string directory)
         {
             Directory.CreateDirectory(DirectoryPath); var temp = VaultPath + ".tmp";
             await using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 8192, FileOptions.WriteThrough)) { var bytes = Encoding.UTF8.GetBytes(Json.Serialize(workspace)); await stream.WriteAsync(bytes, cancellation); stream.Flush(true); }
-            if (File.Exists(VaultPath)) File.Replace(temp, VaultPath, VaultPath + ".bak", true); else File.Move(temp, VaultPath);
+            if (File.Exists(VaultPath)) File.Replace(temp, VaultPath, RecoveredBackup ? null : VaultPath + ".bak", true); else File.Move(temp, VaultPath); RecoveredBackup=false;
         }
         finally { gate.Release(); }
     }

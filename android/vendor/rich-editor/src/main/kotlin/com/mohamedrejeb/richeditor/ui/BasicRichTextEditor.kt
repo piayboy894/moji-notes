@@ -84,6 +84,7 @@ import kotlinx.coroutines.CoroutineScope
 @Composable
 public fun BasicRichTextEditor(
     state: RichTextState,
+    onValueChange: (RichTextState) -> Unit = {},
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
@@ -102,6 +103,7 @@ public fun BasicRichTextEditor(
 ) {
     BasicRichTextEditor(
         state = state,
+        onValueChange = onValueChange,
         modifier = modifier,
         enabled = enabled,
         readOnly = readOnly,
@@ -176,6 +178,7 @@ public fun BasicRichTextEditor(
 @Composable
 public fun BasicRichTextEditor(
     state: RichTextState,
+    onValueChange: (RichTextState) -> Unit = {},
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
@@ -237,6 +240,7 @@ public fun BasicRichTextEditor(
                 if (it.text.length > maxLength) return@BasicTextField
 
                 state.onTextFieldValueChange(it)
+                onValueChange(state)
             },
             modifier = modifier
                 .onPreviewKeyEvent { event ->

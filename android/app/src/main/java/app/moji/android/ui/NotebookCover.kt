@@ -1,5 +1,8 @@
 package app.moji.android.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -24,12 +27,9 @@ import app.moji.android.data.NoteMode
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun NotebookCard(book: Notebook, count: Int, open: () -> Unit, edit: () -> Unit) {
     val dark = MaterialTheme.colorScheme.background.luminance() < .3f
-    val palette = when (book.mode) {
-        NoteMode.Text -> listOf(Color(0xFFE7ECDD), Color(0xFFCCD8BA), Color(0xFF7C8B69), Color(0xFF80965D))
-        NoteMode.Prompt -> listOf(Color(0xFFF2EBE1), Color(0xFFE7DBC9), Color(0xFFA89A7E), Color(0xFFB1A181))
-        NoteMode.Password -> listOf(Color(0xFFE6EDF2), Color(0xFFCBD7E1), Color(0xFF82929C), Color(0xFF7E98A9))
-    }
-    BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(.87f).combinedClickable(onClick = open, onLongClick = edit).testTag("book-${book.mode.name}")) {
+    val chosen=color(book.color)
+    val palette=listOf(lerp(chosen,Color.White,.78f),lerp(chosen,Color.White,.58f),lerp(chosen,Color.Black,.15f),chosen)
+    BoxWithConstraints(Modifier.widthIn(max=210.dp).fillMaxWidth().aspectRatio(.87f).combinedClickable(onClick = open, onLongClick = edit).testTag("book-${book.mode.name}")) {
         val small = maxWidth < 220.dp
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height; val corner = w * .065f; val pageY = h - w * .09f
@@ -53,7 +53,7 @@ import app.moji.android.data.NoteMode
         }
         val ink = Color(0xFF293226)
         Column(Modifier.fillMaxSize().padding(start = maxWidth * .14f, end = maxWidth * .22f, top = maxWidth * .16f, bottom = maxWidth * .15f)) {
-            Icon(modeIcon(book.mode), null, Modifier.size(if (small) 25.dp else 34.dp), tint = when (book.mode) { NoteMode.Text -> Color(0xFF53664A); NoteMode.Prompt -> Color(0xFF8C7857); NoteMode.Password -> Color(0xFF5D7380) })
+            Icon(notebookIcon(book), null, Modifier.size(if (small) 25.dp else 34.dp), tint = lerp(chosen,Color.Black,.32f))
             Spacer(Modifier.weight(1f))
             Text(book.name, fontSize = if (small) 18.sp else 26.sp, lineHeight = if (small) 24.sp else 35.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(if (small) 5.dp else 10.dp))
@@ -61,5 +61,13 @@ import app.moji.android.data.NoteMode
             Spacer(Modifier.height(if (small) 10.dp else 24.dp))
             Icon(MojiIcons.ArrowForward, null, Modifier.size(if (small) 18.dp else 24.dp), tint = Color(0xFF57654F))
         }
+    }
+}
+
+@Composable fun AddNotebookCard(create:()->Unit){
+    val stroke=MaterialTheme.colorScheme.outline;val accent=MaterialTheme.colorScheme.primary
+    Box(Modifier.widthIn(max=210.dp).fillMaxWidth().aspectRatio(.87f).testTag("add-notebook-card").then(Modifier.clickable(onClick=create)).semantics{contentDescription="新建记事本"},contentAlignment=Alignment.Center){
+        Canvas(Modifier.fillMaxSize()){val padding=3.dp.toPx();drawRoundRect(stroke,Offset(padding,padding),Size(size.width-padding*2,size.height-size.width*.066f-padding),CornerRadius(14.dp.toPx()),style=Stroke(width=1.4.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(),6.dp.toPx()))))}
+        Icon(MojiIcons.Add,null,Modifier.padding(bottom=10.dp).size(32.dp),tint=accent)
     }
 }

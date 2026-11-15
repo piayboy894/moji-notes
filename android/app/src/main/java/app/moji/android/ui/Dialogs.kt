@@ -1,5 +1,7 @@
 package app.moji.android.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,14 +22,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun NotebookDialog(book: Notebook?, vm: MojiViewModel, close: () -> Unit) {
-    var name by remember { mutableStateOf(book?.name ?: "") }; var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }; var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }; var deleting by remember { mutableStateOf(false) }
-    PanelDialog(if (book == null) "新建记事本" else "编辑记事本", close, actions = { if (book != null) TextButton(onClick = { deleting = true }) { Text("删除", color = MaterialTheme.colorScheme.error) }; Spacer(Modifier.weight(1f)); TextButton(onClick = close) { Text("取消") }; Button(onClick = { vm.saveBook(book, name, mode, selectedColor); close() }, enabled = name.isNotBlank()) { Text(if (book == null) "创建记事本" else "保存修改") } }) {
+    var name by remember { mutableStateOf(book?.name ?: "") }; var mode by remember { mutableStateOf(book?.mode ?: NoteMode.Text) }; var selectedColor by remember { mutableStateOf(book?.color ?: "#75876D") }; var selectedIcon by remember{mutableStateOf(book?.icon?.ifBlank{"Book"}?:"Book")};var customColor by remember{mutableStateOf(false)};var deleting by remember { mutableStateOf(false) }
+    PanelDialog(if (book == null) "新建记事本" else "编辑记事本", close, actions = { if (book != null) TextButton(onClick = { deleting = true }) { Text("删除", color = MaterialTheme.colorScheme.error) }; Spacer(Modifier.weight(1f)); TextButton(onClick = close) { Text("取消") }; Button(onClick = { vm.saveBook(book, name, mode, selectedColor,selectedIcon); close() }, enabled = name.isNotBlank()) { Text(if (book == null) "创建记事本" else "保存修改") } }) {
         Field("记事本名称", name) { name = it.take(40) }
         Text("记录模式", style = MaterialTheme.typography.labelLarge)
         Column { NoteMode.entries.forEach { type -> Row(Modifier.fillMaxWidth().clickable(enabled = book == null) { mode = type }, verticalAlignment = Alignment.CenterVertically) { RadioButton(mode == type, { mode = type }, enabled = book == null); Icon(modeIcon(type), null, Modifier.size(20.dp), tint = modeColor(type)); Spacer(Modifier.width(12.dp)); Text(type.label) } } }
         Text("封面颜色", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { listOf("#75876D", "#B2946E", "#8393AC", "#A5849D", "#BA886C", "#9182A8").forEach { c -> Box(Modifier.size(32.dp).background(color(c), CircleShape).clickable { selectedColor = c }, contentAlignment = Alignment.Center) { if (selectedColor == c) Icon(MojiIcons.Check, "已选颜色", Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White) } } }
+        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("#75876D", "#B2946E", "#8393AC", "#A5849D", "#BA886C", "#9182A8").forEach { c -> Box(Modifier.size(40.dp).background(color(c), CircleShape).clickable { selectedColor = c }, contentAlignment = Alignment.Center) { if (selectedColor == c) Icon(MojiIcons.Check, "已选颜色", Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White) } } }
+        TextButton(onClick={customColor=true}){Text("自定义颜色")}
+        Text("图标",style=MaterialTheme.typography.labelLarge)
+        FlowRow { notebookIcons.forEach{(id,label)->Tool(notebookIcon(Notebook(icon=id)),label,selected=selectedIcon==id){selectedIcon=id}} }
+    }
+    if(customColor){val initial=remember{color(selectedColor)};var red by remember{mutableFloatStateOf(initial.red)};var green by remember{mutableFloatStateOf(initial.green)};var blue by remember{mutableFloatStateOf(initial.blue)}
+        PanelDialog("自定义颜色",{customColor=false},actions={Button(onClick={selectedColor="#%02X%02X%02X".format((red*255).toInt(),(green*255).toInt(),(blue*255).toInt());customColor=false}){Text("使用此颜色")}}){Box(Modifier.fillMaxWidth().height(48.dp).background(androidx.compose.ui.graphics.Color(red,green,blue),androidx.compose.foundation.shape.RoundedCornerShape(8.dp)));Text("红色");Slider(red,{red=it});Text("绿色");Slider(green,{green=it});Text("蓝色");Slider(blue,{blue=it})}
     }
     if (deleting && book != null) Confirm("删除「${book.name}」？", "其中的记录会移到回收站，之后仍可恢复。", { deleting = false }) { vm.deleteBook(book); close() }
 }
@@ -36,7 +45,7 @@ import java.util.Locale
         s.workspace?.liveBooks?.forEach { book ->
             OutlinedCard(onClick = { vm.addNote(book.id); close() }, modifier = Modifier.fillMaxWidth().testTag("choose-book-${book.id}")) {
                 Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Icon(modeIcon(book.mode), null, tint = modeColor(book.mode))
+                    Icon(notebookIcon(book), null, tint = modeColor(book.mode))
                     Column(Modifier.weight(1f)) { Text(book.name); Text(book.mode.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Icon(MojiIcons.ChevronRight, null)
                 }
