@@ -14,6 +14,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - run: |
           mkdir -p android/app/build/outputs/apk/release
           curl -fsSL https://github.com/piayboy894/moji-notes/releases/download/android-v1.1.0/Moji-Notes-Android-1.1.0.apk -o android/app/build/outputs/apk/release/app-release.apk
