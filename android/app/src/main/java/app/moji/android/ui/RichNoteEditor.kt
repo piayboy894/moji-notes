@@ -25,6 +25,9 @@ import kotlinx.coroutines.*
 
 /** The Android host owns persistence and file permissions. Tiptap owns the entire document. */
 class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long,private val generation:Int) {
+    // Flush acknowledgements must still run after the editor leaves the layout.
+    // View.post queues work until reattachment, which may never happen here.
+    private val main=android.os.Handler(android.os.Looper.getMainLooper())
     private val pending=mutableMapOf<String,CompletableDeferred<Unit>>()
     val flusher:suspend ()->Unit={flush()}
     private suspend fun flush(){if(ready&&vm.workspaceEpoch==epoch&&vm.state.value.editorGeneration==generation){val token=uid();val done=CompletableDeferred<Unit>();pending[token]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(token)})",null);withTimeout(10000){done.await()}}finally{pending.remove(token)}}}
@@ -35,7 +38,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
     var onReady:(()->Unit)?=null
     @JavascriptInterface fun postMessage(message:String) {
         if(message.length>30_000_000)return
-        web.post {
+        main.post {
             runCatching {
                 val data=json.parseToJsonElement(message).jsonObject
                 val type=data["type"]?.jsonPrimitive?.content

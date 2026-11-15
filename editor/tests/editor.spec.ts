@@ -55,8 +55,14 @@ test.describe('older Android WebView committed input',()=>{
  test.use({userAgent:'Mozilla/5.0 (Linux; Android 15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36'})
  test('committed characters advance the caret, remain literal and retain undo',async({page})=>{
   const body=page.getByRole('textbox',{name:'笔记正文'});await body.click()
-  const handled=await js(page,`Array.from('ABC123<{{原样}}').map(data=>!window.MojiEditor.editor.view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data})))`)
-  expect(handled.every(Boolean)).toBe(true);await expect(body).toHaveText('ABC123<{{原样}}');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([])
+  let expected=''
+  for(const data of 'ABC123<{{原样}}'){
+   // Reproduce WebView's actual sequence: a committed insertion followed by a
+   // stale DOM caret. The editor must receive the native mutation unchanged.
+   expect(await page.evaluate(data=>{const view=(window as any).MojiEditor.editor.view;const allowed=view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:false,inputType:'insertText',data}));const selection=window.getSelection()!;const range=selection.getRangeAt(0);let node=selection.anchorNode!;let offset=selection.anchorOffset;if(node.nodeType===Node.TEXT_NODE){(node as Text).insertData(offset,data)}else{node=document.createTextNode(data);range.insertNode(node);offset=0}selection.setPosition(node,offset);view.dom.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data}));return allowed},data)).toBe(true)
+   expected+=data;await expect.poll(()=>js(page,'window.MojiEditor.editor.getText()')).toBe(expected)
+  }
+  await expect(body).toHaveText('ABC123<{{原样}}');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([])
   await page.waitForTimeout(600);await page.keyboard.press('Backspace');await expect(body).toHaveText('ABC123<{{原样}');await page.keyboard.press('Control+z');await expect(body).toHaveText('ABC123<{{原样}}')
   expect(await js(page,"window.MojiEditor.editor.view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,isComposing:true,inputType:'insertCompositionText',data:'中'}))")).toBe(true)
  })

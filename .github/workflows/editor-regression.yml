@@ -1,9 +1,9 @@
-name: Inspect signed Android editor
+name: Inspect Android input regression
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Build workflow containing the signed APK
+        description: Build workflow containing the debuggable test APK
         type: string
         required: true
 permissions:
@@ -46,5 +46,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: signed-editor-probe
+          name: android-input-probe
           path: android/app/build/outputs/editor-probe/

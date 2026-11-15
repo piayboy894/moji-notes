@@ -26,15 +26,14 @@ for shown in ('0','1'):
             r=json.loads(ws.recv())
             if r.get('id')==serial:return r
     evaluate("window.probe=[]; ['keydown','beforeinput','input','keyup','selectionchange'].forEach(type=>document.addEventListener(type,e=>probe.push({type,key:e.key,keyCode:e.keyCode,data:e.data,cancelable:e.cancelable,inputType:e.inputType,composing:e.isComposing,sel:window.getSelection()?.anchorOffset,head:MojiEditor.editor.state.selection.head,html:MojiEditor.editor.getHTML()}),true));")
-    evaluate("(()=>{let pending;const ed=MojiEditor.editor;const Plugin=ed.state.plugins[0].constructor;const TextSelection=ed.state.selection.constructor;ed.view.setProps({handleDOMEvents:{beforeinput:(view,e)=>{pending=e.inputType==='insertText'&&e.data&&!e.isComposing&&!view.composing?{from:view.state.selection.from,to:view.state.selection.to,text:e.data}:null;return false}}});ed.registerPlugin(new Plugin({props:{handleTextInput:(view,from,to,text,deflt)=>{if(!pending||pending.from!==from||pending.to!==to||pending.text!==text)return false;pending=null;const tr=deflt();if(!tr.selection.empty||tr.selection.from!==from)return false;tr.setSelection(TextSelection.create(tr.doc,from+text.length));view.dispatch(tr);return true}}}));})()")
     tap(wait_editor());type_editor_text('ABC123');time.sleep(.5);adb('shell','input','keyevent','KEYCODE_DEL');time.sleep(.2);adb('shell','input','keyevent','KEYCODE_ENTER');time.sleep(.2);type_editor_text('Next');time.sleep(1)
-    print('DEFAULT_TRANSACTION',shown,json.dumps(evaluate('({html:MojiEditor.editor.getHTML(),probe})')))
+    actual=evaluate('MojiEditor.editor.getHTML()')['result']['result']['value'];print('EDIT',shown,actual);assert '<p>ABC12</p><p>Next</p>' in actual
     evaluate("MojiEditor.editor.chain().clearContent().focus().toggleBlockquote().run()")
     type_editor_text('Quote');adb('shell','input','keyevent','KEYCODE_ENTER');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Normal');time.sleep(1)
-    print('QUOTE',shown,json.dumps(evaluate('MojiEditor.editor.getHTML()')))
+    actual=evaluate('MojiEditor.editor.getHTML()')['result']['result']['value'];print('QUOTE',shown,actual);assert '<blockquote><p>Quote</p></blockquote><p>Normal</p>' in actual
     evaluate("MojiEditor.editor.chain().clearContent().focus().toggleTaskList().run()")
     type_editor_text('Task');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Second');adb('shell','input','keyevent','KEYCODE_ENTER');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Tail');time.sleep(1)
-    print('TASK',shown,json.dumps(evaluate('MojiEditor.editor.getHTML()')))
+    actual=evaluate('MojiEditor.editor.getHTML()')['result']['result']['value'];print('TASK',shown,actual);assert '<p>Tail</p>' in actual and actual.count('data-type="taskItem"')==2
     (folder/('events-'+shown+'.json')).write_text(json.dumps(evaluate('probe'),indent=2))
     # Compare a plain browser-managed contenteditable within the same WebView.
     evaluate("document.body.innerHTML='<div contenteditable=true id=plain style=\"min-height:300px\">plain: </div>';document.getElementById('plain').focus();getSelection().selectAllChildren(document.getElementById('plain'));getSelection().collapseToEnd()")

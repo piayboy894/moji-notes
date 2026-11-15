@@ -164,11 +164,23 @@ class AdaptiveUiTest {
         compose.waitUntil(10000){compose.activity.hasWindowFocus()}
         webReady();tapWeb(".tiptap");InstrumentationRegistry.getInstrumentation().sendStringSync(marker)
         compose.waitUntil(5000){jsText().contains(marker)}
+        val input=InstrumentationRegistry.getInstrumentation()
+        input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DEL)
+        compose.waitUntil(5000){jsText()==marker.dropLast(1)}
+        input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendStringSync("Tail")
+        compose.waitUntil(5000){js("Boolean(MojiEditor.editor.state.doc.content.content.some(n=>n.type.name==='paragraph'&&n.textContent==='Tail'))")=="true"}
+        val expected=jsText()
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
         compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)};webReady()
-        compose.waitUntil(5000){jsText().contains(marker)}
+        compose.waitUntil(5000){jsText()==expected}
+        js("MojiEditor.editor.chain().clearContent().focus().toggleBlockquote().run()");focusWeb()
+        input.sendStringSync("Quote");input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendStringSync("Normal")
+        compose.waitUntil(5000){js("Boolean(MojiEditor.editor.state.doc.content.content.some(n=>n.type.name==='paragraph'&&n.textContent==='Normal'))")=="true"}
+        js("MojiEditor.editor.chain().clearContent().focus().toggleTaskList().run()");focusWeb()
+        input.sendStringSync("Task");input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendStringSync("Second");input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);input.sendStringSync("Tail")
+        compose.waitUntil(5000){js("Boolean(MojiEditor.editor.state.doc.content.content.some(n=>n.type.name==='paragraph'&&n.textContent==='Tail'))")=="true"}
         }
         }catch(t:Throwable){runCatching{screenshot("failure-physical-keyboard")};throw t}
         finally{shell(if(original=="null")"settings delete secure show_ime_with_hard_keyboard" else "settings put secure show_ime_with_hard_keyboard $original")}
