@@ -79,6 +79,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
         if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),horizontalArrangement=Arrangement.SpaceBetween){TextButton(onClick={variableDialog=true}){Text("插入变量")};Button(onClick=usePrompt){Text("使用提示词")}}
         if(failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
         AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
+            if(BuildConfig.DEBUG)WebView.setWebContentsDebuggingEnabled(true)
             WebView(context).apply {
                 tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
                 setOnTouchListener { view,event->if(event.actionMasked==android.view.MotionEvent.ACTION_DOWN)view.requestFocus();false }
