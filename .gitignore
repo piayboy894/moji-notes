@@ -24,3 +24,5 @@ android/local.properties
 
 __pycache__/
 *.pyc
+
+*_wpftmp.csproj
