@@ -155,7 +155,10 @@ class AdaptiveUiTest {
         assertEquals("Leaf",current().icon);assertEquals("#A1C4FD",current().color);assertEquals("#C2E9FB",current().colorEnd);screenshot("13-custom-notebook-home")
     }
     @Test fun physicalKeyboardBurstPersistsEveryCharacter() {
+        val original=shell("settings get secure show_ime_with_hard_keyboard").trim()
         try {
+        for(shown in listOf("0","1")){
+        shell("settings put secure show_ime_with_hard_keyboard $shown")
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
         val marker="MOJI_SIGNED_UPGRADE_PERSISTENCE_20261115"
         compose.waitUntil(10000){compose.activity.hasWindowFocus()}
@@ -166,7 +169,9 @@ class AdaptiveUiTest {
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
         compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)};webReady()
         compose.waitUntil(5000){jsText().contains(marker)}
+        }
         }catch(t:Throwable){runCatching{screenshot("failure-physical-keyboard")};throw t}
+        finally{shell(if(original=="null")"settings delete secure show_ime_with_hard_keyboard" else "settings put secure show_ime_with_hard_keyboard $original")}
     }
     @Test fun shortcutsCanBeChangedWithoutActivatingCommandsDuringCapture() {
         ready(); compose.activityRule.scenario.onActivity{it.vm.navigate("home")}

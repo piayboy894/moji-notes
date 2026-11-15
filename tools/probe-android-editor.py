@@ -7,6 +7,7 @@ import websocket
 ui.PACKAGE=PACKAGE='app.moji.android.debug'
 folder=Path('app/build/outputs/editor-probe');folder.mkdir(parents=True,exist_ok=True)
 if adb('shell','getprop','ro.kernel.qemu').strip()!='1':raise RuntimeError('Emulator required')
+adb('shell','pm','disable-user','--user','0','com.google.android.apps.nexuslauncher')
 adb('install','-r','app/build/outputs/apk/debug/app-debug.apk')
 for shown in ('0','1'):
     adb('shell','settings','put','secure','show_ime_with_hard_keyboard',shown)

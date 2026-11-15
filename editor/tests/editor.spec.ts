@@ -50,3 +50,14 @@ test('official toolbar toggles lists, quotation, code and alignment back to ordi
 })
 
 test('canceling image selection leaves the document unchanged',async({page})=>{await page.getByRole('textbox',{name:'笔记正文'}).click();await page.keyboard.insertText('保留正文');const before=await html(page);const picking=page.waitForEvent('filechooser');await page.getByRole('button',{name:'插入图片',exact:true}).click();await (await picking).setFiles([]);expect(await html(page)).toBe(before)})
+
+test.describe('older Android WebView committed input',()=>{
+ test.use({userAgent:'Mozilla/5.0 (Linux; Android 15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36'})
+ test('committed characters advance the caret, remain literal and retain undo',async({page})=>{
+  const body=page.getByRole('textbox',{name:'笔记正文'});await body.click()
+  const handled=await js(page,`Array.from('ABC123<{{原样}}').map(data=>!window.MojiEditor.editor.view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,inputType:'insertText',data})))`)
+  expect(handled.every(Boolean)).toBe(true);await expect(body).toHaveText('ABC123<{{原样}}');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([])
+  await page.waitForTimeout(600);await page.keyboard.press('Backspace');await expect(body).toHaveText('ABC123<{{原样}');await page.keyboard.press('Control+z');await expect(body).toHaveText('ABC123<{{原样}}')
+  expect(await js(page,"window.MojiEditor.editor.view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,isComposing:true,inputType:'insertCompositionText',data:'中'}))")).toBe(true)
+ })
+})

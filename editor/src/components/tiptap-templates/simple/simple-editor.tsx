@@ -66,6 +66,7 @@ import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Components ---
 import { MojiVariable, bindEditor, reportImageError } from "@/native"
+import { handleLegacyAndroidInput } from "@/legacy-android-input"
 
 // --- Lib ---
 import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
@@ -192,6 +193,7 @@ export function SimpleEditor() {
     editable: false,
     shouldRerenderOnTransaction: false,
     editorProps: {
+      handleDOMEvents: {beforeinput: handleLegacyAndroidInput},
       attributes: {
         autocomplete: "off",
         autocorrect: "off",
