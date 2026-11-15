@@ -24,10 +24,14 @@ for shown in ('0','1'):
         while True:
             r=json.loads(ws.recv())
             if r.get('id')==serial:return r
-    evaluate("window.probe=[]; ['keydown','beforeinput','input','keyup','selectionchange'].forEach(type=>document.addEventListener(type,e=>probe.push({type,key:e.key,keyCode:e.keyCode,data:e.data,inputType:e.inputType,composing:e.isComposing,sel:window.getSelection()?.anchorOffset,head:MojiEditor.editor.state.selection.head,html:MojiEditor.editor.getHTML()}),true));")
+    evaluate("window.probe=[]; ['keydown','beforeinput','input','keyup','selectionchange'].forEach(type=>document.addEventListener(type,e=>probe.push({type,key:e.key,keyCode:e.keyCode,data:e.data,cancelable:e.cancelable,inputType:e.inputType,composing:e.isComposing,sel:window.getSelection()?.anchorOffset,head:MojiEditor.editor.state.selection.head,html:MojiEditor.editor.getHTML()}),true));")
     tap(wait_editor());type_editor_text('ABC123');time.sleep(2)
     print('IME',shown,json.dumps(evaluate('({probe,html:MojiEditor.editor.getHTML(),editable:MojiEditor.editor.isEditable,userAgent:navigator.userAgent})')))
     (folder/('events-'+shown+'.json')).write_text(json.dumps(evaluate('probe'),indent=2))
+    if shown=='0':
+        evaluate("MojiEditor.editor.commands.clearContent();MojiEditor.editor.view.setProps({handleDOMEvents:{beforeinput:(view,e)=>{if(e.inputType!=='insertText'||!e.data||e.isComposing||view.composing||!e.cancelable)return false;const {from,to}=view.state.selection;const deflt=()=>view.state.tr.insertText(e.data,from,to).scrollIntoView();if(!view.someProp('handleTextInput',f=>f(view,from,to,e.data,deflt)))view.dispatch(deflt());e.preventDefault();return true}}});MojiEditor.editor.commands.focus('end')")
+        type_editor_text('Fixed123');adb('shell','input','keyevent','KEYCODE_DEL');adb('shell','input','keyevent','KEYCODE_ENTER');type_editor_text('Next');time.sleep(1)
+        print('TRANSACTION_INPUT',json.dumps(evaluate('({html:MojiEditor.editor.getHTML(),probe})')))
     # Compare a plain browser-managed contenteditable within the same WebView.
     evaluate("document.body.innerHTML='<div contenteditable=true id=plain style=\"min-height:300px\">plain: </div>';document.getElementById('plain').focus();getSelection().selectAllChildren(document.getElementById('plain'));getSelection().collapseToEnd()")
     type_editor_text('XYZ789');time.sleep(1)
