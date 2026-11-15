@@ -11,5 +11,5 @@ object PromptVariables {
         val placeholders=used(note).associate{it.id to "MOJIVAR${it.id}MOJI"}
         return Regex("MOJIVAR([a-f0-9]{32})MOJI").replace(render(fill(note,placeholders))){values[it.groupValues[1]]?:it.value}
     }
-    fun fill(note:Note,values:Map<String,String>)=pattern.replace(note.content){m->val v=note.variables.firstOrNull{it.id==(m.groupValues[1].ifEmpty{m.groupValues[2]})};v?.let{values[it.id]}?.let{if(m.value.startsWith("<span"))org.jsoup.nodes.Entities.escape(it)else it}?:m.value}
+    fun fill(note:Note,values:Map<String,String>)=pattern.replace(note.content){m->if(m.value.contains("data-moji-field="))return@replace m.value;val v=note.variables.firstOrNull{it.id==(m.groupValues[1].ifEmpty{m.groupValues[2]})};v?.let{values[it.id]}?.let{if(m.value.startsWith("<span"))org.jsoup.nodes.Entities.escape(it)else it}?:m.value}
 }

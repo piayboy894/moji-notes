@@ -56,7 +56,7 @@ val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls
         require(schema == 1 && notebooks.size <= 5000 && notes.size <= 100000) { "数据版本或容量不受支持" }
         require(notebooks.map { it.id }.distinct().size == notebooks.size && notes.map { it.id }.distinct().size == notes.size) { "数据 ID 重复" }
         require(notebooks.all { it.id.isNotBlank() && it.revision.isNotBlank() } && notes.all { n -> notebooks.any { it.id == n.notebookId } && n.id.isNotBlank() && n.revision.isNotBlank() }) { "记录数据损坏" }
-        require(notes.all { n -> n.variables.map { it.id }.distinct().size == n.variables.size && n.variables.all { it.id.matches(Regex("[a-f0-9]{32}")) && it.name.isNotBlank() && it.name.length <= 40 } }) { "变量数据损坏" }
+        require(notes.all { n -> n.variables.map { it.id }.distinct().size == n.variables.size && n.variables.all { it.id.matches(Regex("[a-f0-9]{32}")) && it.name.isNotBlank() && it.name.length <= 2000 } }) { "变量数据损坏" }
         require(preferences.theme in listOf("light", "dark", "system") && preferences.fontSize in 11.0..32.0) { "偏好设置无效" }
         return this
     }

@@ -186,6 +186,7 @@ export function SimpleEditor() {
   const [mobileView, setMobileView] = React.useState<
     "main" | "highlighter" | "link"
   >("main")
+  React.useEffect(()=>{const reset=()=>setMobileView("main");window.addEventListener("moji-document",reset);return()=>window.removeEventListener("moji-document",reset)},[])
   const toolbarRef = React.useRef<HTMLDivElement>(null)
 
   const editor = useEditor({
@@ -228,7 +229,7 @@ export function SimpleEditor() {
         maxSize: MAX_FILE_SIZE,
         limit: 3,
         upload: handleImageUpload,
-        onError: () => reportImageError(),
+        onError: (error) => { if(error.message!=="已取消")reportImageError() },
       }),
     ],
     content: "",

@@ -1,3 +1,4 @@
+import {currentDocument} from "@/native"
 import type { Node as TiptapNode } from "@tiptap/pm/model"
 import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state"
 import type { Editor } from "@tiptap/react"
@@ -291,6 +292,7 @@ export const handleImageUpload = async (
   onProgress?: (event: { progress: number }) => void,
   abortSignal?: AbortSignal
 ): Promise<string> => {
+  const documentToken=currentDocument()
   // Validate file
   if (!file) {
     throw new Error("No file provided")
@@ -302,12 +304,12 @@ export const handleImageUpload = async (
     )
   }
 
-  if (abortSignal?.aborted) throw new Error("已取消")
+  if (abortSignal?.aborted||documentToken!==currentDocument()) throw new Error("已取消")
   const image = new Image()
   const objectUrl = URL.createObjectURL(file)
   try {
     await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error("无法读取图片"));image.src=objectUrl})
-    if (abortSignal?.aborted) throw new Error("已取消")
+    if (abortSignal?.aborted||documentToken!==currentDocument()) throw new Error("已取消")
     let ratio=Math.min(1,1800/Math.max(image.naturalWidth,image.naturalHeight))
     const canvas=document.createElement("canvas")
     while(true){

@@ -27,12 +27,14 @@ data class WindowPosture(val hingeLeft: Int? = null, val hingeTop: Int? = null, 
 class MainActivity : FragmentActivity() {
     val vm: MojiViewModel by viewModels { viewModelFactory { initializer { MojiViewModel(application) } } }
     val posture = MutableStateFlow(WindowPosture())
+    val editorSession by lazy { app.moji.android.ui.SharedEditorSession(this,vm) }
     private var copiedSecret: String? = null
     private val screenOff = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { if (intent?.action == Intent.ACTION_SCREEN_OFF) { clearSecretClipboard(); vm.background() } } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         lifecycleScope.launch { WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info -> val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull(); posture.value = fold?.let { WindowPosture(if (it.orientation == FoldingFeature.Orientation.VERTICAL) it.bounds.left else null, if (it.orientation == FoldingFeature.Orientation.HORIZONTAL) it.bounds.top else null, it.bounds.width(), it.bounds.height(), it.isSeparating) } ?: WindowPosture() } }
+        editorSession // Warm the local editor once while the workspace opens.
         receive(intent); setContent { MojiRoot(vm, this) }
         lifecycleScope.launch { vm.state.collect { s -> if (s.workspace == null) clearSecretClipboard() } }
     }
@@ -41,7 +43,7 @@ class MainActivity : FragmentActivity() {
     override fun onStart() { super.onStart(); vm.foreground() }
     override fun onStop() { if (!isChangingConfigurations) vm.background(); super.onStop() }
     override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); vm.touch() }
-    override fun onDestroy() { runCatching { unregisterReceiver(screenOff) }; super.onDestroy() }
+    override fun onDestroy() { runCatching { unregisterReceiver(screenOff) }; editorSession.dispose(); super.onDestroy() }
     fun copy(value: String, secret: Boolean = false) {
         if (value.isEmpty()) { vm.message("没有可复制的内容"); return }
         val clipboard = getSystemService(ClipboardManager::class.java); val clip = ClipData.newPlainText("墨记", value)

@@ -77,12 +77,6 @@ import java.util.Locale
     }
     if(deleting&&book!=null)Confirm("删除「${book.name}」？","其中的记录会移到回收站，之后仍可恢复。",{deleting=false}){vm.deleteBook(book);close()}
 }
-@Composable fun PromptDialog(note: Note, activity: MainActivity, close: () -> Unit) {
-    val variables=PromptVariables.used(note);var values by remember(note.id){mutableStateOf(emptyMap<String,String>())}
-    PanelDialog("使用提示词",close,actions={Button(onClick={activity.copy(visibleText(activity,note,values))},enabled=variables.all{values[it.id]?.isNotBlank()==true}){Text("复制提示词")}}){
-        variables.forEach{variable->Field(variable.name,values[variable.id]?:"",lines=2){values=values+(variable.id to it)}}
-    }
-}
 @Composable fun HistoryDialog(note: Note, close: () -> Unit, allowRestore: Boolean = true, restore: (NoteVersion) -> Unit) {
     var selected by remember(note.id) { mutableStateOf(note.history.firstOrNull()) }; val date = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     PanelDialog("版本历史", close, width = 760, actions = { Text("最近 40 个版本", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Button(onClick = { selected?.let(restore) }, enabled = selected != null && allowRestore) { Text("恢复此版本") } }) {

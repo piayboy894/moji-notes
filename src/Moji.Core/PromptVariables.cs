@@ -20,6 +20,6 @@ public static class PromptVariables
         return Regex.Replace(plain,@"MOJIVAR(?<id>[a-f0-9]{32})MOJI",m=>values.TryGetValue(m.Groups["id"].Value,out var value)?value:m.Value);
     }
     public static string Fill(Note note,IReadOnlyDictionary<string,string> values) => TokenPattern.Replace(note.Content,m=>{
-        var v=note.Variables.FirstOrDefault(v=>v.Id==m.Groups["id"].Value);return v!=null&&values.TryGetValue(v.Id,out var value)?(m.Value.StartsWith("<span")?System.Net.WebUtility.HtmlEncode(value):value):m.Value;
+        if(m.Value.Contains("data-moji-field="))return m.Value;var v=note.Variables.FirstOrDefault(v=>v.Id==m.Groups["id"].Value);return v!=null&&values.TryGetValue(v.Id,out var value)?(m.Value.StartsWith("<span")?System.Net.WebUtility.HtmlEncode(value):value):m.Value;
     });
 }

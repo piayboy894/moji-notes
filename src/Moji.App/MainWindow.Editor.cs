@@ -19,7 +19,7 @@ public partial class MainWindow
         var header = new StackPanel { Margin = new Thickness(19,23,19,10) }; var title = new DockPanel(); var options = Ui.Icon("More", () => { }, "更多操作"); options.Name = "ListOptions"; options.Click += (_,_) => { options.ContextMenu = BuildListMenu(); options.ContextMenu.PlacementTarget = options; options.ContextMenu.IsOpen = true; }; DockPanel.SetDock(options,Dock.Right); title.Children.Add(options); title.Children.Add(Ui.Text(ViewTitle(),17,null,true)); header.Children.Add(title);
         var search = Ui.Input(VM.Search,"搜索记录"); search.Padding=new Thickness(34,10,12,10); search.FontSize=11; search.TextChanged += (_,_)=> { VM.Search=search.Text; RefreshNoteList(); }; var searchRow=new Grid{Margin=new Thickness(0,17,0,10)}; searchRow.Children.Add(search); searchRow.Children.Add(new NativeIcon{Kind="Search",Width=15,Height=15,Foreground=Ui.Resource("Sub"),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12,0,0,0),IsHitTestVisible=false}); header.Children.Add(searchRow);
         var sort = new ComboBox { ItemsSource = new[] { "最近编辑", "创建时间", "名称顺序" }, SelectedIndex = VM.Sort=="created"?1:VM.Sort=="name"?2:0, FontSize=10, MinWidth=110, BorderThickness=new Thickness(0), Background=Brushes.Transparent }; sort.SelectionChanged+=(_,_)=> { VM.Sort=sort.SelectedIndex==1?"created":sort.SelectedIndex==2?"name":"updated";RefreshNoteList();};
-        var tools=Ui.Row(sort,Ui.Icon("Check",()=> { if(noteList!=null){noteList.SelectionMode=noteList.SelectionMode==SelectionMode.Extended?SelectionMode.Multiple:SelectionMode.Extended;Toast("按 Ctrl 或 Shift 可多选记录");} },"批量选择"),Ui.Icon("Trash",()=>DeleteSelection(),"删除所选记录")); header.Children.Add(tools); DockPanel.SetDock(header,Dock.Top);left.Children.Add(header);
+        var tools=Ui.Row(sort,Ui.Icon("Check",()=> { if(noteList!=null){noteList.SelectionMode=noteList.SelectionMode==SelectionMode.Extended?SelectionMode.Multiple:SelectionMode.Extended;Toast("按 Ctrl 或 Shift 可多选记录");} },"批量选择"),Ui.Icon("Trash",()=>DeleteSelection(),"删除所选记录")); header.Children.Add(tools); if(VM.View=="trash"){var clear=Ui.Button("清空回收站",EmptyTrash);clear.Name="EmptyTrash";clear.IsEnabled=VM.State!.Notes.Any(n=>n.DeletedAt!=null&&n.PurgedAt==null);header.Children.Add(clear);} DockPanel.SetDock(header,Dock.Top);left.Children.Add(header);
         noteList = new ListBox { ItemsSource=noteRows, SelectionMode=SelectionMode.Extended };
         var template = "<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><StackPanel><TextBlock Text='{Binding Title}' FontSize='16' FontWeight='Bold' TextTrimming='CharacterEllipsis'/><TextBlock Text='{Binding Snippet}' FontSize='12' Foreground='{DynamicResource Sub}' Margin='0,10,0,12' TextWrapping='Wrap' MaxHeight='40'/><TextBlock Text='{Binding Meta}' FontSize='11' Foreground='{DynamicResource Sub}'/></StackPanel></DataTemplate>";
         noteList.ItemTemplate=(DataTemplate)XamlReader.Parse(template); noteList.SelectionChanged+=(_,_)=> { if(noteList.SelectedItem is NoteRow row){if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);} };
@@ -37,7 +37,7 @@ public partial class MainWindow
     {
         if(editorHost==null || renderedId==note.Id)return;
         var request=++editorRequest;var previous=sharedEditor;sharedEditor=null;
-        if(previous!=null){editorRelease=Release(previous);try{await editorRelease;}catch{Toast("编辑内容暂时未能保存，请重试");return;}}
+        if(previous!=null){previous.Deactivate();editorRelease=previous.Flush();try{await editorRelease;}catch{Toast("编辑内容暂时未能保存，请重试");return;}}
         if(request!=editorRequest)return;
         note=VM.State!.Notes.FirstOrDefault(n=>n.Id==note.Id)??note;
         renderedId=note.Id;loadingEditor=true;titleBox=null;
@@ -51,14 +51,20 @@ public partial class MainWindow
         }
         var more=Ui.Icon("More",()=>{},"更多操作");more.ToolTip="更多操作";more.Click+=(_,_)=> {more.ContextMenu=NoteMenu(note.Id);more.ContextMenu.IsOpen=true;};actions.Children.Add(more);DockPanel.SetDock(actions,Dock.Right);top.Children.Add(actions);top.Children.Add(Ui.Text(book.Name,10,NotebookAppearance.Ink(book.Color)));DockPanel.SetDock(top,Dock.Top);container.Children.Add(top);
         var heading=new StackPanel{Margin=new Thickness(28,8,28,22)};
-        titleBox=Ui.Input(note.Title,"记录标题");titleBox.IsReadOnly=book.Mode==NoteMode.Password&&editingCredentialId!=note.Id;titleBox.Name="RecordTitle";titleBox.FontSize=25;titleBox.FontWeight=FontWeights.SemiBold;titleBox.Background=Brushes.Transparent;titleBox.BorderThickness=new Thickness(0);titleBox.Padding=new Thickness(0,13,0,12);titleBox.TextChanged+=(_,_)=>{if(!loadingEditor&&!titleBox.IsReadOnly)VM.EditNote(note.Id,n=>n with{Title=titleBox.Text});};heading.Children.Add(titleBox);
+        titleBox=Ui.Input(note.Title,"记录标题");titleBox.IsReadOnly=book.Mode==NoteMode.Password&&editingCredentialId!=note.Id;titleBox.Name="RecordTitle";titleBox.FontSize=25;titleBox.FontWeight=FontWeights.SemiBold;titleBox.Background=Brushes.Transparent;titleBox.BorderThickness=new Thickness(0);titleBox.Padding=new Thickness(0,13,0,12);titleBox.GotKeyboardFocus+=(_,_)=>cachedEditor?.ClearSelectionAvailability();titleBox.AcceptsReturn=false;titleBox.AcceptsTab=false;titleBox.PreviewKeyDown+=async(_,e)=>{if(e.Key is Key.Enter or Key.Tab && Keyboard.Modifiers==ModifierKeys.None){e.Handled=true;if(book.Mode!=NoteMode.Password&&sharedEditor!=null)await sharedEditor.Command("focus");else titleBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));}};titleBox.TextChanged+=(_,_)=>{if(!loadingEditor&&!titleBox.IsReadOnly)VM.EditNote(note.Id,n=>n with{Title=titleBox.Text});};heading.Children.Add(titleBox);
         DockPanel.SetDock(heading,Dock.Top);container.Children.Add(heading);
         if(book.Mode==NoteMode.Password){container.Children.Add(editingCredentialId == note.Id ? CredentialView(note) : CredentialReadView(note));editorHost.Content=container;loadingEditor=false;return;}
-        if(book.Mode==NoteMode.Prompt){var promptBar=new DockPanel{Margin=new Thickness(22,6,22,6)};var use=Ui.Button("使用提示词",()=>PromptDialog(note.Id),true);var insert=Ui.Button("插入变量",InsertVariable);DockPanel.SetDock(insert,Dock.Left);promptBar.Children.Add(insert);DockPanel.SetDock(use,Dock.Right);promptBar.Children.Add(use);container.Children.Add(promptBar);DockPanel.SetDock(promptBar,Dock.Top);}
-        sharedEditor=new SharedEditorView(VM,note);sharedEditor.ActionRequested+=action=>{switch(action){case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":SearchDialog();break;case "save":VM.Checkpoint(note.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};
+        if(cachedEditor==null){
+            cachedEditor=new SharedEditorView(VM);
+            cachedEditor.ActionRequested+=action=>{switch(action){case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":SearchDialog();break;case "save":if(CurrentNote() is {} current)VM.Checkpoint(current.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};
+        }
+        sharedEditor=cachedEditor;
+        if(sharedEditor.Parent is Panel parent)parent.Children.Remove(sharedEditor);
+        if(book.Mode==NoteMode.Prompt){var convert=Ui.Button("转化为变量",()=>_ = cachedEditor.Command("convertVariable"));convert.Name="ConvertVariable";convert.Focusable=false;convert.IsEnabled=cachedEditor.CanConvert;cachedEditor.SelectionChanged=value=>convert.IsEnabled=value;var bar=Ui.Row(convert);bar.Margin=new Thickness(22,6,22,6);DockPanel.SetDock(bar,Dock.Top);container.Children.Add(bar);}
+        else cachedEditor.SelectionChanged=null;
         container.Children.Add(sharedEditor);editorHost.Content=container;loadingEditor=false;
+        try{await sharedEditor.Show(note);}catch(Exception){Toast("编辑器未能加载，请重新打开记录");}
     }
-    private static async Task Release(SharedEditorView editor){await editor.Flush();editor.Dispose();}
     internal async Task<SharedEditorView> ReadyEditor(){for(var i=0;i<100&&sharedEditor==null;i++)await Task.Delay(50);var editor=sharedEditor??throw new InvalidOperationException("Editor not created");await editor.Ready.WaitAsync(TimeSpan.FromMinutes(2));return editor;}
     private UIElement CredentialReadView(Note note)
     {
@@ -97,7 +103,7 @@ public partial class MainWindow
         menu.Items.Add(new Separator());
         if (VM.View == "trash") {
             Add("恢复所选", RestoreSelection, selected); Add("永久删除所选", DeleteSelection, selected);
-            Add("清空回收站", () => Purge(VM.Filtered().Select(n => n.Id).ToList()), noteRows.Count > 0);
+            Add("清空回收站", EmptyTrash, VM.State.Notes.Any(n=>n.DeletedAt!=null&&n.PurgedAt==null));
         } else {
             Add(VM.View == "star" ? "取消收藏所选" : "收藏所选", () => Batch(n => n with { Favorite = VM.View != "star" }), selected);
             Add(VM.View == "archive" ? "取消归档所选" : "归档所选", () => Batch(n => n with { Archived = VM.View != "archive" }), selected);
@@ -111,5 +117,6 @@ public partial class MainWindow
     private void TrashNotes(List<string> ids){VM.Change(v=>v with{Notes=v.Notes.Select(n=>ids.Contains(n.Id)?n.Apply(n with{DeletedAt=Clock.Now}):n).ToList()});Toast("已移到回收站");}
     private void RestoreSelection()=>RestoreNotes(SelectedIds());
     private void RestoreNotes(List<string> ids){VM.Change(v=>{var books=v.Notes.Where(n=>ids.Contains(n.Id)).Select(n=>n.NotebookId).ToHashSet();return v with{Notebooks=v.Notebooks.Select(b=>books.Contains(b.Id)&&b.DeletedAt!=null?b with{DeletedAt=null,Revision=Clock.Id,UpdatedAt=Clock.Now}:b).ToList(),Notes=v.Notes.Select(n=>ids.Contains(n.Id)?n.Apply(n with{DeletedAt=null}):n).ToList()};});Toast("记录已恢复");}
-    private void Purge(List<string> ids){if(!Confirm("永久删除所选记录？","正文、密码与历史版本都会清除，无法从回收站恢复。"))return;VM.Change(v=>v with{Notes=v.Notes.Select(n=>ids.Contains(n.Id)?n with{Title="",Content="",Username="",Password="",Url="",Otp="",Tags=[],Variables=[],History=[],DeletedAt=n.DeletedAt??Clock.Now,PurgedAt=Clock.Now,Revision=Clock.Id,UpdatedAt=Clock.Now}:n).ToList()});Toast("记录已永久删除");}
+    private void EmptyTrash()=>Purge(VM.State!.Notes.Where(n=>n.DeletedAt!=null&&n.PurgedAt==null).Select(n=>n.Id).ToList(),true);
+    private void Purge(List<string> ids,bool all=false){if(ids.Count==0)return;if(!Confirm(all?"清空回收站？":"永久删除所选记录？",$"将永久删除 {ids.Count} 条记录，正文、密码与历史版本都会清除，无法恢复。"))return;VM.Change(v=>v with{Notes=v.Notes.Select(n=>ids.Contains(n.Id)?n with{Title="",Content="",Username="",Password="",Url="",Otp="",Tags=[],Variables=[],History=[],DeletedAt=n.DeletedAt??Clock.Now,PurgedAt=Clock.Now,Revision=Clock.Id,UpdatedAt=Clock.Now}:n).ToList()});Toast("记录已永久删除");}
 }

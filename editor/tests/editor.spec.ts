@@ -14,10 +14,25 @@ test('interactive tasks keep checkbox at first line and exit empty item with Ent
  const checkbox=body.locator('li input[type=checkbox]').first();await expect(checkbox).toBeVisible();expect(await checkbox.evaluate(e=>getComputedStyle(e).opacity)).toBe('1');expect((await checkbox.boundingBox())!.width).toBeGreaterThan(12);const label=body.locator('li label').first();const box=await label.boundingBox();const para=await body.locator('li p').first().boundingBox();expect(Math.abs(box!.y-para!.y)).toBeLessThan(10);await label.click();await expect(body.locator('li').first()).toHaveAttribute('data-checked','true');
  await js(page,"window.MojiEditor.editor.chain().focus('end').run()");await page.keyboard.press('Enter');await page.keyboard.press('Enter');await page.keyboard.insertText('普通段落');await expect(body.locator(':scope > p').last()).toHaveText('普通段落');
 })
-test('variables are explicit atomic nodes, literal braces stay text, undo survives insertion',async({page})=>{
- const body=page.getByRole('textbox',{name:'笔记正文'});await body.click();await page.keyboard.insertText('原样 {{变量}} ');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([]);
- await js(page,"window.MojiEditor.action('insertVariable',{id:'12345678901234567890123456789012',name:'受众'})");await expect(body.locator('.moji-variable')).toHaveText('受众');await page.keyboard.press('Backspace');await expect(body.locator('.moji-variable')).toHaveCount(0);await page.keyboard.press('Control+z');await expect(body.locator('.moji-variable')).toHaveCount(1);
- const saved=await js(page,'window.MojiEditor.snapshot()');await load(page,saved.content,saved.variables);expect(await js(page,'window.MojiEditor.editor.can().undo()')).toBe(false);await expect(body).toContainText('{{变量}}');await expect(body.locator('.moji-variable')).toHaveText('受众');
+test('selection converts to an empty editable field, retains its name and copies only entered text',async({page})=>{
+ const body=page.getByRole('textbox',{name:'笔记正文'});await body.click();await page.keyboard.insertText('原样 {{变量}} 受众');
+ await js(page,"const e=window.MojiEditor.editor;const end=e.state.doc.content.size-1;e.commands.setTextSelection({from:end-2,to:end});window.MojiEditor.action('convertVariable')");
+ const field=body.locator('.moji-variable');await expect(field).toHaveAttribute('data-name','受众');await expect(field).toHaveText('');await expect(field.locator('.moji-variable-content')).toHaveAttribute('data-placeholder','请在这里输入受众');
+ await page.keyboard.insertText('产品设计师');await expect(field).toHaveText('产品设计师');expect(await js(page,'window.MojiEditor.editor.getText()')).toBe('原样 {{变量}} 产品设计师');
+ const saved=await js(page,'window.MojiEditor.snapshot()');await load(page,saved.content,saved.variables);await expect(field).toHaveText('产品设计师');
+ await field.click();await page.keyboard.press('End');await page.keyboard.press('Backspace');await expect(field).toHaveText('产品设计');
+ await field.locator('textarea').press('Control+a');await page.keyboard.press('Backspace');await expect(field).toHaveText('');await expect(field).toHaveCount(1);
+ await page.keyboard.insertText('开发者');await expect(field).toHaveText('开发者');expect((await js(page,'window.MojiEditor.snapshot()')).variables[0].name).toBe('受众');
+})
+test('field conversion and typing have separate undo boundaries and long values wrap',async({page})=>{
+ await load(page,prefix+'<p>主题</p>');await js(page,"window.MojiEditor.editor.commands.setTextSelection({from:1,to:3});window.MojiEditor.action('convertVariable')");await page.keyboard.insertText('很长的填写内容'.repeat(35));
+ const field=page.locator('.moji-variable');await expect(field).toContainText('很长的填写内容');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.keyboard.press('Control+z');await expect(field).toHaveText('');await page.keyboard.press('Control+z');await expect(field).toHaveCount(0);await expect(page.getByRole('textbox',{name:'笔记正文'})).toHaveText('主题');
+ await page.keyboard.press('Control+y');await expect(field).toHaveCount(1);await page.keyboard.press('Control+y');await expect(field).toContainText('很长的填写内容');
+})
+test('ordinary typing does not create fields and invalid selections do not convert',async({page})=>{
+ await page.getByRole('textbox',{name:'笔记正文'}).click();await page.keyboard.insertText('{{受众}}');expect((await js(page,'window.MojiEditor.snapshot()')).variables).toEqual([]);expect(await js(page,"window.MojiEditor.action('convertVariable')")).toBe(false);
+ const id='12345678901234567890123456789012';await load(page,prefix+`<p><span data-moji-variable="${id}" data-name="受众">受众</span></p>`,[{id,name:'受众'}]);await expect(page.locator('.moji-variable')).toHaveText('');await page.locator('.moji-variable').click();await page.keyboard.insertText('真实内容');await expect(page.locator('.moji-variable')).toHaveText('真实内容');
 })
 test('images upload locally, display and persist after reopening with no external request',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));const remote:string[]=[];page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1')&&!r.url().startsWith('data:')&&!r.url().startsWith('blob:'))remote.push(r.url())});

@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<NoteRow> noteRows = [];
     private ContentControl? editorHost;
     private SharedEditorView? sharedEditor;
+    private SharedEditorView? cachedEditor;
     private Task editorRelease=Task.CompletedTask;
     private int editorRequest;
     private TextBox? titleBox;
@@ -39,8 +40,8 @@ public partial class MainWindow : Window
         toastTimer.Tick += (_, _) => { ToastBorder.Visibility = Visibility.Collapsed; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Closed += (_,_) => { ClearSecretClipboard(); sessionTimer.Stop(); toastTimer.Stop(); sharedEditor?.Dispose();VM.Dispose(); };
-        VM.FlushEditor=async()=>{await editorRelease;if(sharedEditor!=null)await sharedEditor.Flush();};
+        Closed += (_,_) => { ClearSecretClipboard(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
     private void SessionTick()
@@ -51,7 +52,7 @@ public partial class MainWindow : Window
     }
     private void DataChanged(string kind)
     {
-        if(kind is "open" or "replace"){sharedEditor?.Dispose();sharedEditor=null;editorRequest++;}
+        if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;editorRequest++;}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }
@@ -102,7 +103,7 @@ public partial class MainWindow : Window
         if(closing)return;e.Cancel=true;if(closePending)return;closePending=true;IsEnabled=false;
         // Even a completed SaveAsync must resume after WPF has left its Closing callback.
         Dispatcher.BeginInvoke(new Action(async()=>{
-            try{await editorRelease;if(sharedEditor!=null)await sharedEditor.Flush();await VM.SaveAsync();closing=true;closePending=false;Close();}
+            try{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();await VM.SaveAsync();closing=true;closePending=false;Close();}
             catch(Exception){closing=false;closePending=false;IsEnabled=true;ShowSaveFailure();}
         }),DispatcherPriority.Background);
     }

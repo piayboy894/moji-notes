@@ -2,8 +2,9 @@ using AngleSharp.Html.Parser;
 namespace Moji.Core;
 public static class EditorContent
 {
-    public const string Prefix="<!--moji:tiptap:1-->";
-    public static bool IsDocument(string content)=>content.StartsWith(Prefix,StringComparison.Ordinal);
+    public const string Prefix="<!--moji:tiptap:2-->";
+    private const string LegacyPrefix="<!--moji:tiptap:1-->";
+    public static bool IsDocument(string content)=>content.StartsWith(Prefix,StringComparison.Ordinal)||content.StartsWith(LegacyPrefix,StringComparison.Ordinal);
     public static string Html(string content)=>IsDocument(content)?content[Prefix.Length..]:"<p>"+System.Net.WebUtility.HtmlEncode(content).Replace("\n","</p><p>")+"</p>";
     public static string Plain(string content)
     {

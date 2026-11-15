@@ -117,13 +117,16 @@ class AdaptiveUiTest {
         compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data-checked=\"true\"")}
         focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         InstrumentationRegistry.getInstrumentation().sendStringSync("Tail {{literal}}")
-        hideKeyboard();compose.onNodeWithText("插入变量").performClick();compose.onNodeWithTag("variable-name").performTextInput("Audience");compose.onNodeWithText("插入",substring=false).performClick()
+        js("const e=window.MojiEditor.editor;e.commands.insertContent('Audience');const end=e.state.selection.from;e.commands.setTextSelection({from:end-8,to:end})")
+        compose.onNodeWithText("转化为变量").assertIsEnabled().performClick()
+        compose.waitUntil(5000){js("Boolean(document.querySelector('.moji-variable'))")=="true"}
+        InstrumentationRegistry.getInstrumentation().sendStringSync("Filled audience")
         compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1};assertTrue(jsText().contains("{{literal}}"))
         js("window.MojiEditor.editor.chain().focus('end').setImage({src:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuoAAAAASUVORK5CYII='}).run()")
         compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data:image/")};runBlocking{compose.activity.vm.flush()}
         val saved=compose.activity.vm.selectedNote()!!;screenshot("10-shared-editor")
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertExists();compose.activityRule.scenario.onActivity{it.vm.navigate(saved.notebookId);it.vm.select(saved.id)};webReady()
-        assertTrue(jsText().contains("Audience"));assertTrue(js("Boolean(document.querySelector('.tiptap img')?.complete)")=="true");assertFalse(js("window.MojiEditor.editor.can().undo()")=="true");screenshot("11-explicit-variable")
+        assertTrue(jsText().contains("Filled audience"));assertTrue(js("Boolean(document.querySelector('.tiptap img')?.complete)")=="true");screenshot("11-explicit-variable")
     }
     @Test fun systemImagePickerReturnsToSameSharedDocument() {
         ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady()
@@ -234,4 +237,31 @@ class AdaptiveUiTest {
             compose.waitUntil(5000) { jsText().contains("Still editable") }
         } catch(t:Throwable) { runCatching { screenshot("failure-overlay-layers") }; throw t }
     }
+    @Test fun titleEnterAndTabFocusTheBodyAndSwitchingRecordsReusesOnePage() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady()
+        val original=webView();val first=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
+        js("window.__mojiReuseMarker='same-page'")
+        compose.onNodeWithTag("note-title").performTextReplacement("Title hop")
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
+        compose.waitUntil(5000){js("document.activeElement===window.MojiEditor.editor.view.dom")=="true"}
+        InstrumentationRegistry.getInstrumentation().sendStringSync("First content")
+        compose.waitUntil(5000){jsText().contains("First content")};assertEquals("Title hop",compose.activity.vm.selectedNote()!!.title)
+        compose.onNodeWithTag("note-title").performClick();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
+        compose.waitUntil(5000){js("document.activeElement===window.MojiEditor.editor.view.dom")=="true"}
+        hideKeyboard();compose.activityRule.scenario.onActivity{it.vm.addNote()};webReady();assertSame(original,webView());assertEquals("same-page",org.json.JSONTokener(js("window.__mojiReuseMarker")).nextValue())
+        js("window.MojiEditor.editor.commands.insertContent('Second content')")
+        compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
+        compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(first)};webReady();assertSame(original,webView());assertEquals("First content",jsText());assertFalse(js("window.MojiEditor.editor.can().undo()")=="true")
+    }
+    @Test fun emptyTrashClearsHiddenRecordsAndLeavesLiveRecordsAlone() {
+        ready();val book=compose.activity.vm.state.value.workspace!!.liveBooks.first().id
+        val live=Note(notebookId=book,title="Keep me",content="Live")
+        val a=Note(notebookId=book,title="Match",content="Deleted A",deletedAt=now())
+        val b=Note(notebookId=book,title="Hidden",password="Fake",content="Deleted B",deletedAt=now())
+        compose.activityRule.scenario.onActivity{it.vm.mutate{w->w.copy(notes=w.notes+listOf(live,a,b))};it.vm.navigate("trash");it.vm.search("Match")}
+        compose.onNodeWithTag("empty-trash").assertIsEnabled().performClick();compose.onNodeWithText("确认",substring=false).performClick()
+        compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.notes.none{it.deletedAt!=null&&it.purgedAt==null}}
+        val notes=compose.activity.vm.state.value.workspace!!.notes;assertEquals("Live",notes.first{it.id==live.id}.content);assertEquals("",notes.first{it.id==b.id}.password)
+    }
+
 }

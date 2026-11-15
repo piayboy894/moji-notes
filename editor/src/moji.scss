@@ -1,7 +1,14 @@
 :root{--moji-font-size:16px;--tt-bg-color:#fff;--tt-brand-color-500:#516b4d}
 .dark{--tt-bg-color:#202721}
 .tiptap.ProseMirror{font-size:var(--moji-font-size);overflow-wrap:anywhere;line-height:1.7}
-.moji-variable{display:inline-flex;align-items:center;vertical-align:baseline;background:#e3ebdc;color:#3d5739;padding:0 .4em;border-radius:4px;white-space:nowrap;line-height:1.6;font-weight:500}
+.moji-variable{display:inline-block;position:relative;vertical-align:middle;max-width:100%;box-sizing:border-box;background:#e3ebdc;color:#3d5739;padding:0 .35em;border-radius:4px;white-space:pre-wrap;line-height:1.7;cursor:text}
+.moji-variable-content{display:block;visibility:hidden;max-width:100%;min-width:1ch;overflow-wrap:anywhere;white-space:pre-wrap;line-height:inherit}
+.moji-variable-content:empty::before{content:attr(data-placeholder)}
+.moji-variable-content::after{content:' '}
+.moji-variable-input{position:absolute;top:0;left:.35em;width:calc(100% - .7em);height:100%;box-sizing:border-box;padding:0;margin:0;border:0;border-radius:0;resize:none;outline:none;background:transparent;color:inherit;font:inherit;line-height:inherit;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere}
+.moji-variable-input::placeholder{color:#82917e;opacity:1}
+.moji-variable.ProseMirror-selectednode{outline:1px solid #a6b69f}
+
 .dark .moji-variable{background:#364535;color:#dcebd5}
 
 @media print{.tiptap-toolbar{display:none!important}.simple-editor-wrapper,.simple-editor-content{height:auto!important;overflow:visible!important}.simple-editor-content .tiptap.ProseMirror.simple-editor{padding:0!important}html,body,#app{height:auto!important;background:white!important}}

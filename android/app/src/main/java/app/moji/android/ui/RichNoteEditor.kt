@@ -43,98 +43,105 @@ class EditorWebView(context: android.content.Context) : WebView(context) {
     }
 }
 
-/** The Android host owns persistence and file permissions. Tiptap owns the entire document. */
-class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,private val id:String,private val epoch:Long,private val generation:Int) {
-    // Flush acknowledgements must still run after the editor leaves the layout.
-    // View.post queues work until reattachment, which may never happen here.
+/** One page and browser per Activity; only the document changes. */
+@SuppressLint("SetJavaScriptEnabled")
+class SharedEditorSession(private val activity:MainActivity,private val vm:MojiViewModel) {
     private val main=android.os.Handler(android.os.Looper.getMainLooper())
+    private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+    private val page=CompletableDeferred<Unit>()
+    private val gate=kotlinx.coroutines.sync.Mutex()
     private val pending=mutableMapOf<String,CompletableDeferred<Unit>>()
-    val flusher:suspend ()->Unit={flush()}
-    private suspend fun flush(){if(ready&&vm.workspaceEpoch==epoch&&vm.state.value.editorGeneration==generation){val token=uid();val done=CompletableDeferred<Unit>();pending[token]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(token)})",null);withTimeout(10000){done.await()}}finally{pending.remove(token)}}}
-    var ready=false
-    var loadSent=false
-    var lastAppearance=""
+    private var version=0;private var requested="";private var owner="";private var activeId="";private var token="";private var loadingToken="";private var epoch=-1L;private var generation=-1;private var visible=false;private var needsActivation=true;private var disposed=false
+    private var loaded=CompletableDeferred<Unit>();private var lastAppearance=""
+    var canConvert by mutableStateOf(false);private set
+    var failure by mutableStateOf(false);private set
     var fileResult:ValueCallback<Array<Uri>>?=null
-    var onReady:(()->Unit)?=null
-    @JavascriptInterface fun postMessage(message:String) {
-        if(message.length>30_000_000)return
-        main.post {
-            runCatching {
-                val data=json.parseToJsonElement(message).jsonObject
-                val type=data["type"]?.jsonPrimitive?.content
-                if(type=="flushed"){pending.remove(data["token"]?.jsonPrimitive?.content)?.complete(Unit);return@runCatching}
-                if(vm.workspaceEpoch!=epoch||vm.state.value.editorGeneration!=generation)return@runCatching
-                when(type){
-                    "ready"->onReady?.invoke()
-                    "loaded"->if(data["id"]?.jsonPrimitive?.content==id)ready=true
-                    "change"->{if(data["id"]?.jsonPrimitive?.content!=id)return@runCatching
-                        val content=data.getValue("content").jsonPrimitive.content
-                        val variables=json.decodeFromJsonElement<List<PromptVariable>>(data.getValue("variables"))
-                        if(!EditorContent.isDocument(content)||variables.any{!Regex("[a-f0-9]{32}").matches(it.id)||it.name.length !in 1..40})return@runCatching
-                        val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==id}?:return@runCatching
-                        if(old.content!=content||old.variables!=variables)vm.edit(id){it.copy(content=content,variables=variables)}
-                    }
-                    "openLink"->{val uri=Uri.parse(data["url"]?.jsonPrimitive?.content?:"");if(uri.scheme in listOf("http","https"))runCatching{web.context.startActivity(Intent(Intent.ACTION_VIEW,uri))}}
-                    "action"->if(vm.state.value.selectedId==id)vm.editorActions.tryEmit(data["action"]?.jsonPrimitive?.content?:"")
+    var chooseFile:((Intent)->Unit)?=null
+    private var fileToken=""
+    private var selectedRange:JsonElement?=null
+    val flusher:suspend ()->Unit={flush()}
+    val web=EditorWebView(activity).apply {
+        layoutParams=android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT,android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+        tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;alpha=0f
+        if(BuildConfig.DEBUG)WebView.setWebContentsDebuggingEnabled(true)
+        settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;isVerticalScrollBarEnabled=false
+        setOnTouchListener{v,e->if(e.actionMasked==android.view.MotionEvent.ACTION_DOWN)v.requestFocus();false}
+        val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(activity)).build()
+        addJavascriptInterface(this@SharedEditorSession,"MojiNative")
+        webViewClient=object:WebViewClient(){
+            override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=loader.shouldInterceptRequest(request.url)?:WebResourceResponse("text/plain","UTF-8",java.io.ByteArrayInputStream(ByteArray(0)))
+            override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=request.url.host!="appassets.androidplatform.net"
+            override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){if(request.isForMainFrame)failure=true}
+        }
+        webChromeClient=object:WebChromeClient(){
+            override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {
+                fileResult?.onReceiveValue(null);fileResult=callback;fileToken=token
+                return try{chooseFile?.invoke(params.createIntent().apply{action=Intent.ACTION_OPEN_DOCUMENT;addCategory(Intent.CATEGORY_OPENABLE);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})?:error("No active editor");true}catch(_:Exception){fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}
+            }
+            override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
+        }
+        setBackgroundColor(android.graphics.Color.WHITE)
+        val hash=java.security.MessageDigest.getInstance("SHA-256").digest(activity.assets.open("editor/index.html").use{it.readBytes()}).joinToString(""){"%02x".format(it)}
+        loadUrl("https://appassets.androidplatform.net/assets/editor/index.html?v=$hash")
+    }
+    init{vm.editorFlushers.add(flusher)}
+    @JavascriptInterface fun postMessage(message:String){if(message.length>30_000_000)return;main.post{
+        if(disposed)return@post
+        runCatching{
+            val data=json.parseToJsonElement(message).jsonObject;val type=data["type"]?.jsonPrimitive?.content
+            if(type=="ready"){page.complete(Unit);return@runCatching}
+            if(type=="flushed"){pending.remove(data["token"]?.jsonPrimitive?.content)?.complete(Unit);return@runCatching}
+            if(vm.workspaceEpoch!=epoch||vm.state.value.editorGeneration!=generation||data["id"]?.jsonPrimitive?.content!=activeId||data["session"]?.jsonPrimitive?.content!=token)return@runCatching
+            when(type){
+                "loaded"->if(token==loadingToken){loaded.complete(Unit);web.alpha=1f}
+                "selection"->{canConvert=visible&&loaded.isCompleted&&loadingToken==token&&data["canConvert"]?.jsonPrimitive?.boolean==true;selectedRange=if(canConvert)data["selection"]else null}
+                "change"->{
+                    val content=data.getValue("content").jsonPrimitive.content;val vars=json.decodeFromJsonElement<List<PromptVariable>>(data.getValue("variables"))
+                    if(!EditorContent.isDocument(content)||vars.any{!Regex("[a-f0-9]{32}").matches(it.id)||it.name.length !in 1..2000})return@runCatching
+                    val old=vm.state.value.workspace?.notes?.firstOrNull{it.id==activeId&&it.deletedAt==null&&it.purgedAt==null}?:return@runCatching
+                    if(old.content!=content||old.variables!=vars)vm.edit(activeId){it.copy(content=content,variables=vars)}
                 }
+                "action"->if(visible)vm.editorActions.tryEmit(data["action"]?.jsonPrimitive?.content?:"")
+                "openLink"->if(visible){val uri=Uri.parse(data["url"]?.jsonPrimitive?.content?:"");if(uri.scheme in listOf("http","https"))runCatching{activity.startActivity(Intent(Intent.ACTION_VIEW,uri))}}
             }
         }
+    }}
+    fun attach(key:String):EditorWebView {owner=key;visible=true;(web.parent as? android.view.ViewGroup)?.removeView(web);return web}
+    fun hide(key:String){if(owner!=key)return;visible=false;needsActivation=true;canConvert=false;chooseFile=null;web.cover(true);scope.launch{flush();if(owner!=key||visible)return@launch;web.evaluateJavascript("window.MojiEditor?.deactivate()",null)}}
+    fun show(note:Note,dark:Boolean,obscured:Boolean){
+        visible=true;web.cover(obscured);web.setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
+        val prefs=vm.state.value.workspace!!.preferences
+        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
+        if(lastAppearance!=configuration){lastAppearance=configuration;web.evaluateJavascript("window.MojiEditor?.configure($configuration)",null)}
+        val key="${vm.workspaceEpoch}:${vm.state.value.editorGeneration}:${note.id}"
+        if(key==requested){if(loaded.isCompleted&&needsActivation){needsActivation=false;web.evaluateJavascript("window.MojiEditor?.editor?.setEditable(true,false)",null)};return}
+        requested=key;val request=++version;canConvert=false;loadingToken="";loaded.cancel();loaded=CompletableDeferred();needsActivation=false
+        scope.launch {
+            page.await();gate.lock();try{
+                if(request!=version||disposed)return@launch
+                flush();if(request!=version||disposed)return@launch
+                fileResult?.onReceiveValue(null);fileResult=null
+                val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:return@launch
+                activeId=latest.id;epoch=vm.workspaceEpoch;generation=vm.state.value.editorGeneration;token=uid();loadingToken=token
+                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
+                web.evaluateJavascript("window.MojiEditor.load($payload)",null)
+            }finally{gate.unlock()}
+        }
     }
-    fun command(action:String,value:String="null"){web.requestFocus();web.evaluateJavascript("window.MojiEditor?.action(${JSONObject.quote(action)},$value)",null)}
-    fun load(note:Note,theme:String,fontSize:Double,p:Preferences){
-        loadSent=true
-        val payload=buildJsonObject{put("id",id);put("content",note.content);put("variables",json.encodeToJsonElement(note.variables));put("theme",theme);put("fontSize",fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(p,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
-        web.evaluateJavascript("window.MojiEditor?window.MojiEditor.load($payload):window.__mojiLoad=$payload",null)
-    }
+    private suspend fun flush(){if(!page.isCompleted||activeId.isEmpty()||epoch!=vm.workspaceEpoch||generation!=vm.state.value.editorGeneration||disposed)return;val id=uid();val done=CompletableDeferred<Unit>();pending[id]=done;try{web.evaluateJavascript("window.MojiEditor.flush(${JSONObject.quote(id)})",null);withTimeout(10000){done.await()}}finally{pending.remove(id)}}
+    fun clearSelectionAvailability(){selectedRange=null;canConvert=false}
+    fun command(action:String){if(action=="convertVariable"&&!canConvert)return;val argument=if(action=="convertVariable")selectedRange.toString()else "null";val target=version;scope.launch{loaded.await();if(!visible||disposed||target!=version)return@launch;web.requestFocus();web.evaluateJavascript("window.MojiEditor.action(${JSONObject.quote(action)},$argument)",null);if(action=="focus"||action=="convertVariable")main.post{(activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(web,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)}}}
+    fun imageResult(result:androidx.activity.result.ActivityResult){fileResult?.onReceiveValue(if(fileToken==token)WebChromeClient.FileChooserParams.parseResult(result.resultCode,result.data)else null);fileResult=null}
+    fun dispose(){if(disposed)return;disposed=true;vm.editorFlushers.remove(flusher);fileResult?.onReceiveValue(null);scope.cancel();web.removeJavascriptInterface("MojiNative");web.destroy()}
 }
-@SuppressLint("SetJavaScriptEnabled")
-@Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier,usePrompt:()->Unit) {
-    val prefs=vm.state.value.workspace!!.preferences
-    val dark=MaterialTheme.colorScheme.background.red<.5f
-    val obscured=LocalEditorObscured.current
-    var bridge by remember(note.id){mutableStateOf<SharedEditorBridge?>(null)}
-    var web by remember(note.id){mutableStateOf<WebView?>(null)}
-    var variableDialog by remember(note.id){mutableStateOf(false)}
-    var failure by remember(note.id){mutableStateOf(false)}
-    val picker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){result->
-        bridge?.fileResult?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode,result.data));bridge?.fileResult=null
-    }
+@Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier) {
+    val activity=androidx.compose.ui.platform.LocalContext.current as MainActivity
+    val session=activity.editorSession;val dark=MaterialTheme.colorScheme.background.red<.5f;val obscured=LocalEditorObscured.current
+    val owner=remember{uid()}
+    val picker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(),session::imageResult)
     Column(modifier){
-        if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),horizontalArrangement=Arrangement.SpaceBetween){TextButton(onClick={variableDialog=true}){Text("插入变量")};Button(onClick=usePrompt){Text("使用提示词")}}
-        if(failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
-        AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
-            if(BuildConfig.DEBUG)WebView.setWebContentsDebuggingEnabled(true)
-            EditorWebView(context).apply {
-                layoutParams=android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT,android.view.ViewGroup.LayoutParams.MATCH_PARENT)
-                tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
-                setOnTouchListener { view,event->if(event.actionMasked==android.view.MotionEvent.ACTION_DOWN)view.requestFocus();false }
-                settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                isVerticalScrollBarEnabled=false
-                val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(context)).build()
-                val current=SharedEditorBridge(this,vm,note.id,vm.workspaceEpoch,vm.state.value.editorGeneration);bridge=current;web=this;vm.editorFlushers.add(current.flusher)
-                current.onReady={if(!current.loadSent)current.load(vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:note,if(dark)"dark"else"light",prefs.fontSize,prefs)}
-                addJavascriptInterface(current,"MojiNative")
-                webViewClient=object:WebViewClient(){
-                    override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=loader.shouldInterceptRequest(request.url)?:WebResourceResponse("text/plain","UTF-8",java.io.ByteArrayInputStream(ByteArray(0)))
-                    override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean = request.url.host!="appassets.androidplatform.net"
-                    override fun onPageFinished(view:WebView,url:String){current.onReady?.invoke()}
-                    override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){if(request.isForMainFrame)failure=true}
-                }
-                webChromeClient=object:WebChromeClient(){
-                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {android.util.Log.d("MojiEditor","Opening system image picker");current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent().apply{action=Intent.ACTION_OPEN_DOCUMENT;addCategory(Intent.CATEGORY_OPENABLE);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)});true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
-                    override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
-                }
-                loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")
-            }
-        },update={view->
-            view.cover(obscured)
-            // The open editor owns its document. Never echo an autosave back into it.
-            // Explicit version restores create a new editor session in EditorScreen.
-            val current=bridge
-            val appearance="${if(dark)"dark"else"light"}:${prefs.fontSize}"
-            if(current!=null&&current.lastAppearance!=appearance){current.lastAppearance=appearance;view.evaluateJavascript("window.MojiEditor?.theme({theme:${JSONObject.quote(if(dark)"dark"else"light")},fontSize:${prefs.fontSize}})",null)}
-        })
+        if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp)){TextButton(onClick={session.command("convertVariable")},enabled=session.canConvert){Text("转化为变量")}}
+        if(session.failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
+        AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,dark,obscured)},onReset=null,onRelease={session.hide(owner)})
     }
-    DisposableEffect(note.id){onDispose{val old=web;bridge?.fileResult?.onReceiveValue(null);val previous=bridge;if(previous!=null&&old!=null)vm.releaseEditor(previous.flusher){old.removeJavascriptInterface("MojiNative");old.destroy()}}}
-    if(variableDialog){var name by remember{mutableStateOf("")};var error by remember{mutableStateOf("")};PanelDialog("插入变量",{variableDialog=false},actions={Button(onClick={try{val variable=PromptVariables.named(vm.selectedNote()?:note,name);bridge?.command("insertVariable",json.encodeToString(variable));variableDialog=false}catch(e:Exception){error=UserMessages.forError(e)}},enabled=name.isNotBlank()){Text("插入")}}){Field("变量名称",name,Modifier.testTag("variable-name")){name=it};if(error.isNotBlank())Text(error)}}
 }
