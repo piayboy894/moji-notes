@@ -38,7 +38,8 @@ import kotlinx.coroutines.delay
     val workspace=s.workspace?:return;val book=workspace.notebooks.first{it.id==note.notebookId};val editing=s.editingCredentialId==note.id
     var more by remember(note.id){mutableStateOf(false)};var history by remember(note.id){mutableStateOf(false)};var move by remember(note.id){mutableStateOf(false)};var purge by remember(note.id){mutableStateOf(false)}
     val credentialFocus=remember { androidx.compose.ui.focus.FocusRequester() }
-    fun focusContent(){if(book.mode==NoteMode.Password)credentialFocus.requestFocus() else activity.editorSession.command("focus")}
+    val titleEpoch=vm.workspaceEpoch
+    fun focusContent(){if(vm.workspaceEpoch!=titleEpoch||vm.state.value.selectedId!=note.id)return;if(book.mode==NoteMode.Password)credentialFocus.requestFocus() else activity.editorSession.command("focus")}
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)){
         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
             if(showBack)Tool(MojiIcons.ArrowBack,"返回记录",action=back)
@@ -59,7 +60,7 @@ import kotlinx.coroutines.delay
                 }else DropdownMenuItem(text={Text("永久删除")},onClick={purge=true;more=false})
             }}
         }
-        BasicTextField(note.title,{text->vm.edit(note.id){it.copy(title=text.replace("\n"," ").replace("\r"," "))}},Modifier.fillMaxWidth().padding(23.dp,18.dp).testTag("note-title").onFocusChanged{if(it.isFocused)activity.editorSession.clearSelectionAvailability()}.onPreviewKeyEvent { e -> if(e.type==KeyEventType.KeyDown && (e.key==Key.Enter||e.key==Key.Tab)&&!e.isShiftPressed&&!e.isCtrlPressed&&!e.isAltPressed){focusContent();true}else false },singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next),keyboardActions=androidx.compose.foundation.text.KeyboardActions(onNext={focusContent()}),textStyle=MaterialTheme.typography.titleLarge.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),readOnly=note.deletedAt!=null||(book.mode==NoteMode.Password&&!editing))
+        key(note.id,titleEpoch) { BasicTextField(note.title,{text->if(vm.workspaceEpoch==titleEpoch)vm.edit(note.id){it.copy(title=text.replace("\n"," ").replace("\r"," "))}},Modifier.fillMaxWidth().padding(23.dp,18.dp).testTag("note-title").onFocusChanged{if(it.isFocused)activity.editorSession.clearSelectionAvailability()}.onPreviewKeyEvent { e -> if(e.type==KeyEventType.KeyDown && (e.key==Key.Enter||e.key==Key.Tab)&&!e.isShiftPressed&&!e.isCtrlPressed&&!e.isAltPressed){focusContent();true}else false },singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next),keyboardActions=androidx.compose.foundation.text.KeyboardActions(onNext={focusContent()}),textStyle=MaterialTheme.typography.titleLarge.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),readOnly=note.deletedAt!=null||(book.mode==NoteMode.Password&&!editing)) }
         if(note.deletedAt!=null)Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Button(onClick={vm.restore(setOf(note.id))}){Text("恢复记录")};TextButton(onClick={purge=true}){Text("永久删除")}}
         else if(book.mode==NoteMode.Password)CredentialEditor(vm,note,activity,editing,credentialFocus,Modifier.weight(1f))
         else RichNoteEditor(note,book.mode,vm,Modifier.weight(1f))
