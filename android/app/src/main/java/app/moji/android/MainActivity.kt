@@ -34,8 +34,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         lifecycleScope.launch { WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info -> val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull(); posture.value = fold?.let { WindowPosture(if (it.orientation == FoldingFeature.Orientation.VERTICAL) it.bounds.left else null, if (it.orientation == FoldingFeature.Orientation.HORIZONTAL) it.bounds.top else null, it.bounds.width(), it.bounds.height(), it.isSeparating) } ?: WindowPosture() } }
-        editorSession // Warm the local editor once while the workspace opens.
         receive(intent); setContent { MojiRoot(vm, this) }
+        editorSession.preload()
         lifecycleScope.launch { vm.state.collect { s -> if (s.workspace == null) clearSecretClipboard() } }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receive(intent) }

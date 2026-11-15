@@ -15,6 +15,7 @@ import { useCurrentEditor, useEditorState } from "@tiptap/react"
  */
 export function useTiptapEditor(providedEditor?: Editor | null): {
   editor: Editor | null
+  isEditable?: boolean
   editorState?: Editor["state"]
   canCommand?: Editor["can"]
 } {
@@ -37,11 +38,15 @@ export function useTiptapEditor(providedEditor?: Editor | null): {
 
       return {
         editor: context.editor,
+        isEditable: context.editor.isEditable,
         editorState: context.editor.state,
         canCommand: context.editor.can,
       }
     },
   })
 
-  return editorState || { editor: null }
+  // Subscribe to transactions, but never return the previous subscription's
+  // editor (initially null) when the context has just supplied an instance.
+  return { editor: mainEditor, editorState: editorState?.editorState,
+    isEditable: mainEditor?.isEditable, canCommand: mainEditor?.can }
 }

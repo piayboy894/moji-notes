@@ -52,7 +52,7 @@ public partial class MainWindow : Window
     }
     private void DataChanged(string kind)
     {
-        if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;editorRequest++;}
+        if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }

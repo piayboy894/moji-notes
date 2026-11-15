@@ -139,7 +139,7 @@ export function shouldShowButton(props: {
 }): boolean {
   const { editor, hideWhenUnavailable } = props
 
-  if (!editor || !editor.isEditable) return false
+  if (!editor) return false
   if (!isMarkInSchema("highlight", editor)) return false
 
   if (hideWhenUnavailable && !editor.isActive("code")) {

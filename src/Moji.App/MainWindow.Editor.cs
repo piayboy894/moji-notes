@@ -58,17 +58,32 @@ public partial class MainWindow
         recordTitle.TextChanged+=(_,_)=>{if(!loadingEditor&&!recordTitle.IsReadOnly&&VM.WorkspaceEpoch==titleEpoch&&VM.State?.Notes.Any(n=>n.Id==note.Id&&n.PurgedAt==null)==true)VM.EditNote(note.Id,n=>n with{Title=recordTitle.Text.Replace("\r\n"," ").Replace('\r',' ').Replace('\n',' ')});};heading.Children.Add(recordTitle);
         DockPanel.SetDock(heading,Dock.Top);container.Children.Add(heading);
         if(book.Mode==NoteMode.Password){container.Children.Add(editingCredentialId == note.Id ? CredentialView(note) : CredentialReadView(note));editorHost.Content=container;loadingEditor=false;return;}
+        if(cachedEditor==null)WarmEditor();
+        var activeEditor=cachedEditor!;sharedEditor=activeEditor;
+        ParkEditor();
+        if(book.Mode==NoteMode.Prompt){var convert=Ui.Button("转化为变量",()=>_ = activeEditor.Command("convertVariable"));convert.Name="ConvertVariable";convert.Focusable=false;convert.IsEnabled=activeEditor.CanConvert;activeEditor.SelectionChanged=value=>convert.IsEnabled=value;var bar=Ui.Row(convert);bar.Margin=new Thickness(22,6,22,6);DockPanel.SetDock(bar,Dock.Top);container.Children.Add(bar);}
+        else activeEditor.SelectionChanged=null;
+        var pendingEditor=activeEditor;editorHost.Content=container;loadingEditor=false;
+        try{await pendingEditor.Show(note);await pendingEditor.Ready;if(request!=editorRequest)return;
+            if(pendingEditor.Parent is Panel parent)parent.Children.Remove(pendingEditor);
+            container.Children.Add(pendingEditor);
+        }catch(OperationCanceledException){}catch(Exception){if(request==editorRequest)Toast("编辑器未能加载，请重新打开记录");}
+    }
+    private void WarmEditor()
+    {
         if(cachedEditor==null){
             cachedEditor=new SharedEditorView(VM);
             cachedEditor.ActionRequested+=action=>{switch(action){case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":SearchDialog();break;case "save":if(CurrentNote() is {} current)VM.Checkpoint(current.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};
         }
-        sharedEditor=cachedEditor;
-        if(sharedEditor.Parent is Panel parent)parent.Children.Remove(sharedEditor);
-        if(book.Mode==NoteMode.Prompt){var convert=Ui.Button("转化为变量",()=>_ = cachedEditor.Command("convertVariable"));convert.Name="ConvertVariable";convert.Focusable=false;convert.IsEnabled=cachedEditor.CanConvert;cachedEditor.SelectionChanged=value=>convert.IsEnabled=value;var bar=Ui.Row(convert);bar.Margin=new Thickness(22,6,22,6);DockPanel.SetDock(bar,Dock.Top);container.Children.Add(bar);}
-        else cachedEditor.SelectionChanged=null;
-        container.Children.Add(sharedEditor);editorHost.Content=container;loadingEditor=false;
-        try{await sharedEditor.Show(note);}catch(Exception){Toast("编辑器未能加载，请重新打开记录");}
+        ParkEditor();_ = cachedEditor!.Preload();
     }
+    private void ParkEditor()
+    {
+        if(cachedEditor==null||cachedEditor.Parent==EditorWarmHost)return;
+        if(cachedEditor.Parent is Panel parent)parent.Children.Remove(cachedEditor);
+        EditorWarmHost.Children.Add(cachedEditor);
+    }
+    internal Task PreloadedEditor=>cachedEditor?.Preloaded??Task.FromException(new InvalidOperationException("Editor was not preloaded"));
     internal async Task<SharedEditorView> ReadyEditor(){for(var i=0;i<100&&sharedEditor==null;i++)await Task.Delay(50);var editor=sharedEditor??throw new InvalidOperationException("Editor not created");await editor.Ready.WaitAsync(TimeSpan.FromMinutes(2));return editor;}
     private UIElement CredentialReadView(Note note)
     {

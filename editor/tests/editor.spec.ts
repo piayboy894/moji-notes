@@ -82,3 +82,36 @@ test.describe('older Android WebView committed input',()=>{
   expect(await js(page,"window.MojiEditor.editor.view.dom.dispatchEvent(new InputEvent('beforeinput',{bubbles:true,cancelable:true,isComposing:true,inputType:'insertCompositionText',data:'中'}))")).toBe(true)
  })
 })
+
+test('all toolbar controls exist before body focus and stay in place across activation and document switches',async({page})=>{
+ const bar=page.getByRole('toolbar');const buttons=bar.locator('button');
+ await expect(buttons).toHaveCount(20);
+ const labels=await buttons.evaluateAll(items=>items.map(e=>e.getAttribute('aria-label')));
+ expect(await js(page,"document.activeElement===window.MojiEditor.editor.view.dom")).toBe(false);
+ await expect(bar.getByRole('button',{name:'加粗',exact:true})).toBeEnabled();
+ await expect(bar.getByRole('button',{name:'引用',exact:true})).toBeEnabled();
+ await expect(bar.getByRole('button',{name:'撤销',exact:true})).toBeDisabled();
+ // The first interaction can be a toolbar command, without first clicking the body.
+ await bar.getByRole('button',{name:'引用',exact:true}).click();
+ expect(await html(page)).toContain('<blockquote>');
+ await js(page,'window.MojiEditor.deactivate()');
+ await expect(buttons).toHaveCount(20);await expect(bar.getByRole('button',{name:'加粗',exact:true})).toBeDisabled();
+ await js(page,'window.MojiEditor.activate()');
+ await expect(bar.getByRole('button',{name:'加粗',exact:true})).toBeEnabled();
+ await js(page,"window.MojiEditor.editor.commands.blur()");
+ await load(page,prefix+'<p>另一条记录</p>');
+ await expect(buttons).toHaveCount(20);expect(await buttons.evaluateAll(items=>items.map(e=>e.getAttribute('aria-label')))).toEqual(labels);
+ await expect(bar.getByRole('button',{name:'撤销',exact:true})).toBeDisabled();
+ await expect(bar.getByRole('button',{name:'插入图片',exact:true})).toBeEnabled();
+})
+
+test('startup page uses requested background before a document is opened and reports painted readiness',async({page})=>{
+ await page.goto('/?theme=dark');
+ await page.waitForFunction(()=>(window as any).nativeMessages?.some((m:any)=>m.type==='ready'));
+ expect(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor)).toBe('rgb(32, 39, 33)');
+ expect(await js(page,'window.MojiEditor.recordId')).toBeUndefined();
+ await expect(page.getByRole('toolbar').locator('button')).toHaveCount(20);
+ await expect(page.getByRole('button',{name:'加粗',exact:true})).toBeDisabled();
+ await load(page,prefix+'<p>第一次打开</p>');await expect(page.getByRole('button',{name:'加粗',exact:true})).toBeEnabled();
+ expect(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor)).toBe('rgb(255, 255, 255)');
+})

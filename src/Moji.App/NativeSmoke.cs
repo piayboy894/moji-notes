@@ -17,8 +17,13 @@ internal static class NativeSmoke
         try {
             using var vm=new WorkspaceViewModel(Path.Combine(output,"test-data"));var window=new MainWindow(vm,true);Application.Current.MainWindow=window;window.Width=1200;window.Height=850;window.Show();
             if(!await vm.OpenAsync()||vm.State!.Notebooks.Count!=0)throw new Exception("Fresh workspace is not empty");await Render();Capture(window,Path.Combine(output,"01-workspace.png"));checks.Add("empty workspace; only notebooks can own new records");
+            await window.PreloadedEditor.WaitAsync(TimeSpan.FromMinutes(2));
+            checks.Add("editor page preloads in the workspace before opening or creating the first record");
             var book=new Notebook{Name="编辑测试",Mode=NoteMode.Prompt,Color="#75876D"};vm.Change(w=>w with{Notebooks=[book]},"edit");window.Navigate(book.Id);await Render();window.AddNote();var editor=await window.ReadyEditor();
             editorReadyMilliseconds=startup.Elapsed.TotalMilliseconds;
+            await Render();
+            if(await editor.Browser.CoreWebView2.ExecuteScriptAsync("document.querySelectorAll('.tiptap-toolbar button').length")!="20"||await editor.Browser.CoreWebView2.ExecuteScriptAsync("document.querySelector('button[aria-label=加粗]').disabled")!="false")throw new Exception("Complete enabled toolbar must be present before body focus");
+            checks.Add("all 20 toolbar controls appear before the first body focus; applicable commands are already enabled");
             if(Environment.GetEnvironmentVariable("MOJI_FORCE_WEBVIEW_BOOTSTRAP")=="1"){
                 if(!EditorFiles.HasBootstrapper||EditorFiles.HasFixedRuntime||EditorFiles.BootstrapperInvocations!=1)throw new Exception("Light package must execute the embedded bootstrapper once without a fixed runtime");
                 checks.Add("Microsoft-signed setup executes; standard package embeds no fixed WebView2 runtime");

@@ -36,6 +36,26 @@ class AdaptiveUiTest {
 
     private fun hideKeyboard() { compose.activityRule.scenario.onActivity { androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(350); compose.waitForIdle() }
     private fun screenshot(name: String) { compose.waitForIdle(); Thread.sleep(500); val path="/sdcard/Download/moji-native-ui/$name.png"; shell("mkdir -p /sdcard/Download/moji-native-ui"); shell("screencap -p $path"); check((shell("stat -c %s $path").trim().toLongOrNull()?:0)>1024) }
+    @Test fun startupPaintsTheEditorBeforeTheFirstRecordAndKeepsTheFullToolbar() {
+        ready()
+        compose.waitUntil(30000){compose.activity.editorSession.isPreloaded}
+        assertNull(compose.activity.vm.state.value.selectedId)
+        assertEquals("null",js("window.MojiEditor.recordId??null"))
+        assertEquals("20",js("document.querySelectorAll('.tiptap-toolbar button').length"))
+        compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()}
+        webReady()
+        assertEquals("20",js("document.querySelectorAll('.tiptap-toolbar button').length"))
+        assertEquals("false",js("document.querySelector('button[aria-label=加粗]').disabled"))
+        assertEquals("false",js("document.activeElement===window.MojiEditor.editor.view.dom"))
+        js("document.querySelector('button[aria-label=引用]').click()")
+        compose.waitUntil(5000){js("Boolean(window.MojiEditor.editor.isActive('blockquote'))")=="true"}
+        js("window.MojiEditor.deactivate()")
+        assertEquals("20",js("document.querySelectorAll('.tiptap-toolbar button').length"))
+        assertEquals("true",js("document.querySelector('button[aria-label=加粗]').disabled"))
+        js("window.MojiEditor.activate()")
+        assertEquals("false",js("document.querySelector('button[aria-label=加粗]').disabled"))
+        screenshot("25-first-editor-full-toolbar")
+    }
     @Test fun emptyWorkspaceCreatesOnlyTheNotebookChosenByUser() {
         ready(false); runBlocking { compose.activity.vm.replaceData(GameSaves.capture(Seed.create())) }
         compose.activityRule.scenario.onActivity { it.vm.navigate("home") }
