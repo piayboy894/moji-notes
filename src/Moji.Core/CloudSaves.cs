@@ -32,18 +32,18 @@ public static class GameSaves
     }
 }
 
-// Each user action commits the encrypted catalog and save together. A stale branch
+// Each user action commits the catalog and save together. A stale branch
 // head is rejected; no automatic merge, overwrite, retry, or choice of direction.
 public sealed class CloudSaveService(HttpClient? client = null)
 {
     private readonly HttpClient http = client ?? new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
     private static string Source(SyncSettings c) => CryptoService.Hash(c.Repository.ToLowerInvariant() + "\n" + c.Code);
-    public static string Root(string code) => "moji-notes/" + CryptoService.Hash(code)[..40] + "/";
+    public static string Root() => "moji-notes/saves/";
+    public static string OldRoot(string code) => "moji-notes/" + CryptoService.Hash(code)[..40] + "/";
     public static string LegacyPath(string code) => "moji-notes/" + CryptoService.Hash(code)[..40] + ".moji";
     public static void ValidateConfig(SyncSettings c)
     {
         if (string.IsNullOrWhiteSpace(c.Token)) throw new InvalidOperationException("请先设置 GitHub Token");
-        if (!Regex.IsMatch(c.Code, "^[A-Za-z0-9]{12,128}$")) throw new InvalidOperationException("存档码需为 12–128 位字母或数字");
         if (!Regex.IsMatch(c.Repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) throw new InvalidOperationException("仓库格式应为 用户名/仓库名");
     }
     private static void CheckSource(SyncSettings c, SaveCatalog catalog)
@@ -82,10 +82,10 @@ public sealed class CloudSaveService(HttpClient? client = null)
         using var key = CryptoService.Derive(code, envelope.Salt, envelope.Iterations);
         return CryptoService.Decrypt<T>(envelope, key);
     }
-    private static string Encrypt<T>(T value, string code)
+    private static string Encode<T>(T value)
     {
-        using var key = CryptoService.NewKey(code); var text = Json.Serialize(CryptoService.Encrypt(value, key));
-        if (text.Length > 25_000_000) throw new InvalidDataException("存档超过容量限制，请先导出较大的图片");
+        var text = Json.Serialize(value);
+        if (Encoding.UTF8.GetByteCount(text) > 25_000_000) throw new InvalidDataException("存档超过容量限制，请先导出较大的图片");
         return text;
     }
     public async Task<SaveCatalog> ListAsync(SyncSettings config, CancellationToken cancellation = default)
@@ -98,18 +98,26 @@ public sealed class CloudSaveService(HttpClient? client = null)
         var headSha = head.Value.GetProperty("object").GetProperty("sha").GetString()!;
         var commit = (await Api(config, HttpMethod.Get, "/git/commits/" + headSha, cancellation: cancellation))!.Value;
         var tree = commit.GetProperty("tree").GetProperty("sha").GetString()!;
-        var indexFile = await Api(config, HttpMethod.Get, "/contents/" + Root(config.Code) + "index.moji?ref=" + headSha, missing: true, cancellation: cancellation);
+        var indexFile = await Api(config, HttpMethod.Get, "/contents/" + Root() + "index.json?ref=" + headSha, missing: true, cancellation: cancellation);
         var entries = new List<SaveEntry>();
         if (indexFile != null)
         {
-            var index = Decrypt<SaveIndex>(await DecodeFile(config, indexFile.Value, cancellation), config.Code); GameSaves.Validate(index); entries.AddRange(index.Entries);
+            var index = Json.Deserialize<SaveIndex>(await DecodeFile(config, indexFile.Value, cancellation)); GameSaves.Validate(index); entries.AddRange(index.Entries);
         }
-        var legacy = await Api(config, HttpMethod.Get, "/contents/" + LegacyPath(config.Code) + "?ref=" + headSha, missing: true, cancellation: cancellation);
-        if (legacy != null)
+        // Retain access to previous encrypted saves when their key is already on this device.
+        // Listing is read-only; migration happens only when the user reads or overwrites a save.
+        if (!string.IsNullOrEmpty(config.Code))
         {
-            var payload = Decrypt<SyncPayload>(await DecodeFile(config, legacy.Value, cancellation), config.Code);
-            var w = GameSaves.Apply(new(), payload);
-            entries.Add(new("legacy", "旧版存档", 0, w.LiveBooks.Count(), w.LiveNotes.Count(), legacy.Value.GetProperty("sha").GetString()!, "旧版", true));
+            var oldIndex = await Api(config, HttpMethod.Get, "/contents/" + OldRoot(config.Code) + "index.moji?ref=" + headSha, missing: true, cancellation: cancellation);
+            if (oldIndex != null) {
+                var old = Decrypt<SaveIndex>(await DecodeFile(config, oldIndex.Value, cancellation), config.Code); GameSaves.Validate(old);
+                entries.AddRange(old.Entries.Select(e=>e with { Id="old-"+e.Id, Legacy=true }));
+            }
+            var legacy = await Api(config, HttpMethod.Get, "/contents/" + LegacyPath(config.Code) + "?ref=" + headSha, missing: true, cancellation: cancellation);
+            if (legacy != null) {
+                var w = GameSaves.Apply(new(), Decrypt<SyncPayload>(await DecodeFile(config, legacy.Value, cancellation), config.Code));
+                entries.Add(new("legacy", "旧版存档", 0, w.LiveBooks.Count(), w.LiveNotes.Count(), legacy.Value.GetProperty("sha").GetString()!, "旧版", true));
+            }
         }
         return new(Source(config), branch, headSha, tree, entries.OrderByDescending(e => e.SavedAt).ToList());
     }
@@ -118,7 +126,8 @@ public sealed class CloudSaveService(HttpClient? client = null)
         CheckSource(config, catalog);
         if (!catalog.Entries.Contains(entry)) throw new InvalidOperationException("请重新选择存档");
         var blob = (await Api(config, HttpMethod.Get, "/git/blobs/" + entry.BlobSha, cancellation: cancellation))!.Value;
-        var payload = Decrypt<SyncPayload>(await DecodeFile(config, blob, cancellation), config.Code);
+        var text = await DecodeFile(config, blob, cancellation);
+        var payload = entry.Legacy ? Decrypt<SyncPayload>(text, config.Code) : Json.Deserialize<SyncPayload>(text);
         _ = GameSaves.Apply(new(), payload);
         return payload;
     }
@@ -132,15 +141,15 @@ public sealed class CloudSaveService(HttpClient? client = null)
         if (overwrite == null && catalog.Entries.Count(e => !e.Legacy) >= 500) throw new InvalidOperationException("存档已达 500 份，请先删除不需要的存档");
         if (catalog.HeadSha == null)
         {
-            var empty = Encrypt(new SaveIndex("moji-saves", 1, []), config.Code);
-            await Api(config, HttpMethod.Put, "/contents/" + Root(config.Code) + "index.moji", new { message = "moji: initialize encrypted saves", content = Convert.ToBase64String(Encoding.UTF8.GetBytes(empty)) }, cancellation: cancellation);
+            var empty = Encode(new SaveIndex("moji-saves", 1, []));
+            await Api(config, HttpMethod.Put, "/contents/" + Root() + "index.json", new { message = "moji: initialize saves", content = Convert.ToBase64String(Encoding.UTF8.GetBytes(empty)) }, cancellation: cancellation);
             catalog = await ListAsync(config, cancellation);
         }
         var payload = GameSaves.Capture(workspace);
-        var blobSha = await Blob(config, Encrypt(payload, config.Code), cancellation);
-        var entry = new SaveEntry(overwrite?.Id ?? Clock.Id, overwrite?.Legacy == true ? "旧版存档" : name, Clock.Now, workspace.LiveBooks.Count(), workspace.LiveNotes.Count(), blobSha, "Windows", overwrite?.Legacy ?? false);
-        var entries = catalog.Entries.Where(e => e.Id != entry.Id).Append(entry).OrderByDescending(e => e.SavedAt).ToList();
-        return await Commit(config, catalog, entries, entry, false, cancellation);
+        var blobSha = await Blob(config, Encode(payload), cancellation);
+        var entry = new SaveEntry(overwrite?.Legacy==true ? Clock.Id : overwrite?.Id ?? Clock.Id, name, Clock.Now, workspace.LiveBooks.Count(), workspace.LiveNotes.Count(), blobSha, "Windows");
+        var entries = catalog.Entries.Where(e => e.Id != entry.Id && e.Id != overwrite?.Id).Append(entry).OrderByDescending(e => e.SavedAt).ToList();
+        return await Commit(config, catalog, entries, entry, false, cancellation, overwrite?.Legacy==true ? overwrite : null);
     }
     public async Task<SaveCatalog> DeleteAsync(SyncSettings config, SaveCatalog catalog, SaveEntry entry, CancellationToken cancellation = default)
     {
@@ -148,17 +157,26 @@ public sealed class CloudSaveService(HttpClient? client = null)
         if (!catalog.Entries.Contains(entry)) throw new InvalidOperationException("请重新选择存档");
         return await Commit(config, catalog, catalog.Entries.Where(e => e.Id != entry.Id).ToList(), entry, true, cancellation);
     }
-    private async Task<SaveCatalog> Commit(SyncSettings config, SaveCatalog catalog, List<SaveEntry> entries, SaveEntry changed, bool deleting, CancellationToken cancellation)
+    private async Task<SaveCatalog> Commit(SyncSettings config, SaveCatalog catalog, List<SaveEntry> entries, SaveEntry changed, bool deleting, CancellationToken cancellation, SaveEntry? retired = null)
     {
         var index = new SaveIndex("moji-saves", 1, entries.Where(e => !e.Legacy).ToList()); GameSaves.Validate(index);
-        var indexSha = await Blob(config, Encrypt(index, config.Code), cancellation);
-        var changes = new object[] {
-            new { path = Root(config.Code) + "index.moji", mode = "100644", type = "blob", sha = indexSha },
-            new { path = changed.Legacy ? LegacyPath(config.Code) : Root(config.Code) + changed.Id + ".moji", mode = "100644", type = "blob", sha = deleting ? null : changed.BlobSha }
-        };
+        var indexSha = await Blob(config, Encode(index), cancellation);
+        var changes = new List<object> { new { path = Root()+"index.json", mode="100644", type="blob", sha=indexSha } };
+        var old = changed.Legacy ? changed : retired;
+        if (!changed.Legacy) changes.Add(new { path=Root()+changed.Id+".json", mode="100644", type="blob", sha=deleting ? null : changed.BlobSha });
+        if (old != null) {
+            var oldPath=old.Id=="legacy" ? LegacyPath(config.Code) : OldRoot(config.Code)+old.Id[4..]+".moji";
+            changes.Add(new { path=oldPath, mode="100644", type="blob", sha=(string?)null });
+            if (old.Id!="legacy") {
+                var oldEntries=entries.Where(e=>e.Legacy && e.Id.StartsWith("old-")).Select(e=>e with { Id=e.Id[4..], Legacy=false }).ToList();
+                using var key=CryptoService.NewKey(config.Code);
+                var oldSha=await Blob(config,Json.Serialize(CryptoService.Encrypt(new SaveIndex("moji-saves",1,oldEntries),key)),cancellation);
+                changes.Add(new {path=OldRoot(config.Code)+"index.moji",mode="100644",type="blob",sha=oldSha});
+            }
+        }
         var treeBody = new Dictionary<string,object> { ["tree"] = changes }; if (catalog.TreeSha != null) treeBody["base_tree"] = catalog.TreeSha;
         var treeSha = (await Api(config, HttpMethod.Post, "/git/trees", treeBody, cancellation: cancellation))!.Value.GetProperty("sha").GetString()!;
-        var commitSha = (await Api(config, HttpMethod.Post, "/git/commits", new { message = deleting ? "moji: delete encrypted save" : "moji: write encrypted save", tree = treeSha, parents = catalog.HeadSha == null ? Array.Empty<string>() : new[] { catalog.HeadSha } }, cancellation: cancellation))!.Value.GetProperty("sha").GetString()!;
+        var commitSha = (await Api(config, HttpMethod.Post, "/git/commits", new { message = deleting ? "moji: delete save" : "moji: write save", tree = treeSha, parents = catalog.HeadSha == null ? Array.Empty<string>() : new[] { catalog.HeadSha } }, cancellation: cancellation))!.Value.GetProperty("sha").GetString()!;
         if (catalog.HeadSha == null) await Api(config, HttpMethod.Post, "/git/refs", new { @ref = "refs/heads/" + catalog.Branch, sha = commitSha }, cancellation: cancellation);
         else await Api(config, HttpMethod.Patch, "/git/refs/heads/" + Uri.EscapeDataString(catalog.Branch), new { sha = commitSha, force = false }, cancellation: cancellation);
         return catalog with { HeadSha = commitSha, TreeSha = treeSha, Entries = entries };

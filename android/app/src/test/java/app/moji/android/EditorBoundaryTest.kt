@@ -6,11 +6,11 @@ import org.junit.Test
 import org.junit.Assert.*
 class EditorBoundaryTest {
  @Test fun emptyAndSelectedContentCanBeSplitAndAcceptVariables() {
-  for(text in listOf("", "hello", "**bold**", "第一行\n\n第二行", "- one\n- two")) {
+  for(text in listOf("", "hello", "**bold**", "第一行\n\n第二行", "- one\n- two", "hello   ", "  leading space", "emoji 😀 end", "line\n\n\n", "![变量](moji-variable:0123456789abcdef0123456789abcdef)")) {
    val original=RichTextState().apply{setMarkdown(text)}
    for(position in 0..original.annotatedString.length) {
-    val left=RichTextState().apply{setHtml(original.toHtml())}
-    val right=RichTextState().apply{setHtml(original.toHtml())}
+    val left=original.copy()
+    val right=original.copy()
     if(position<left.annotatedString.length)left.removeTextRange(TextRange(position,left.annotatedString.length))
     if(position>0)right.removeTextRange(TextRange(0,position))
     RichMarkdown.fromHtml(left.toHtml());RichMarkdown.fromHtml(right.toHtml())

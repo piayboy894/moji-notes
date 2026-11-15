@@ -12,7 +12,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudSaveTest {
-    private fun state() = TestWorkspace.create().copy(sync = SyncSettings(repository = "test-owner/xuxian-data", token = "fake-private-token", code = "ManualSaveCode2026"))
+    private fun state() = TestWorkspace.create().copy(sync = SyncSettings(repository = "test-owner/xuxian-data", token = "fake-private-token", code = ""))
     @Test fun loadingReplacesAllProjectsWithoutMergingAndKeepsDevicePreferences() {
         val local = state().copy(preferences = Preferences(theme = "dark", autoSync = true)); val source = TestWorkspace.create()
         val loaded = GameSaves.apply(local, GameSaves.capture(source)); assertEquals(source.notebooks.map { it.id }, loaded.notebooks.map { it.id }); assertEquals(source.notes.map { it.id }, loaded.notes.map { it.id }); assertTrue(loaded.notes.none { n -> local.notes.any { it.id == n.id } }); assertEquals(local.sync, loaded.sync); assertEquals("dark", loaded.preferences.theme); assertFalse(loaded.preferences.autoSync)
@@ -38,8 +38,8 @@ class CloudSaveTest {
             val changed = state.changeNote(state.notes[0].id, true) { it.copy(content = "replacement") }; catalog = service.write(state.sync, catalog, changed, "覆盖名称", entry)
             val payload = service.read(state.sync, catalog, catalog.entries.single()); assertEquals("replacement", payload.notes[0].content); assertTrue(payload.notes[0].history.isNotEmpty())
             catalog = service.write(state.sync, catalog, state, "第二份"); assertEquals(2, catalog.entries.size); catalog = service.list(state.sync); val removed = catalog.entries.first { it.name == "覆盖名称" }
-            catalog = service.delete(state.sync, catalog, removed); assertEquals(1, catalog.entries.size); assertFalse(git.files.containsKey(CloudSaveService.root(state.sync.code) + removed.id + ".moji")); assertEquals("OTHER_APP_DATA", git.text("other-app/data.json"))
-            assertTrue(git.changedPaths.all { it.startsWith(CloudSaveService.root(state.sync.code)) }); assertTrue(git.uploads.all { !it.contains("fake-private-token") && !it.contains("replacement") && !it.contains("覆盖名称") }); assertFalse(git.forced)
+            catalog = service.delete(state.sync, catalog, removed); assertEquals(1, catalog.entries.size); assertFalse(git.files.containsKey(CloudSaveService.root() + removed.id + ".json")); assertEquals("OTHER_APP_DATA", git.text("other-app/data.json"))
+            assertTrue(git.changedPaths.all { it.startsWith(CloudSaveService.root()) }); assertTrue(git.uploads.all { !it.contains("fake-private-token") }); assertFalse(git.forced)
         }
     }
     @Test fun staleSaveNeverOverwritesOrRetriesAutomatically() = runBlocking {
@@ -49,18 +49,28 @@ class CloudSaveTest {
         }
     }
     @Test fun legacySaveIsOnlyReadOrDeletedWhenSelected() = runBlocking {
-        MockWebServer().use { server -> val git = MemoryGit(); val state = state(); Crypto.newKey(state.sync.code).use { git.add(CloudSaveService.legacyPath(state.sync.code), json.encodeToString(Crypto.encrypt(state.payload(), it))) }; server.dispatcher = git; server.start(); val service = CloudSaveService(OkHttpClient(), server.url("/").toString().trimEnd('/'))
+        MockWebServer().use { server -> val git = MemoryGit(); val state = state().let{it.copy(sync=it.sync.copy(code="ManualSaveCode2026"))}; Crypto.newKey(state.sync.code).use { git.add(CloudSaveService.legacyPath(state.sync.code), json.encodeToString(Crypto.encrypt(state.payload(), it))) }; server.dispatcher = git; server.start(); val service = CloudSaveService(OkHttpClient(), server.url("/").toString().trimEnd('/'))
             val catalog = service.list(state.sync); val entry = catalog.entries.single(); assertTrue(entry.legacy); assertEquals(0, git.writes); assertEquals(state.notes.map { it.id }, service.read(state.sync, catalog, entry).notes.map { it.id }); assertTrue(service.delete(state.sync, catalog, entry).entries.isEmpty()); assertFalse(git.files.containsKey(CloudSaveService.legacyPath(state.sync.code)))
         }
     }
     @Test fun emptyRepositoryCanBeInitializedAndConnectionChangesCannotUseOldCatalog() = runBlocking {
         MockWebServer().use { server -> val git = MemoryGit(true); server.dispatcher = git; server.start(); val service = CloudSaveService(OkHttpClient(), server.url("/").toString().trimEnd('/')); val state = state(); val empty = service.list(state.sync); assertNull(empty.headSha)
-            val catalog = service.write(state.sync, empty, state, "first"); assertEquals(1, service.list(state.sync).entries.size); assertTrue(git.files.keys.all { it.startsWith(CloudSaveService.root(state.sync.code)) }); val writes = git.writes
-            assertNotNull(runCatching { service.write(state.sync.copy(code = "OtherSaveCode2026"), catalog, state, "wrong") }.exceptionOrNull()); assertEquals(writes, git.writes)
+            val catalog = service.write(state.sync, empty, state, "first"); assertEquals(1, service.list(state.sync).entries.size); assertTrue(git.files.keys.all { it.startsWith(CloudSaveService.root()) }); val writes = git.writes
+            assertNotNull(runCatching { service.write(state.sync.copy(repository = "another/repository"), catalog, state, "wrong") }.exceptionOrNull()); assertEquals(writes, git.writes)
         }
     }
     @Test fun corruptCatalogCannotAddressOtherPaths() { assertThrows(IllegalArgumentException::class.java) { GameSaves.validate(SaveIndex("moji-saves", 1, listOf(SaveEntry("../../other-app/data.json", "bad", 1, 0, 0, "a".repeat(40), "test")))) } }
 
+    @Test fun anotherDeviceNeedsOnlyRepositoryAndToken() = runBlocking {
+        MockWebServer().use { server ->val git=MemoryGit();server.dispatcher=git;server.start();val service=CloudSaveService(OkHttpClient(),server.url("/").toString().trimEnd('/'));val w=state();val empty=service.list(w.sync);service.write(w.sync,empty,w,"code-free");val c=SyncSettings(repository=w.sync.repository,token="second-device-token");val remote=service.list(c);assertEquals(1,remote.entries.size);assertEquals(w.notes,service.read(c,remote,remote.entries.single()).notes);assertTrue(git.files.containsKey("moji-notes/saves/index.json"))}
+    }
+    @Test fun previousCatalogIsReadOnlyUntilExplicitlyConvertedOrDeleted() = runBlocking {
+        MockWebServer().use {server->val git=MemoryGit();val w=state().let{it.copy(sync=it.sync.copy(code="ManualSaveCode2026"))};val entries=(0..1).map{i->val id=uid();val path=CloudSaveService.oldRoot(w.sync.code)+id+".moji";Crypto.newKey(w.sync.code).use{git.add(path,json.encodeToString(Crypto.encrypt(w.payload(),it)))};SaveEntry(id,"old$i",now(),3,3,git.files.getValue(path),"Android")}
+            Crypto.newKey(w.sync.code).use{git.add(CloudSaveService.oldRoot(w.sync.code)+"index.moji",json.encodeToString(Crypto.encrypt(SaveIndex("moji-saves",1,entries),it)))}
+            server.dispatcher=git;server.start();val service=CloudSaveService(OkHttpClient(),server.url("/").toString().trimEnd('/'));var c=service.list(w.sync);assertEquals(2,c.entries.size);assertTrue(c.entries.all{it.legacy});assertEquals(0,git.writes);assertEquals(w.id,service.read(w.sync,c,c.entries.first()).id)
+            c=service.write(w.sync,c,w,"converted",c.entries.first());c=service.list(w.sync);assertEquals(2,c.entries.size);assertEquals(1,c.entries.count{it.legacy});c=service.delete(w.sync,c,c.entries.first{it.legacy});assertEquals(1,service.list(w.sync).entries.size);assertEquals("OTHER_APP_DATA",git.text("other-app/data.json"))
+        }
+    }
     private class MemoryGit(empty: Boolean = false) : Dispatcher() {
         private var next = 10; private fun id() = (next++).toString(16).padStart(40, '0')
         private val blobs = mutableMapOf<String, String>(); private val trees = mutableMapOf<String, MutableMap<String, String>>(); private val commits = mutableMapOf<String, Pair<String, String?>>()

@@ -8,7 +8,7 @@ using Xunit;
 namespace Moji.Tests;
 public class CloudSaveTests
 {
-    private static Workspace State() => TestWorkspace.Create() with { Sync = new() { Repository = "test-owner/xuxian-data", Token = "fake-private-token", Code = "ManualSaveCode2026" } };
+    private static Workspace State() => TestWorkspace.Create() with { Sync = new() { Repository = "test-owner/xuxian-data", Token = "fake-private-token", Code = "" } };
     [Fact] public void LoadingReplacesEveryProjectWithoutMergingAndKeepsDeviceSettings()
     {
         var local = State() with { Preferences = new() { Theme = "dark", AutoSync = true } };
@@ -41,10 +41,10 @@ public class CloudSaveTests
         catalog=await service.WriteAsync(state.Sync,catalog,state,"第二份"); Assert.Equal(2,catalog.Entries.Count);
         catalog=await service.ListAsync(state.Sync); Assert.Equal(2,catalog.Entries.Count);
         var removed=catalog.Entries.First(e=>e.Name=="覆盖名称"); catalog=await service.DeleteAsync(state.Sync,catalog,removed);
-        Assert.Single(catalog.Entries); Assert.DoesNotContain(CloudSaveService.Root(state.Sync.Code)+removed.Id+".moji",git.Files.Keys);
+        Assert.Single(catalog.Entries); Assert.DoesNotContain(CloudSaveService.Root()+removed.Id+".json",git.Files.Keys);
         Assert.Equal("OTHER_APP_DATA",git.Text("other-app/data.json"));
-        Assert.All(git.ChangedPaths,p=>Assert.StartsWith(CloudSaveService.Root(state.Sync.Code),p));
-        Assert.All(git.Uploads,text=>{Assert.DoesNotContain("fake-private-token",text);Assert.DoesNotContain("replacement",text);Assert.DoesNotContain("覆盖名称",text);});
+        Assert.All(git.ChangedPaths,p=>Assert.StartsWith(CloudSaveService.Root(),p));
+        Assert.All(git.Uploads,text=>{Assert.DoesNotContain("fake-private-token",text);});
         Assert.False(git.Forced);
     }
     [Fact] public async Task AStaleSaveNeverOverridesRemoteChangesOrRetries()
@@ -57,18 +57,35 @@ public class CloudSaveTests
     }
     [Fact] public async Task LegacySaveIsOnlyLoadedOrDeletedWhenExplicitlySelected()
     {
-        using var git=new MemoryGit();var state=State();using(var key=CryptoService.NewKey(state.Sync.Code))git.Add(CloudSaveService.LegacyPath(state.Sync.Code),Json.Serialize(CryptoService.Encrypt(GameSaves.Capture(state),key)));
+        using var git=new MemoryGit();var state=State() with{Sync=State().Sync with{Code="ManualSaveCode2026"}};using(var key=CryptoService.NewKey(state.Sync.Code))git.Add(CloudSaveService.LegacyPath(state.Sync.Code),Json.Serialize(CryptoService.Encrypt(GameSaves.Capture(state),key)));
         var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);var entry=catalog.Entries.Single();Assert.True(entry.Legacy);Assert.Equal(0,git.Writes);
         Assert.Equal(state.Notes.Select(n=>n.Id),(await service.ReadAsync(state.Sync,catalog,entry)).Notes.Select(n=>n.Id));
         catalog=await service.DeleteAsync(state.Sync,catalog,entry);Assert.Empty(catalog.Entries);Assert.DoesNotContain(CloudSaveService.LegacyPath(state.Sync.Code),git.Files.Keys);
     }
     [Fact] public async Task EmptyRepositoryIsInitializedWithoutAnotherApplicationsFiles()
-    {using var git=new MemoryGit(true);var state=State();var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);Assert.Null(catalog.HeadSha);catalog=await service.WriteAsync(state.Sync,catalog,state,"first");Assert.Single((await service.ListAsync(state.Sync)).Entries);Assert.All(git.Files.Keys,p=>Assert.StartsWith(CloudSaveService.Root(state.Sync.Code),p));}
+    {using var git=new MemoryGit(true);var state=State();var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);Assert.Null(catalog.HeadSha);catalog=await service.WriteAsync(state.Sync,catalog,state,"first");Assert.Single((await service.ListAsync(state.Sync)).Entries);Assert.All(git.Files.Keys,p=>Assert.StartsWith(CloudSaveService.Root(),p));}
     [Fact] public async Task ChangedConnectionCannotUseAnOldCatalog()
-    {using var git=new MemoryGit();var state=State();var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);var count=git.Writes;await Assert.ThrowsAsync<InvalidOperationException>(()=>service.WriteAsync(state.Sync with{Code="OtherSaveCode2026"},catalog,state,"wrong"));Assert.Equal(count,git.Writes);}
+    {using var git=new MemoryGit();var state=State();var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);var count=git.Writes;await Assert.ThrowsAsync<InvalidOperationException>(()=>service.WriteAsync(state.Sync with{Repository="another/repository"},catalog,state,"wrong"));Assert.Equal(count,git.Writes);}
     [Fact] public void CorruptCatalogCannotAddressArbitraryPaths()
     {Assert.Throws<InvalidDataException>(()=>GameSaves.Validate(new("moji-saves",1,[new("../../other-app/data.json","bad",1,0,0,new string('a',40),"test")])));}
 
+    [Fact] public async Task AnotherDeviceNeedsOnlyRepositoryAndTokenToReadTheSameSaves()
+    {
+        using var git=new MemoryGit();var service=new CloudSaveService(new HttpClient(git));var state=State();var catalog=await service.ListAsync(state.Sync);
+        await service.WriteAsync(state.Sync,catalog,state,"code-free");var connection=new SyncSettings{Repository=state.Sync.Repository,Token="second-device-token"};
+        var remote=await service.ListAsync(connection);Assert.Single(remote.Entries);Assert.Equal(Json.Serialize(state.Notes),Json.Serialize((await service.ReadAsync(connection,remote,remote.Entries.Single())).Notes));
+        Assert.Contains("moji-notes/saves/index.json",git.Files.Keys);Assert.DoesNotContain("fake-private-token",git.Text("moji-notes/saves/index.json"));
+    }
+    [Fact] public async Task OlderCatalogCanBeReadAndExplicitlyReplacedWithoutLosingOtherSaves()
+    {
+        using var git=new MemoryGit();var state=State() with{Sync=State().Sync with{Code="ManualSaveCode2026"}};var entries=new List<SaveEntry>();
+        for(var i=0;i<2;i++){string data;using(var key=CryptoService.NewKey(state.Sync.Code))data=Json.Serialize(CryptoService.Encrypt(GameSaves.Capture(state),key));var id=Clock.Id;var path=CloudSaveService.OldRoot(state.Sync.Code)+id+".moji";git.Add(path,data);entries.Add(new(id,"old"+i,Clock.Now,3,3,git.Files[path],"Windows"));}
+        using(var key=CryptoService.NewKey(state.Sync.Code))git.Add(CloudSaveService.OldRoot(state.Sync.Code)+"index.moji",Json.Serialize(CryptoService.Encrypt(new SaveIndex("moji-saves",1,entries),key)));
+        var service=new CloudSaveService(new HttpClient(git));var catalog=await service.ListAsync(state.Sync);Assert.Equal(2,catalog.Entries.Count);Assert.All(catalog.Entries,e=>Assert.True(e.Legacy));Assert.Equal(0,git.Writes);
+        var first=catalog.Entries[0];Assert.Equal(state.Id,(await service.ReadAsync(state.Sync,catalog,first)).Id);
+        catalog=await service.WriteAsync(state.Sync,catalog,state,"converted",first);catalog=await service.ListAsync(state.Sync);Assert.Equal(2,catalog.Entries.Count);Assert.Single(catalog.Entries,e=>e.Legacy);Assert.Single(catalog.Entries,e=>!e.Legacy);
+        catalog=await service.DeleteAsync(state.Sync,catalog,catalog.Entries.Single(e=>e.Legacy));Assert.Single((await service.ListAsync(state.Sync)).Entries);Assert.Equal("OTHER_APP_DATA",git.Text("other-app/data.json"));
+    }
     private sealed class MemoryGit : HttpMessageHandler
     {
         private int next=10; private readonly Dictionary<string,string> blobs=[];

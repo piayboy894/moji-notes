@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 @Composable fun SettingsDialog(s: AppState, vm: MojiViewModel, activity: MainActivity, initial: String, close: () -> Unit, backup: () -> Unit, exportText: () -> Unit, import: () -> Unit, manageSaves: () -> Unit) {
     val w = s.workspace ?: return; var tab by remember { mutableStateOf(initial) }; val scope = rememberCoroutineScope()
-    var repo by remember { mutableStateOf(w.sync.repository) }; var token by remember { mutableStateOf(w.sync.token) }; var code by remember { mutableStateOf(w.sync.code) }
+    var repo by remember { mutableStateOf(w.sync.repository) }; var token by remember { mutableStateOf(w.sync.token) }
     var status by remember { mutableStateOf("") }
     PanelDialog("偏好设置", close, width = 720) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("general" to "通用", "sync" to "存档", "shortcuts" to "快捷键", "data" to "数据", "about" to "更新").forEach { (id, title) -> FilterChip(tab == id, { tab = id; status = "" }, label = { Text(title) }) } }
@@ -32,13 +32,11 @@ import kotlinx.coroutines.launch
                 SectionTitle("云存档连接")
                 Field("数据仓库", repo) { repo = it }; Field("GitHub Token", token, secret = true) { token = it.trim() }
                 Text("仅需数据仓库 Contents 读写权限。Token 不会进入云端数据文件。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Field("存档码（12–128 位字母或数字）", code, secret = true) { code = it.trim() }
-                Row { TextButton(onClick = { code = Crypto.password(24, false) }) { Icon(MojiIcons.Casino, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("随机生成") }; TextButton(onClick = { activity.copy(code, true) }) { Text("复制存档码") } }
-                fun config() = w.sync.copy(repository = repo.trim(), token = token, code = code, base = emptyMap())
+                fun config() = w.sync.copy(repository = repo.trim(), token = token, base = emptyMap())
                 fun saveConnection() { vm.mutate { it.copy(sync = config(), preferences = it.preferences.copy(autoSync = false)) } }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(onClick = { saveConnection(); status = "连接设置已保存" }) { Text("保存设置") }
-                    Button(onClick = { saveConnection(); manageSaves() }, enabled = token.isNotBlank() && code.isNotBlank()) { Text("打开云存档") }
+                    Button(onClick = { saveConnection(); manageSaves() }, enabled = token.isNotBlank() && repo.isNotBlank()) { Text("打开云存档") }
                 }
                 if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.labelSmall)
                 TextButton(onClick = { activity.openUrl("https://github.com/settings/personal-access-tokens/new") }) { Text("创建 GitHub 授权"); Icon(MojiIcons.OpenInNew, null, Modifier.size(15.dp)) }

@@ -27,7 +27,7 @@ object GameSaves {
     }
 }
 
-// A user action atomically commits encrypted data + catalog. No background sync,
+// A user action atomically commits data + catalog. No background sync,
 // automatic merge, forced overwrite, retry, or selection of a newer save.
 class CloudSaveService(private val http: OkHttpClient = OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build(), private val apiBase: String = "https://api.github.com") {
     private fun source(c: SyncSettings) = Crypto.hash(c.repository.lowercase() + "\n" + c.code)
@@ -51,7 +51,7 @@ class CloudSaveService(private val http: OkHttpClient = OkHttpClient.Builder().c
         return Crypto.unb64(blob.getValue("content").jsonPrimitive.content).toString(Charsets.UTF_8)
     }
     private inline fun <reified T> decrypt(text: String, code: String): T { val e = json.decodeFromString<Envelope>(text); return Crypto.derive(code, e.salt, e.iterations).use { Crypto.decrypt<T>(e, it) } }
-    private inline fun <reified T> encrypt(value: T, code: String): String { val text = Crypto.newKey(code).use { json.encodeToString(Crypto.encrypt(value, it)) }; require(text.length <= 25_000_000) { "存档超过容量限制，请先导出较大的图片" }; return text }
+    private inline fun <reified T> encode(value: T): String { val text=json.encodeToString(value); require(text.toByteArray(Charsets.UTF_8).size<=25_000_000) { "存档超过容量限制，请先导出较大的图片" }; return text }
     suspend fun list(config: SyncSettings): SaveCatalog = withContext(Dispatchers.IO) {
         validateConfig(config)
         val repo = api(config, "GET", "")!!; val branch = repo["default_branch"]?.jsonPrimitive?.contentOrNull ?: "main"
@@ -59,16 +59,20 @@ class CloudSaveService(private val http: OkHttpClient = OkHttpClient.Builder().c
         if (head == null) return@withContext SaveCatalog(source(config), branch, null, null, emptyList())
         val headSha = head.getValue("object").jsonObject.getValue("sha").jsonPrimitive.content
         val commit = api(config, "GET", "/git/commits/$headSha")!!; val tree = commit.getValue("tree").jsonObject.getValue("sha").jsonPrimitive.content
-        val indexFile = api(config, "GET", "/contents/${root(config.code)}index.moji?ref=$headSha", missing = true)
+        val indexFile = api(config, "GET", "/contents/${root()}index.json?ref=$headSha", missing = true)
         val entries = mutableListOf<SaveEntry>()
-        if (indexFile != null) { val index = decrypt<SaveIndex>(decodeFile(config, indexFile), config.code); GameSaves.validate(index); entries += index.entries }
-        val legacy = api(config, "GET", "/contents/${legacyPath(config.code)}?ref=$headSha", missing = true)
-        if (legacy != null) { val payload = decrypt<SyncPayload>(decodeFile(config, legacy), config.code); val w = GameSaves.apply(Workspace(), payload); entries += SaveEntry("legacy", "旧版存档", 0, w.liveBooks.size, w.liveNotes.size, legacy.getValue("sha").jsonPrimitive.content, "旧版", true) }
+        if (indexFile != null) { val index = json.decodeFromString<SaveIndex>(decodeFile(config, indexFile)); GameSaves.validate(index); entries += index.entries }
+        if(config.code.isNotEmpty()) {
+            val oldFile=api(config,"GET","/contents/${oldRoot(config.code)}index.moji?ref=$headSha",missing=true)
+            if(oldFile!=null){val old=decrypt<SaveIndex>(decodeFile(config,oldFile),config.code);GameSaves.validate(old);entries+=old.entries.map{it.copy(id="old-"+it.id,legacy=true)}}
+            val legacy=api(config,"GET","/contents/${legacyPath(config.code)}?ref=$headSha",missing=true)
+            if(legacy!=null){val w=GameSaves.apply(Workspace(),decrypt<SyncPayload>(decodeFile(config,legacy),config.code));entries+=SaveEntry("legacy","旧版存档",0,w.liveBooks.size,w.liveNotes.size,legacy.getValue("sha").jsonPrimitive.content,"旧版",true)}
+        }
         SaveCatalog(source(config), branch, headSha, tree, entries.sortedByDescending { it.savedAt })
     }
     suspend fun read(config: SyncSettings, catalog: SaveCatalog, entry: SaveEntry): SyncPayload = withContext(Dispatchers.IO) {
         checkSource(config, catalog); require(entry in catalog.entries) { "请重新选择存档" }
-        val blob = api(config, "GET", "/git/blobs/${entry.blobSha}")!!; val payload = decrypt<SyncPayload>(decodeFile(config, blob), config.code)
+        val blob = api(config, "GET", "/git/blobs/${entry.blobSha}")!!; val payload = if(entry.legacy) decrypt<SyncPayload>(decodeFile(config, blob), config.code) else json.decodeFromString<SyncPayload>(decodeFile(config,blob))
         GameSaves.apply(Workspace(), payload); payload
     }
     private fun blob(c: SyncSettings, text: String): String = api(c, "POST", "/git/blobs", buildJsonObject { put("content", Crypto.b64(text.toByteArray(Charsets.UTF_8))); put("encoding", "base64") })!!.getValue("sha").jsonPrimitive.content
@@ -78,33 +82,44 @@ class CloudSaveService(private val http: OkHttpClient = OkHttpClient.Builder().c
         require(overwrite != null || original.entries.count { !it.legacy } < 500) { "存档已达 500 份，请先删除不需要的存档" }
         var catalog = original
         if (catalog.headSha == null) {
-            val emptyIndex = encrypt(SaveIndex("moji-saves", 1, emptyList()), config.code)
-            api(config, "PUT", "/contents/${root(config.code)}index.moji", buildJsonObject { put("message", "moji: initialize encrypted saves"); put("content", Crypto.b64(emptyIndex.toByteArray(Charsets.UTF_8))) })
+            val emptyIndex = encode(SaveIndex("moji-saves", 1, emptyList()))
+            api(config, "PUT", "/contents/${root()}index.json", buildJsonObject { put("message", "moji: initialize saves"); put("content", Crypto.b64(emptyIndex.toByteArray(Charsets.UTF_8))) })
             catalog = list(config)
         }
-        val payload = GameSaves.capture(workspace); val dataSha = blob(config, encrypt(payload, config.code))
-        val entry = SaveEntry(overwrite?.id ?: uid(), if (overwrite?.legacy == true) "旧版存档" else title, now(), workspace.liveBooks.size, workspace.liveNotes.size, dataSha, "Android", overwrite?.legacy ?: false)
-        commit(config, catalog, (catalog.entries.filter { it.id != entry.id } + entry).sortedByDescending { it.savedAt }, entry, false)
+        val payload = GameSaves.capture(workspace); val dataSha = blob(config, encode(payload))
+        val entry = SaveEntry(if(overwrite?.legacy==true) uid() else overwrite?.id ?: uid(), title, now(), workspace.liveBooks.size, workspace.liveNotes.size, dataSha, "Android")
+        commit(config, catalog, (catalog.entries.filter { it.id != entry.id && it.id != overwrite?.id } + entry).sortedByDescending { it.savedAt }, entry, false, overwrite?.takeIf{it.legacy})
     }
     suspend fun delete(config: SyncSettings, catalog: SaveCatalog, entry: SaveEntry): SaveCatalog = withContext(Dispatchers.IO) {
         checkSource(config, catalog); require(entry in catalog.entries) { "请重新选择存档" }
         commit(config, catalog, catalog.entries.filter { it.id != entry.id }, entry, true)
     }
-    private fun commit(c: SyncSettings, catalog: SaveCatalog, entries: List<SaveEntry>, changed: SaveEntry, deleting: Boolean): SaveCatalog {
-        val index = SaveIndex("moji-saves", 1, entries.filter { !it.legacy }); GameSaves.validate(index); val indexSha = blob(c, encrypt(index, c.code))
+    private fun commit(c: SyncSettings, catalog: SaveCatalog, entries: List<SaveEntry>, changed: SaveEntry, deleting: Boolean, retired: SaveEntry? = null): SaveCatalog {
+        val index = SaveIndex("moji-saves", 1, entries.filter { !it.legacy }); GameSaves.validate(index); val indexSha = blob(c, encode(index))
         val changes = buildJsonArray {
-            add(buildJsonObject { put("path", "${root(c.code)}index.moji"); put("mode", "100644"); put("type", "blob"); put("sha", indexSha) })
-            add(buildJsonObject { put("path", if (changed.legacy) legacyPath(c.code) else "${root(c.code)}${changed.id}.moji"); put("mode", "100644"); put("type", "blob"); put("sha", if (deleting) JsonNull else JsonPrimitive(changed.blobSha)) })
+            fun change(path:String,sha:String?){add(buildJsonObject{put("path",path);put("mode","100644");put("type","blob");put("sha",sha?.let(::JsonPrimitive)?:JsonNull)})}
+            change("${root()}index.json",indexSha)
+            if(!changed.legacy)change("${root()}${changed.id}.json",if(deleting)null else changed.blobSha)
+            val old=changed.takeIf{it.legacy}?:retired
+            if(old!=null){
+                change(if(old.id=="legacy")legacyPath(c.code)else "${oldRoot(c.code)}${old.id.removePrefix("old-")}.moji",null)
+                if(old.id!="legacy"){
+                    val oldIndex=SaveIndex("moji-saves",1,entries.filter{it.legacy&&it.id.startsWith("old-")}.map{it.copy(id=it.id.removePrefix("old-"),legacy=false)})
+                    val text=Crypto.newKey(c.code).use{json.encodeToString(Crypto.encrypt(oldIndex,it))}
+                    change("${oldRoot(c.code)}index.moji",blob(c,text))
+                }
+            }
         }
         val treeSha = api(c, "POST", "/git/trees", buildJsonObject { put("tree", changes); catalog.treeSha?.let { put("base_tree", it) } })!!.getValue("sha").jsonPrimitive.content
-        val commitSha = api(c, "POST", "/git/commits", buildJsonObject { put("message", if (deleting) "moji: delete encrypted save" else "moji: write encrypted save"); put("tree", treeSha); put("parents", buildJsonArray { catalog.headSha?.let { add(JsonPrimitive(it)) } }) })!!.getValue("sha").jsonPrimitive.content
+        val commitSha = api(c, "POST", "/git/commits", buildJsonObject { put("message", if (deleting) "moji: delete save" else "moji: write save"); put("tree", treeSha); put("parents", buildJsonArray { catalog.headSha?.let { add(JsonPrimitive(it)) } }) })!!.getValue("sha").jsonPrimitive.content
         if (catalog.headSha == null) api(c, "POST", "/git/refs", buildJsonObject { put("ref", "refs/heads/${catalog.branch}"); put("sha", commitSha) })
         else api(c, "PATCH", "/git/refs/heads/${encoded(catalog.branch)}", buildJsonObject { put("sha", commitSha); put("force", false) })
         return catalog.copy(headSha = commitSha, treeSha = treeSha, entries = entries)
     }
     companion object {
-        fun root(code: String) = "moji-notes/${Crypto.hash(code).take(40)}/"
+        fun root() = "moji-notes/saves/"
+        fun oldRoot(code: String) = "moji-notes/${Crypto.hash(code).take(40)}/"
         fun legacyPath(code: String) = "moji-notes/${Crypto.hash(code).take(40)}.moji"
-        fun validateConfig(c: SyncSettings) { require(c.token.isNotBlank()) { "请先设置 GitHub Token" }; require(c.code.matches(Regex("[A-Za-z0-9]{12,128}"))) { "存档码需为 12–128 位字母或数字" }; require(c.repository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "仓库格式应为 用户名/仓库名" } }
+        fun validateConfig(c: SyncSettings) { require(c.token.isNotBlank()) { "请先设置 GitHub Token" }; require(c.repository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "仓库格式应为 用户名/仓库名" } }
     }
 }

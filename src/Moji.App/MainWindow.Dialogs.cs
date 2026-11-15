@@ -122,11 +122,16 @@ public partial class MainWindow
     private void InsertImage()
     {
         var open=new OpenFileDialog{Filter="图片|*.png;*.jpg;*.jpeg;*.gif;*.bmp"};if(open.ShowDialog(this)!=true)return;
-        try{var file=new FileInfo(open.FileName);if(file.Length>2_000_000)throw new InvalidDataException("单张图片请控制在 2 MB 以内");var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.StreamSource=new MemoryStream(File.ReadAllBytes(file.FullName));bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.EndInit();bitmap.Freeze();EmbedBitmap(bitmap);}catch(Exception error){Toast(UserMessages.For(error));}
+        try{var file=new FileInfo(open.FileName);if(file.Length>30_000_000)throw new InvalidDataException("图片过大，请选择 30 MB 以内的图片");var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.StreamSource=new MemoryStream(File.ReadAllBytes(file.FullName));bitmap.DecodePixelWidth=1600;bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.EndInit();bitmap.Freeze();EmbedBitmap(bitmap);}catch(Exception error){Toast(UserMessages.For(error,"无法读取图片，请重新选择"));}
     }
-    private void EmbedBitmap(BitmapSource bitmap)
+    internal void EmbedBitmap(BitmapSource bitmap)
     {
-        if(textEditor==null)return;try{var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using var stream=new MemoryStream();encoder.Save(stream);if(stream.Length>2_000_000)throw new InvalidDataException("图片请控制在 2 MB 以内");var uri="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray());textEditor.Selection.Text="";_ = new InlineUIContainer(new Image{Source=bitmap,MaxWidth=640,MaxHeight=450,Stretch=Stretch.Uniform},textEditor.CaretPosition){Tag="image:"+uri};SaveRichText();}catch(Exception error){Toast(UserMessages.For(error));}
+        if(textEditor==null)return;try{
+            BitmapSource image=bitmap;byte[] bytes;
+            while(true){var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=new MemoryStream();encoder.Save(stream);bytes=stream.ToArray();if(bytes.Length<=1_800_000)break;
+                image=new TransformedBitmap(image,new ScaleTransform(.75,.75));image.Freeze();}
+            var uri="data:image/png;base64,"+Convert.ToBase64String(bytes);textEditor.Selection.Text="";_ = new InlineUIContainer(new Image{Source=image,MaxWidth=640,MaxHeight=450,Stretch=Stretch.Uniform},textEditor.CaretPosition){Tag="image:"+uri};SaveRichText();
+        }catch(Exception error){Toast(UserMessages.For(error,"无法插入图片，请重新选择"));}
     }
     private void ExportNote(Note note){var save=new SaveFileDialog{Filter="Markdown|*.md|普通文本|*.txt|富文本|*.rtf",FileName=RecordTools.SafeName(note.Title)+".md"};if(save.ShowDialog(this)!=true)return;if(save.FilterIndex==3){var doc=MarkdownDocument.Render(note.Content,15,note.Variables);using var stream=File.Create(save.FileName);new TextRange(doc.ContentStart,doc.ContentEnd).Save(stream,DataFormats.Rtf);}else File.WriteAllText(save.FileName,save.FilterIndex==2?RichDocument.PlainText(note):PromptVariables.Fill(note,note.Variables.ToDictionary(v=>v.Id,v=>RichDocument.Escape(v.Name))));Toast("记录已导出");}
     private void PrintNote(Note note){var dialog=new PrintDialog();if(dialog.ShowDialog()!=true)return;var document=MarkdownDocument.Render("# "+RichDocument.Escape(note.Title)+"\n\n"+note.Content,15,note.Variables);document.PageWidth=dialog.PrintableAreaWidth;document.PageHeight=dialog.PrintableAreaHeight;document.ColumnWidth=dialog.PrintableAreaWidth;dialog.PrintDocument(((IDocumentPaginatorSource)document).DocumentPaginator,note.Title);}

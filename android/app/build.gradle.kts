@@ -13,8 +13,8 @@ android {
         applicationId = "app.moji.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10100
-        versionName = "1.1.0"
+        versionCode = 10101
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -48,6 +48,7 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.05.01")
     implementation(composeBom); androidTestImplementation(composeBom)
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.fragment:fragment-ktx:1.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")

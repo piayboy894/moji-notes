@@ -1,6 +1,6 @@
 # 墨记 Android
 
-原生 Kotlin + Jetpack Compose，Android 8.0+，无 WebView。1.1.0 使用原固定密钥签名，和 Windows 1.2.0 共用项目及云存档格式。
+原生 Kotlin + Jetpack Compose，Android 8.0+，无 WebView。1.1.1 使用原固定密钥签名，和 Windows 1.2.1 共用项目及云存档格式。
 
 正文采用单一所见即所得编辑器；提示词变量显式插入；密码记录先只读，再点击编辑。新装无演示、标签、主密码或自动锁定，数据仓库默认空。本机自动写入普通 JSON，云端提供四种全局手动存档。
 

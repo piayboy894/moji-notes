@@ -137,6 +137,22 @@ class AdaptiveUiTest {
             compose.waitUntil(5000){PromptVariables.used(compose.activity.vm.selectedNote()!!).size==1}
         }catch(t:Throwable){runCatching{screenshot("failure-rich-tools")};throw t}
     }
+    @Test fun emptyInsertionAndSystemImagePickerRoundTrip() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}.id);a.vm.addNote()}
+        compose.onNodeWithContentDescription("引用").performScrollTo().performClick();compose.onNodeWithTag("quote-text").performTextInput("Quoted")
+        compose.onNodeWithContentDescription("插入表格").performScrollTo().performClick();compose.onNodeWithText("插入",substring=false).performClick()
+        compose.onNodeWithTag("table-cell-0-0").performTextInput("Cell");hideKeyboard()
+        val context=compose.activity;val file=java.io.File(context.cacheDir,"exports/editor-test.png");file.parentFile!!.mkdirs()
+        val bitmap=android.graphics.Bitmap.createBitmap(2000,1200,android.graphics.Bitmap.Config.ARGB_8888)
+        val pixels=IntArray(2000*1200){0xff000000.toInt() or java.util.Random(it.toLong()).nextInt(0x1000000)};bitmap.setPixels(pixels,0,2000,0,0,2000,1200);file.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+        val uri=androidx.core.content.FileProvider.getUriForFile(context,context.packageName+".files",file)
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult?=if(intent.action==android.content.Intent.ACTION_OPEN_DOCUMENT)android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))else null}
+        instrumentation.addMonitor(monitor)
+        try {compose.onNodeWithContentDescription("插入图片").performScrollTo().performClick();compose.waitUntil(15000){compose.activity.vm.selectedNote()!!.content.contains("data:image/")};compose.onNodeWithTag("embedded-image").performScrollTo().assertExists()}finally{instrumentation.removeMonitor(monitor)}
+        val note=compose.activity.vm.selectedNote()!!;runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertExists();compose.activityRule.scenario.onActivity{it.vm.navigate(note.notebookId);it.vm.select(note.id)}
+        compose.onNodeWithTag("embedded-image").assertExists();assertTrue(compose.activity.vm.selectedNote()!!.content.contains("Cell"));file.delete()
+    }
     @Test fun notebookAppearanceIsEditableAndSurvivesLocalAndGlobalSaves() {
         ready();compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
         val original=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}

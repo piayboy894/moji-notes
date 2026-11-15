@@ -4,8 +4,8 @@ Windows 与 Android 原生文本管理软件，支持普通文本、提示词、
 
 ## 下载
 
-- [Windows 1.2.0](https://github.com/piayboy894/moji-notes/releases/tag/v1.2.0)：Intel / AMD 选 x64，Windows ARM 选 ARM64。提供自包含 EXE 和便携 ZIP，无需安装 .NET。
-- [Android 1.1.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v1.1.0)：Android 8.0 及以上，固定发布密钥签名，可覆盖升级。
+- [Windows 1.2.1](https://github.com/piayboy894/moji-notes/releases/tag/v1.2.1)：Intel / AMD 选 x64，Windows ARM 选 ARM64。提供自包含 EXE 和便携 ZIP，无需安装 .NET。
+- [Android 1.1.1](https://github.com/piayboy894/moji-notes/releases/tag/android-v1.1.1)：Android 8.0 及以上，固定发布密钥签名，可覆盖升级。
 
 打开即可使用，初始没有记事本或记录，点击虚线「＋」创建自己的本子。无主密码、演示内容、标签或自动锁定。首次升级旧版加密数据时，需要输入一次旧密码完成迁移；之后直接打开。已有记录不会因移除演示功能而被擅自删除。
 
@@ -23,7 +23,7 @@ Windows 与 Android 原生文本管理软件，支持普通文本、提示词、
 
 ## 全局手动云存档
 
-数据仓库默认为空。在设置中填写自己的 `用户名/仓库名`、仅授权该仓库 Contents 读写的 GitHub Token、12–128 位字母或数字存档码。
+数据仓库默认为空。在设置中填写自己的 `用户名/仓库名`、仅授权该仓库 Contents 读写的 GitHub Token。无需存档码，其他设备填写同一仓库即可手动读取。
 
 | 操作 | 范围 |
 | --- | --- |
@@ -34,7 +34,7 @@ Windows 与 Android 原生文本管理软件，支持普通文本、提示词、
 
 没有后台云同步、自动方向判断或自动合并。存档列表手动刷新；覆盖、读取、删除需要确认。读取保留本机连接和设备偏好。云端只包含项目数据，不包含 GitHub Token。
 
-每份存档涵盖记事本、记录、密码、变量、收藏、归档、回收站和历史。仓库专属目录为 `moji-notes/<存档码 SHA-256 前 40 位>/`，可以和其他软件共用数据仓库；只更新此目录。云端目录与数据仍由存档码加密。其他设备填写相同连接，再手动读取。
+每份存档涵盖记事本、记录、密码、变量、收藏、归档、回收站和历史。仓库专属目录为 `moji-notes/saves/`，可以和其他软件共用数据仓库；只更新此目录。云存档是普通 JSON，使用私有仓库的访问权限保护；Token 不包含在存档中。已配置过旧版连接的设备仍可手动读取或覆盖转换旧版加密存档。
 
 ## 本地数据与升级
 
