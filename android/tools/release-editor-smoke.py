@@ -72,9 +72,25 @@ try:
     adb('shell','su','2000','content','update','--uri',uri,'--bind','is_pending:i:0')
     tool('插入图片');select_picker_file('Moji-Editor-Test.png');wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
     adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart');capture('04-reopened')
+    # UIAutomator dumps can outlast an ordinary four-second Snackbar. Extend
+    # the emulator's accessibility timeout, without changing the shipped APK.
+    adb('shell','settings','put','secure','accessibility_non_interactive_ui_timeout_ms','20000')
+    adb('shell','settings','put','secure','accessibility_interactive_ui_timeout_ms','20000')
     tap(wait_node(description='偏好设置'));tap(wait_node(text='更新'));tap(wait_node(text='检查更新'))
-    wait_node(text='你已在使用最新版本',timeout=45);capture('05-update-feedback')
-    checks.append('signed APK check-update feedback is visible inside the foreground settings window')
+    until=time.monotonic()+45;feedback=None;observed=set()
+    while time.monotonic()<until:
+        root=hierarchy();labels={n.get('text','') for n in root.iter('node')};observed.update(labels)
+        # This is a foreground-feedback check. A public GitHub rate limit or
+        # unavailable network must also produce visible, actionable feedback.
+        outcomes={'你已在使用最新版本','检查更新失败','暂时无法连接，请检查网络后重试。','文件无法读取，请检查文件是否完整。'}
+        feedback=next((label for label in labels if label in outcomes or label.startswith('发现新版本 ')),None)
+        if feedback is not None and '偏好设置' in labels:
+            (REPORT.parent/'update-feedback-window.xml').write_bytes(ET.tostring(root,encoding='utf-8'))
+            capture('05-update-feedback');break
+        time.sleep(.2)
+    if feedback is None:raise RuntimeError('Update result was not visible in the foreground settings window: '+repr(sorted(observed)))
+    (REPORT.parent/'update-feedback.json').write_text(json.dumps({'text':feedback,'githubReached':feedback=='你已在使用最新版本' or feedback.startswith('发现新版本 ')},ensure_ascii=False,indent=2))
+    checks.append('signed APK check-update feedback is visible inside the foreground settings window: '+feedback)
     tap(wait_node(description='关闭'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png')
     REPORT.write_text(json.dumps({'success':True,'framework':'Compose / Android WebView / Tiptap 3.34.0','checks':checks},indent=2))
 except Exception as error:
