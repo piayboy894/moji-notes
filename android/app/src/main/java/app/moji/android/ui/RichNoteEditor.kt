@@ -57,7 +57,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
             }
         }
     }
-    fun command(action:String,value:String="null"){web.evaluateJavascript("window.MojiEditor?.action(${JSONObject.quote(action)},$value)",null)}
+    fun command(action:String,value:String="null"){web.requestFocus();web.evaluateJavascript("window.MojiEditor?.action(${JSONObject.quote(action)},$value)",null)}
     fun load(note:Note,theme:String,fontSize:Double,p:Preferences){
         loadSent=true;lastContent=note.content
         val payload=buildJsonObject{put("id",id);put("content",note.content);put("variables",json.encodeToJsonElement(note.variables));put("theme",theme);put("fontSize",fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(p,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
@@ -80,7 +80,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
         if(failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
         AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
             WebView(context).apply {
-                tag="MojiSharedEditor";id=View.generateViewId();setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
+                tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
                 settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 isVerticalScrollBarEnabled=false
                 val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(context)).build()
@@ -94,7 +94,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
                     override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){if(request.isForMainFrame)failure=true}
                 }
                 webChromeClient=object:WebChromeClient(){
-                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent());true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
+                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {android.util.Log.d("MojiEditor","Opening system image picker");current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent());true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
                     override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
                 }
                 loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")

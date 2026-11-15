@@ -70,3 +70,15 @@ jobs:
           path: verified/android-ui
       - name: Verify and publish exact tested packages
         run: python3 tools/publish-tested.py
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'windows'
+        with:
+          name: Moji-verified-Windows-x64-EXE
+          path: verified/windows/release/*win-x64.exe
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'windows'
+        with:
+          name: Moji-verified-Windows-arm64-EXE
+          path: verified/windows/release/*win-arm64.exe
+          compression-level: 0
