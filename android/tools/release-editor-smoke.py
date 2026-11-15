@@ -23,8 +23,14 @@ try:
     def chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
     raw=b''.join(b'\x00'+random.Random(row).randbytes(2000*3) for row in range(1200))
     picture=REPORT.parent/'Moji-Editor-Test.png';picture.write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>2I5B',2000,1200,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
-    adb('push',str(picture),'/sdcard/Download/Moji-Editor-Test.png');adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file:///sdcard/Download/Moji-Editor-Test.png')
-    tool('插入图片');tap(wait_node(description_contains='Moji-Editor-Test.png'));wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
+    # Register through MediaStore: adb-pushed files need not appear in Recents.
+    inserted=adb('shell','content','insert','--uri','content://media/external/images/media','--bind','_display_name:s:Moji-Editor-Test.png','--bind','mime_type:s:image/png','--bind','relative_path:s:Pictures/','--bind','is_pending:i:1')
+    uri=re.search(r'content://media/[A-Za-z0-9_/]+',inserted)
+    if not uri:raise RuntimeError('MediaStore did not register the synthetic image')
+    uri=uri.group(0)
+    with picture.open('rb') as stream:subprocess.run(['adb','shell','-T','content','write','--uri',uri],stdin=stream,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=70)
+    adb('shell','content','update','--uri',uri,'--bind','is_pending:i:0')
+    tool('插入图片');tap(wait_node(contains='Moji-Editor-Test.png'));wait_saved_image('Moji-Editor-Test.png');checks.append('real system image picker embeds a large image offline; screenshot captures its rendering');capture('03-image')
     adb('shell','am','force-stop',PACKAGE);launch();wait_node(resource='home-title');tap(wait_node(resource='book-Prompt'));tap(wait_node(contains='新提示词'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png');checks.append('text, variable and image reopen after a complete process restart');capture('04-reopened')
     REPORT.write_text(json.dumps({'success':True,'framework':'Compose / Android WebView / Tiptap 3.34.0','checks':checks},indent=2))
 except Exception as error:
