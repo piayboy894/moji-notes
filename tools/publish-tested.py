@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 platform = os.environ["MOJI_PLATFORM"]
+reused = {}
 sha = os.environ["MOJI_TESTED_SHA"]
 run_id = os.environ["MOJI_RUN_ID"]
 repository = os.environ["GITHUB_REPOSITORY"]
@@ -32,6 +33,11 @@ if platform == "windows":
             raise RuntimeError("Windows executable checksum mismatch")
     tag, title, notes = f"v{version}", f"墨记 Windows {version}", source("docs/RELEASE.md")
 else:
+    reuse_path=Path('verified/android/REUSED-BUILD.json')
+    if reuse_path.exists():
+        reused=json.loads(reuse_path.read_text())
+        if reused.get('verification_commit')!=sha:raise RuntimeError('Verification provenance does not match this run')
+        subprocess.run(['git','diff','--exit-code',reused['binary_source_commit'],sha,'--','android/app','android/build.gradle.kts','android/settings.gradle.kts','android/gradle.properties','android/gradle','android/gradlew','android/gradlew.bat','editor','assets'],check=True)
     version = re.search(r'versionName = "([0-9.]+)"', source("android/app/build.gradle.kts")).group(1)
     build = Path("verified/android/outputs/apk/release")
     ui = Path("verified/android-ui")
@@ -61,7 +67,7 @@ else:
 
 checksums = [hashlib.sha256(file.read_bytes()).hexdigest() + "  " + file.name for file in sorted(folder.iterdir()) if file.suffix in (".exe", ".apk", ".zip")]
 (folder / "SHA256SUMS.txt").write_text("\n".join(checksums) + "\n")
-(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform}, indent=2) + "\n")
+(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform, **reused}, indent=2) + "\n")
 notes_file = Path(os.environ["RUNNER_TEMP"]) / "moji-release-notes.txt"
 notes_file.write_text(notes)
 subprocess.run(["gh", "release", "create", tag, *[str(file) for file in sorted(folder.iterdir()) if file.is_file()], "--target", sha, "--title", title, "--notes-file", str(notes_file)], check=True)

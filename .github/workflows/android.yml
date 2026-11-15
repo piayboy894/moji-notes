@@ -7,8 +7,14 @@ on:
   pull_request:
     paths: ['android/**', 'editor/**', 'assets/editor/**', '.github/workflows/android.yml']
   workflow_dispatch:
+    inputs:
+      reuse_run_id:
+        description: Recheck existing APKs after test-script-only changes (requires identical application and native tests)
+        type: string
+        required: false
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -21,6 +27,41 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate unchanged application and successful native checks
+        if: inputs.reuse_run_id
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOJI_REUSE_RUN: ${{ inputs.reuse_run_id }}
+        run: python3 tools/verify-android-reuse.py
+      - name: Download immutable APKs and unit results
+        if: inputs.reuse_run_id
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_run_id }}
+          name: Moji-Android-build
+          path: android/app/build
+      - name: Download successful native UI evidence
+        if: inputs.reuse_run_id
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_run_id }}
+          name: Moji-Android-native-UI
+          path: reused-native-ui
+      - name: Reuse successful native evidence for unchanged app and tests
+        if: inputs.reuse_run_id
+        run: |
+          python3 - <<'PY'
+          import shutil
+          from pathlib import Path
+          base=Path('../reused-native-ui')
+          for source,target in [('android-ui-screenshots','../android-ui-screenshots'),('android/app/build/reports/androidTests','app/build/reports/androidTests'),('android/app/build/outputs/androidTest-results','app/build/outputs/androidTest-results')]:
+              shutil.copytree(base/source,target,dirs_exist_ok=True)
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -47,6 +88,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - name: Load publisher signing key when configured
+        if: ${{ !inputs.reuse_run_id }}
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -61,10 +103,11 @@ jobs:
             exit 1
           fi
       - run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon
+        if: ${{ !inputs.reuse_run_id }}
         env:
           MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       - name: Verify fixed Android publisher certificate
-        if: env.MOJI_KEYSTORE_PATH != ''
+        if: env.MOJI_KEYSTORE_PATH != '' || inputs.reuse_run_id != ''
         run: bash tools/verify-publisher-apk.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -75,12 +118,14 @@ jobs:
             android/app/build/reports/tests/
             android/app/build/test-results/
             android/app/build/outputs/mapping/
+            android/app/build/REUSED-BUILD.json
       - name: Enable hardware acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Run native phone, tablet and desktop-window UI checks
+        if: ${{ !inputs.reuse_run_id }}
         uses: reactivecircus/android-emulator-runner@v2
         env:
           MOJI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

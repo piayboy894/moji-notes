@@ -69,7 +69,10 @@ def launch():
 def wait_editor(contains=None,timeout=45):
     until=time.monotonic()+timeout
     while time.monotonic()<until:
-        root=hierarchy()
+        try: root=hierarchy()
+        except (RuntimeError,ET.ParseError):
+            time.sleep(.5)
+            continue
         candidates=[]
         for web in root.iter('node'):
             if web.get('class')=='android.webkit.WebView':candidates.extend(n for n in web.iter('node') if n.get('class')=='android.widget.EditText')
@@ -78,6 +81,39 @@ def wait_editor(contains=None,timeout=45):
             if contains is None or contains in n.get('text','') or contains in ''.join(c.get('text','') for c in n.iter('node')):return n
         time.sleep(.5)
     raise RuntimeError('Shared editor is not ready: '+str(contains))
+
+def wait_saved_document(predicate,timeout=45):
+    # Atomic, non-editable spans/images are omitted from Android's editable AX
+    # value. Inspect only the guarded emulator's synthetic persisted document.
+    if adb('shell','getprop','ro.kernel.qemu').strip()!='1':raise RuntimeError('Fixture inspection requires an emulator')
+    until=time.monotonic()+timeout
+    while time.monotonic()<until:
+        try:
+            workspace=json.loads(adb('shell','cat','/data/user/0/'+PACKAGE+'/no_backup/vault/workspace.json'))
+            for note in workspace.get('notes',[]):
+                if predicate(note):return note
+        except (RuntimeError,ValueError):pass
+        time.sleep(.3)
+    raise RuntimeError('The expected document was not persisted')
+
+def wait_saved_variable(name):
+    return wait_saved_document(lambda n:any(v.get('name')==name and 'data-moji-variable="'+v['id']+'"' in n.get('content','') for v in n.get('variables',[])))
+
+def wait_saved_image(name):
+    from html.parser import HTMLParser
+    import base64
+    class Images(HTMLParser):
+        def __init__(self):super().__init__();self.found=False
+        def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs);src=attrs.get('src','')
+            if tag=='img' and attrs.get('alt')==name and src.startswith('data:image/') and ';base64,' in src:
+                try:
+                    raw=base64.b64decode(src.split(',',1)[1],validate=True)
+                    self.found=len(raw)>1024 and (raw.startswith(b'\xff\xd8\xff') or raw.startswith(b'\x89PNG\r\n\x1a\n') or (raw.startswith(b'RIFF') and raw[8:12]==b'WEBP'))
+                except ValueError:pass
+    def contains(note):
+        parser=Images();parser.feed(note.get('content',''));return parser.found
+    return wait_saved_document(contains)
 
 def wait_embedded_image(name,timeout=45):
     until=time.monotonic()+timeout
