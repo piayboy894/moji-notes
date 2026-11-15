@@ -30,8 +30,14 @@ Windows 标准单文件 EXE 内含 .NET 与编辑器，使用 `EnableCompression
 
 同版本替换先暂存并核验新资产，再保留原完整包、来源与测试报告并替换默认名称。下载校验值对应实际新字节。Git 标签不重写；新源码归档、构建提交和校验值随发行一起提供。同版本客户端不会自动收到更新提示。
 
-Android 编辑器在侧栏开始展开、或上层对话框出现时，结束原生选择 ActionMode 并向 WebView 传递失焦，收起独立弹窗中的选区手柄；不清空文档或重建编辑器。Compose 文本框也在侧栏展开时退出焦点。全局消息宿主放在导航遮罩上方；打开 Dialog 后，只在最上层 Dialog 的 Android 窗口中显示消息，避免主窗口 Snackbar 被 Dialog 的暗幕遮挡。
+Android 编辑器在侧栏开始展开、或上层对话框出现时，结束原生选择 ActionMode 并向 WebView 传递失焦，收起独立弹窗中的选区手柄；不清空文档或重建编辑器。Compose 文本框也在侧栏展开时退出焦点。全局消息宿主放在导航遮罩上方，并避开侧栏底部设置按钮；打开 Dialog 后，只在最上层 Dialog 的 Android 窗口中显示消息，避免主窗口 Snackbar 被 Dialog 的暗幕遮挡。打开设置或新建记事本时自动收起模态侧栏，关闭弹窗后直接回到原页面。
 
 Android 继续沿用固定发行证书，后续 APK 可覆盖升级。系统 WebView 属于 Android 系统组件。数据采用同一文档格式，通过手动全局云存档跨端交换。发布工作流只发布验证成功的原始产物，不在发布时重新构建。
 
 仅修改验证脚本时，可以复用不可变的 APK 产物。工作流要求原构建、单元测试、签名和原生界面检查已通过，并核验应用、原生测试、共享编辑器、资源及构建配置完全一致；随后在全新模拟器中重验原 APK。发布证明分别记录编译来源和验证来源，不在发布阶段重新打包。
+
+## 包体方案参考
+
+- [Microsoft WebView2 分发指南](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)：推荐共享 Evergreen，缺失时通过小型 bootstrapper 安装；完整 Fixed Runtime 的体积超过 250 MB。
+- [.NET 单文件与压缩](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview)及 [WPF trimming 限制](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/incompatibilities)：使用受支持的压缩，不通过不兼容的裁剪缩小 WPF。
+- [Tauri Windows 分发方案](https://v2.tauri.app/distribute/windows-installer/)与[维护者社区讨论](https://github.com/orgs/tauri-apps/discussions/3048)：共享 WebView2、缺失时补装，是同类桌面软件常用的分发方式。
