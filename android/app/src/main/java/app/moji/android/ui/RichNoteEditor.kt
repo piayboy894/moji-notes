@@ -84,6 +84,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
         AndroidView(modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),factory={context->
             if(BuildConfig.DEBUG)WebView.setWebContentsDebuggingEnabled(true)
             WebView(context).apply {
+                layoutParams=android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT,android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                 tag="MojiSharedEditor";id=View.generateViewId();isFocusable=true;isFocusableInTouchMode=true;setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
                 setOnTouchListener { view,event->if(event.actionMasked==android.view.MotionEvent.ACTION_DOWN)view.requestFocus();false }
                 settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
