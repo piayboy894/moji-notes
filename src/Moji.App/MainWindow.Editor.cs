@@ -49,8 +49,9 @@ public partial class MainWindow
         titleBox=Ui.Input(note.Title,"记录标题");titleBox.IsReadOnly=book.Mode==NoteMode.Password&&editingCredentialId!=note.Id;titleBox.Name="RecordTitle";titleBox.FontSize=25;titleBox.FontWeight=FontWeights.SemiBold;titleBox.Background=Brushes.Transparent;titleBox.BorderThickness=new Thickness(0);titleBox.Padding=new Thickness(0,13,0,12);titleBox.TextChanged+=(_,_)=>{if(!loadingEditor&&!titleBox.IsReadOnly)VM.EditNote(note.Id,n=>n with{Title=titleBox.Text});};heading.Children.Add(titleBox);
         DockPanel.SetDock(heading,Dock.Top);container.Children.Add(heading);
         if(book.Mode==NoteMode.Password){container.Children.Add(editingCredentialId == note.Id ? CredentialView(note) : CredentialReadView(note));editorHost.Content=container;loadingEditor=false;return;}
+        formatTools.Clear();
         var toolbar = new WrapPanel { Margin = new Thickness(14,5,14,5) };
-        void Tool(string icon,string label,Action action) { var button=Ui.Icon(icon,action,label); button.Focusable=false; toolbar.Children.Add(button); }
+        void Tool(string icon,string label,Action action) { var button=Ui.Icon(icon,action,label); button.Focusable=false; formatTools[icon]=button; toolbar.Children.Add(button); }
         Tool("Heading","标题",()=>SetHeading()); Tool("Bold","加粗",()=>EditingCommands.ToggleBold.Execute(null,textEditor)); Tool("Italic","斜体",()=>EditingCommands.ToggleItalic.Execute(null,textEditor));
         Tool("Strike","删除线",()=>{if(textEditor!=null){var current=textEditor.Selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;textEditor.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty,current?.Any(t=>t.Location==TextDecorationLocation.Strikethrough)==true?new TextDecorationCollection():TextDecorations.Strikethrough);}});
         Tool("Bullet","项目列表",()=>EditingCommands.ToggleBullets.Execute(null,textEditor)); Tool("Ordered","编号列表",()=>EditingCommands.ToggleNumbering.Execute(null,textEditor));
@@ -60,17 +61,18 @@ public partial class MainWindow
         var tools=new Border { Child=toolbar, Background=Ui.Resource("Side"), BorderBrush=Ui.Resource("Line"), BorderThickness=new Thickness(0,1,0,1) }; DockPanel.SetDock(tools,Dock.Top); container.Children.Add(tools);
         if(book.Mode==NoteMode.Prompt){var promptBar=new DockPanel{Margin=new Thickness(22,6,22,6)};var use=Ui.Button("使用提示词",()=>PromptDialog(note.Id),true);var insert=Ui.Button("插入变量",InsertVariable);DockPanel.SetDock(insert,Dock.Left);promptBar.Children.Add(insert);DockPanel.SetDock(use,Dock.Right);promptBar.Children.Add(use);container.Children.Add(promptBar);DockPanel.SetDock(promptBar,Dock.Top);}
         tableTools=BuildTableTools();DockPanel.SetDock(tableTools,Dock.Top);container.Children.Add(tableTools);
+        linkTools=BuildLinkTools();DockPanel.SetDock(linkTools,Dock.Top);container.Children.Add(linkTools);
         editorStatus=Ui.Text("",11); editorStatus.Margin=new Thickness(24,8,24,8); DockPanel.SetDock(editorStatus,Dock.Bottom);container.Children.Add(editorStatus);
-        textEditor=new RichTextBox { Document=MarkdownDocument.Render(note.Content,VM.State.Preferences.FontSize,note.Variables), IsReadOnly=false, IsDocumentEnabled=true, AcceptsTab=true, BorderThickness=new Thickness(0), Background=Ui.Resource("Panel"), Foreground=Ui.Resource("Ink"), VerticalScrollBarVisibility=ScrollBarVisibility.Auto, UndoLimit=100, Name="RichNoteEditor" };
+        textEditor=new RichTextBox { Document=MarkdownDocument.Render(note.Content,VM.State.Preferences.FontSize,note.Variables), IsReadOnly=false, IsDocumentEnabled=true, AcceptsTab=true, BorderThickness=new Thickness(0), Background=Ui.Resource("Panel"), Foreground=Ui.Resource("Ink"), VerticalScrollBarVisibility=ScrollBarVisibility.Auto, UndoLimit=100, Padding=new Thickness(28,16,28,24), Name="RichNoteEditor" };
         textEditor.TextChanged+=(_,_)=>SaveRichText();textEditor.SelectionChanged+=(_,_)=>UpdateRichSelection();WireTasks();
         DataObject.AddPastingHandler(textEditor,(_,e)=>{if(e.DataObject.GetDataPresent(DataFormats.Bitmap)&&e.DataObject.GetData(DataFormats.Bitmap) is System.Windows.Media.Imaging.BitmapSource bitmap){e.CancelCommand();EmbedBitmap(bitmap);}});
         textEditor.AddHandler(CheckBox.CheckedEvent,new RoutedEventHandler((_,_)=>SaveRichText())); textEditor.AddHandler(CheckBox.UncheckedEvent,new RoutedEventHandler((_,_)=>SaveRichText()));
-        container.Children.Add(textEditor);editorHost.Content=container;loadingEditor=false;UpdateEditorStatus();
+        container.Children.Add(textEditor);editorHost.Content=container;loadingEditor=false;UpdateEditorStatus();UpdateRichSelection();
     }
     private void SaveRichText()
     {
         if(loadingEditor||textEditor==null||CurrentNote() is not {} note)return;
-        var content=RichDocument.Serialize(textEditor.Document);if(content!=note.Content){if(!richUndo.ContainsKey(note.Id))richUndo[note.Id]=[];var history=richUndo[note.Id];history.Add(note.Content);if(history.Count>100)history.RemoveAt(0);richRedo.Remove(note.Id);VM.EditNote(note.Id,n=>n with{Content=content});}UpdateEditorStatus();
+        var content=RichDocument.Serialize(textEditor.Document);if(content!=note.Content){if(!richUndo.ContainsKey(note.Id))richUndo[note.Id]=[];var history=richUndo[note.Id];history.Add(note.Content);if(history.Count>100)history.RemoveAt(0);richRedo.Remove(note.Id);VM.EditNote(note.Id,n=>n with{Content=content});}UpdateEditorStatus();UpdateRichSelection();
     }
     private void UpdateEditorStatus(){if(editorStatus!=null&&textEditor!=null)editorStatus.Text=$"{new TextRange(textEditor.Document.ContentStart,textEditor.Document.ContentEnd).Text.Count(c=>!char.IsWhiteSpace(c)):N0} 字";}
     private void SetHeading()

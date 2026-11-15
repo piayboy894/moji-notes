@@ -55,7 +55,7 @@ public partial class MainWindow
         if(CurrentNote() is not {} note || textEditor==null)return;
         var name=Ui.Input();var status=Ui.Text("",11);var panel=Ui.Stack(Ui.Field("变量名称",name),status);panel.Margin=new Thickness(25);Window? dialog=null;
         panel.Children.Add(Ui.Button("插入",()=>{try{var variable=PromptVariables.Named(note,name.Text);if(!note.Variables.Any(v=>v.Id==variable.Id))VM.EditNote(note.Id,n=>n with{Variables=[..n.Variables,variable]});
-            textEditor.Selection.Text="";_ = new InlineUIContainer(MarkdownDocument.VariableChip(variable),textEditor.CaretPosition){Tag="image:moji-variable:"+variable.Id};SaveRichText();dialog!.Close();textEditor.Focus();
+            textEditor.Selection.Text="";_ = new InlineUIContainer(MarkdownDocument.VariableChip(variable),textEditor.CaretPosition){Tag="image:moji-variable:"+variable.Id,BaselineAlignment=BaselineAlignment.Center};SaveRichText();dialog!.Close();textEditor.Focus();
         }catch(Exception error){status.Text=error.Message;}},true));dialog=Ui.Dialog(this,"插入变量",panel,420);dialog.Loaded+=(_,_)=>name.Focus();dialog.ShowDialog();
     }
     private void PromptDialog(string id)
@@ -86,8 +86,8 @@ public partial class MainWindow
     }
     private void InsertLink()
     {
-        if(textEditor==null)return;var editor=textEditor;var url=Ui.Input("https://");var label=Ui.Input(editor.Selection.Text);var panel=Ui.Stack(Ui.Field("显示文字",label),Ui.Field("链接地址",url));panel.Margin=new Thickness(25);Window? dialog=null;
-        panel.Children.Add(Ui.Button("插入",()=>{if(!Uri.TryCreate(url.Text,UriKind.Absolute,out var uri)||uri.Scheme is not("http" or "https"))return;editor.Selection.Text="";_ = new Hyperlink(new Run(label.Text.Length>0?label.Text:uri.Host),editor.CaretPosition){NavigateUri=uri,Foreground=Ui.Resource("Accent")};SaveRichText();dialog!.Close();editor.Focus();},true));dialog=Ui.Dialog(this,"插入链接",panel);dialog.ShowDialog();
+        if(textEditor==null)return;var editor=textEditor;var existing=ActiveLink();var url=Ui.Input(existing?.NavigateUri?.AbsoluteUri??"https://");var label=Ui.Input(existing!=null?new TextRange(existing.ContentStart,existing.ContentEnd).Text:editor.Selection.Text);var panel=Ui.Stack(Ui.Field("显示文字",label),Ui.Field("链接地址",url));panel.Margin=new Thickness(25);Window? dialog=null;
+        panel.Children.Add(Ui.Button("插入",()=>{if(!Uri.TryCreate(url.Text,UriKind.Absolute,out var uri)||uri.Scheme is not("http" or "https"))return;editor.BeginChange();try{if(existing!=null){existing.NavigateUri=uri;existing.Inlines.Clear();existing.Inlines.Add(new Run(label.Text.Length>0?label.Text:uri.Host));}else{editor.Selection.Text="";_ = new Hyperlink(new Run(label.Text.Length>0?label.Text:uri.Host),editor.CaretPosition){NavigateUri=uri,Foreground=Ui.Resource("Accent")};}}finally{editor.EndChange();}SaveRichText();dialog!.Close();editor.Focus();},true));dialog=Ui.Dialog(this,"插入链接",panel);dialog.ShowDialog();
     }
     private void InsertImage()
     {

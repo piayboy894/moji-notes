@@ -35,3 +35,5 @@ public class ExplicitVariableTests
         Assert.Equal(PromptVariables.Token(second)+" last",PromptVariables.Fill(note,values));
     }
 }
+
+public class VisibleSearchTests { [Xunit.Fact] public void RichTextSearchUsesVisibleWords(){Xunit.Assert.Equal("Hello world left|right #literal",Moji.Core.RecordTools.Plain("**Hello** world left\\|right \\#literal"));} }

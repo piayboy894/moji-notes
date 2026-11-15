@@ -1,3 +1,4 @@
+using Markdig;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,14 +9,16 @@ public static partial class RecordTools
 {
     public static int Strength(string password) => (password.Length >= 12 ? 1 : 0) + (password.Length >= 18 ? 1 : 0) + (password.Any(char.IsLower) && password.Any(char.IsUpper) ? 1 : 0) + (password.Any(char.IsDigit) && password.Any(c => !char.IsLetterOrDigit(c)) ? 1 : 0);
     public static bool Matches(Note note, string search, NoteMode mode)
-    { if (string.IsNullOrWhiteSpace(search)) return true; return string.Join('\n', note.Title, note.Username, note.Url, mode == NoteMode.Password ? "" : PromptVariables.Display(note)).Contains(search, StringComparison.OrdinalIgnoreCase); }
-    public static string Plain(string content) => Regex.Replace(Regex.Replace(content, @"!\[[^\]]*\]\([^)]*\)", "[图片]"), @"[#*`>_\[\]~]", "").Replace('\n', ' ').Trim();
+    { if (string.IsNullOrWhiteSpace(search)) return true; return string.Join('\n', note.Title, note.Username, note.Url, mode == NoteMode.Password ? "" : Plain(PromptVariables.Display(note))).Contains(search, StringComparison.OrdinalIgnoreCase); }
+    private static readonly MarkdownPipeline TextPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+    public static string Escape(string text) => Regex.Replace(text.Replace("\\","\\\\"), @"([`*_\[\]#~>!+\-.|])", @"\$1");
+    public static string Plain(string content) => Regex.Replace(Markdown.ToPlainText(Regex.Replace(content, @"!\[[^\]]*\]\([^)]*\)", "图片"), TextPipeline), @"\s+", " ").Trim();
     public static string ModeName(NoteMode mode) => mode switch { NoteMode.Text => "普通文本", NoteMode.Prompt => "提示词", _ => "账号密码" };
     public static string Relative(long time)
     { var diff = Clock.Now - time; return diff < 60000 ? "刚刚" : diff < 3600000 ? $"{diff / 60000} 分钟前" : diff < 86400000 ? $"{diff / 3600000} 小时前" : diff < 7 * 86400000 ? $"{diff / 86400000} 天前" : DateTimeOffset.FromUnixTimeMilliseconds(time).LocalDateTime.ToString("MM-dd"); }
     public static string SafeName(string name) { var safe = new string(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) || "\\/:*?\"<>|".Contains(c) ? '_' : c).ToArray()); return string.IsNullOrWhiteSpace(safe) ? "未命名" : safe[..Math.Min(safe.Length, 100)]; }
     public static void ExportMarkdown(Workspace workspace, string path)
-    { using var zip = ZipFile.Open(path, ZipArchiveMode.Create); foreach (var note in workspace.LiveNotes) { var book = workspace.Notebooks.First(b => b.Id == note.NotebookId); if (book.Mode == NoteMode.Password) continue; var entry = zip.CreateEntry($"{SafeName(book.Name)}/{SafeName(note.Title)}-{note.Id[..6]}.md"); using var writer = new StreamWriter(entry.Open(), Encoding.UTF8); writer.WriteLine($"# {note.Title}\n\n{PromptVariables.Display(note)}"); } }
+    { using var zip = ZipFile.Open(path, ZipArchiveMode.Create); foreach (var note in workspace.LiveNotes) { var book = workspace.Notebooks.First(b => b.Id == note.NotebookId); if (book.Mode == NoteMode.Password) continue; var entry = zip.CreateEntry($"{SafeName(book.Name)}/{SafeName(note.Title)}-{note.Id[..6]}.md"); using var writer = new StreamWriter(entry.Open(), Encoding.UTF8); writer.WriteLine($"# {Escape(note.Title)}\n\n{PromptVariables.Fill(note,note.Variables.ToDictionary(v=>v.Id,v=>Escape(v.Name)))}"); } }
     public static string Totp(string secret, long? milliseconds = null)
     {
         var clean = Regex.Replace(secret.ToUpperInvariant(), @"[\s=-]", ""); if (!Regex.IsMatch(clean, "^[A-Z2-7]{16,128}$")) throw new InvalidDataException("动态验证码密钥格式不正确");

@@ -23,7 +23,10 @@ public static class MarkdownDocument
         if (document.Blocks.Count == 0) document.Blocks.Add(new System.Windows.Documents.Paragraph());
         return document;
     }
-    public static Border VariableChip(PromptVariable variable) => new() { Child=Ui.Text(variable.Name,13), Background=Ui.Resource("AccentLight"), CornerRadius=new CornerRadius(5),Padding=new Thickness(7,2,7,2),Margin=new Thickness(2,0,2,0),ToolTip="变量："+variable.Name };
+    public static Border VariableChip(PromptVariable variable) {
+        var label=Ui.Text(variable.Name,13);label.LineHeight=18;label.LineStackingStrategy=LineStackingStrategy.BlockLineHeight;label.TextWrapping=TextWrapping.NoWrap;label.TextAlignment=TextAlignment.Center;label.VerticalAlignment=VerticalAlignment.Center;label.HorizontalAlignment=HorizontalAlignment.Center;
+        return new Border { Child=label,Background=Ui.Resource("AccentLight"),CornerRadius=new CornerRadius(5),Padding=new Thickness(8,4,8,4),Margin=new Thickness(2,0,2,0),ToolTip="变量："+variable.Name };
+    }
     private static void AddBlock(BlockCollection target, Markdig.Syntax.Block block, double size, IReadOnlyList<PromptVariable> variables)
     {
         switch (block)
@@ -32,7 +35,7 @@ public static class MarkdownDocument
                 var title = Paragraph(heading.Inline, variables); title.Tag = heading.Level; title.FontSize = size * (heading.Level == 1 ? 1.8 : heading.Level == 2 ? 1.4 : 1.15); title.FontWeight = FontWeights.SemiBold; title.Margin = new Thickness(0,24,0,13); target.Add(title); break;
             case ParagraphBlock paragraph: var p = Paragraph(paragraph.Inline, variables); p.Margin = new Thickness(0,0,0,17); target.Add(p); break;
             case Markdig.Syntax.ListBlock list:
-                var nativeList = new System.Windows.Documents.List { MarkerStyle = list.IsOrdered ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc, Margin = new Thickness(5,6,0,18), Padding = new Thickness(19,0,0,0) };
+                var nativeList = new System.Windows.Documents.List { MarkerStyle = list.Descendants<ParagraphBlock>().Any(p=>p.Inline?.Descendants<TaskList>().Any()==true) ? TextMarkerStyle.None : list.IsOrdered ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc, Margin = new Thickness(5,6,0,18), Padding = new Thickness(19,0,0,0) };
                 foreach (ListItemBlock item in list) { var nativeItem = new System.Windows.Documents.ListItem(); foreach (var child in item) AddBlock(nativeItem.Blocks, child, size, variables); nativeList.ListItems.Add(nativeItem); } target.Add(nativeList); break;
             case QuoteBlock quote:
                 var section = new Section { Tag = "quote", BorderBrush = Ui.Brush("#B9C8AA"), BorderThickness = new Thickness(3,0,0,0), Padding = new Thickness(15,7,12,7), Background = Ui.Resource("Soft"), Margin = new Thickness(0,15,0,22) }; foreach (var child in quote) AddBlock(section.Blocks, child, size, variables); target.Add(section); break;
@@ -58,7 +61,7 @@ public static class MarkdownDocument
                 case CodeInline code: target.Add(new Run(code.Content) { Tag = "code", FontFamily = new FontFamily("Consolas"), Background = Ui.Resource("Soft") }); break;
                 case EmphasisInline emphasis: Span span = emphasis.DelimiterChar == '~' ? new Span { TextDecorations = TextDecorations.Strikethrough } : emphasis.DelimiterCount >= 2 ? new Bold() : new Italic(); AddInline(span.Inlines, emphasis, variables); target.Add(span); break;
                 case LinkInline link when link.IsImage:
-                    if(link.Url?.StartsWith("moji-variable:")==true && variables.FirstOrDefault(v=>"moji-variable:"+v.Id==link.Url) is {} variable) { target.Add(new InlineUIContainer(VariableChip(variable)){Tag="image:"+link.Url}); }
+                    if(link.Url?.StartsWith("moji-variable:")==true && variables.FirstOrDefault(v=>"moji-variable:"+v.Id==link.Url) is {} variable) { target.Add(new InlineUIContainer(VariableChip(variable)){Tag="image:"+link.Url,BaselineAlignment=BaselineAlignment.Center}); }
                     else if (link.Url?.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) == true)
                     { try { var encoded = link.Url[(link.Url.IndexOf(',')+1)..]; if (encoded.Length > 4_000_000) break; var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.StreamSource = new MemoryStream(Convert.FromBase64String(encoded)); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.EndInit(); bitmap.Freeze(); target.Add(new InlineUIContainer(new Image { Source = bitmap, MaxWidth = 640, MaxHeight = 450, Stretch = Stretch.Uniform, Margin = new Thickness(0,12,0,12) }) { Tag = "image:" + link.Url }); } catch { target.Add(new Run("[无法读取图片]")); } }
                     else target.Add(new Run("图片") { Tag = "image:" + link.Url }); break;

@@ -14,7 +14,7 @@ def data(name):
   elif tag=='rect':
    x,y,w,h=map(float,[v.get('x',0),v.get('y',0),v['width'],v['height']]);rx=float(v.get('rx',0));ry=float(v.get('ry',rx));paths.append(f'M{x+rx:g} {y:g}H{x+w-rx:g}Q{x+w:g} {y:g} {x+w:g} {y+ry:g}V{y+h-ry:g}Q{x+w:g} {y+h:g} {x+w-rx:g} {y+h:g}H{x+rx:g}Q{x:g} {y+h:g} {x:g} {y+h-ry:g}V{y+ry:g}Q{x:g} {y:g} {x+rx:g} {y:g}Z')
   else:raise ValueError(tag)
- return ' '.join(paths)
+ return ' '.join('M0 0 '+path for path in paths)  # Each SVG element starts a fresh coordinate system.
 paths={v:data(v)for v in set(mapping.values())|set(android.values())}
 (r/'assets/icons/catalog.json').write_text(json.dumps({'version':'lucide-static 0.468.0','windows':mapping,'android':android},indent=2))
 

@@ -16,7 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import app.moji.android.data.NoteMode
 
 fun modeIcon(mode: NoteMode): ImageVector = when (mode) { NoteMode.Text -> MojiIcons.Description; NoteMode.Prompt -> MojiIcons.AutoAwesome; NoteMode.Password -> MojiIcons.Key }
-@Composable fun Tool(icon: ImageVector, label: String, enabled: Boolean = true, action: () -> Unit) { IconButton(onClick = action, enabled = enabled, modifier = Modifier.size(48.dp)) { Icon(icon, label, modifier = Modifier.size(24.dp)) } }
+@Composable fun Tool(icon: ImageVector, label: String, enabled: Boolean = true, selected: Boolean = false, action: () -> Unit) { IconButton(onClick = action, enabled = enabled, colors = IconButtonDefaults.iconButtonColors(containerColor=if(selected)MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent), modifier = Modifier.size(48.dp)) { Icon(icon, label, modifier = Modifier.size(24.dp)) } }
 @Composable fun Field(label: String, value: String, modifier: Modifier = Modifier, lines: Int = 1, secret: Boolean = false, readOnly: Boolean = false, onChange: (String) -> Unit) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(visible) { if (visible && secret) { kotlinx.coroutines.delay(20000); visible = false } }

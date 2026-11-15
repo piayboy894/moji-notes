@@ -8,7 +8,8 @@ public partial class MainWindow
 {
     private readonly Dictionary<string,List<string>> richUndo=[];
     private readonly Dictionary<string,List<string>> richRedo=[];
-    private StackPanel? tableTools;
+    private StackPanel? tableTools, linkTools;
+    private readonly Dictionary<string,Button> formatTools=[];
     private TableCell? ActiveCell()
     { DependencyObject? node=textEditor?.CaretPosition.Parent; while(node!=null){if(node is TableCell cell)return cell;node=node is FrameworkContentElement content?content.Parent:null;}return null; }
     private void RichUndo(bool redo=false)
@@ -46,7 +47,28 @@ public partial class MainWindow
             else if(paragraph.Parent==textEditor.Document){var section2=new Section{Tag="quote",BorderBrush=Ui.Resource("Accent"),BorderThickness=new Thickness(3,0,0,0),Padding=new Thickness(14,5,0,5)};textEditor.Document.Blocks.InsertBefore(paragraph,section2);textEditor.Document.Blocks.Remove(paragraph);section2.Blocks.Add(paragraph);}
         }finally{textEditor.EndChange();}SaveRichText();
     }
-    private void UpdateRichSelection(){if(tableTools!=null)tableTools.Visibility=ActiveCell()!=null?Visibility.Visible:Visibility.Collapsed;}
+    private Hyperlink? ActiveLink(){DependencyObject? node=textEditor?.CaretPosition.Parent;while(node!=null){if(node is Hyperlink link)return link;node=node is FrameworkContentElement content?content.Parent:null;}return null;}
+    private void UpdateRichSelection(){
+        if(textEditor==null)return;
+        if(tableTools!=null)tableTools.Visibility=ActiveCell()!=null?Visibility.Visible:Visibility.Collapsed;
+        if(linkTools!=null)linkTools.Visibility=ActiveLink()!=null?Visibility.Visible:Visibility.Collapsed;
+        foreach(var (kind,button) in formatTools){
+            var active=kind switch {
+                "Bold"=>textEditor.Selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight weight && weight>=FontWeights.SemiBold,
+                "Italic"=>Equals(textEditor.Selection.GetPropertyValue(TextElement.FontStyleProperty),FontStyles.Italic),
+                "Strike"=>(textEditor.Selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection)?.Any(d=>d.Location==TextDecorationLocation.Strikethrough)==true,
+                "Heading"=>textEditor.CaretPosition.Paragraph?.Tag is int,
+                "Bullet"=>(textEditor.CaretPosition.Paragraph?.Parent as ListItem)?.Parent is System.Windows.Documents.List { MarkerStyle:TextMarkerStyle.Disc },
+                "Ordered"=>(textEditor.CaretPosition.Paragraph?.Parent as ListItem)?.Parent is System.Windows.Documents.List { MarkerStyle:TextMarkerStyle.Decimal },
+                _=>false};
+            button.Background=active?Ui.Resource("AccentLight"):Ui.Resource("Panel");
+            if(kind is "Undo" or "Redo")button.IsEnabled=(kind=="Undo"?richUndo:richRedo).TryGetValue(VM.SelectedId,out var entries)&&entries.Count>0;
+        }
+    }
+    private StackPanel BuildLinkTools(){var panel=Ui.Row();panel.Margin=new Thickness(18,5,18,5);panel.Visibility=Visibility.Collapsed;
+        var open=Ui.Small("打开链接",()=>{if(ActiveLink()?.NavigateUri is {} uri)OpenUrl(uri.AbsoluteUri);});var edit=Ui.Small("修改链接",InsertLink);var remove=Ui.Small("移除链接",()=>{
+            if(ActiveLink() is not {} link||link.Parent is not Paragraph paragraph)return;textEditor!.BeginChange();try{foreach(var inline in link.Inlines.ToList()){link.Inlines.Remove(inline);paragraph.Inlines.InsertBefore(link,inline);}paragraph.Inlines.Remove(link);}finally{textEditor.EndChange();}SaveRichText();});
+        foreach(var button in new[]{open,edit,remove}){button.Focusable=false;panel.Children.Add(button);}return panel;}
     private StackPanel BuildTableTools()
     {
         var panel=Ui.Row();panel.Margin=new Thickness(18,5,18,5);panel.Visibility=Visibility.Collapsed;

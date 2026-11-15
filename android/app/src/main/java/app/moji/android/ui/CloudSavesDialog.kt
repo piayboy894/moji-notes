@@ -33,7 +33,7 @@ import java.util.Locale
     PanelDialog("云存档", { if (!busy) close() }, width = 820) {
         Row(Modifier.fillMaxWidth().testTag("global-saves"), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text("全部记事本", style = MaterialTheme.typography.titleMedium); Text("${workspace.liveBooks.size} 本 · ${workspace.liveNotes.size} 条记录", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Tool(MojiIcons.Settings, "存档连接设置", !busy, settings)
+            Tool(MojiIcons.Settings, "存档连接设置", !busy, action = settings)
             Tool(MojiIcons.Refresh, "刷新存档列表", !busy) { operate { catalog = vm.listCloudSaves(); selectedId = null; status = "已刷新" } }
         }
         BoxWithConstraints {

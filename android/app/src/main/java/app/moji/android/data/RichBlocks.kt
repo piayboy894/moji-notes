@@ -23,7 +23,7 @@ object RichBlocks {
         };flush();if(result.isEmpty()||result.last().kind!="text")result+=RichBlock();return result
     }
     fun serialize(blocks:List<RichBlock>)=blocks.joinToString("\n\n"){b->when(b.kind){
-        "table"->b.rows.mapIndexed{i,row->"| "+row.joinToString(" | "){it.replace(Regex("(?<!\\\\)\\|"),"\\|").replace("\n","<br>") }+" |"+if(i==0)"\n| "+row.joinToString(" | "){"---"}+" |" else ""}.joinToString("\n")
+        "table"->b.rows.mapIndexed{i,row->"| "+row.joinToString(" | "){it.replace(Regex("(?<!\\\\)\\|")){"\\|"}.replace("\n","<br>") }+" |"+if(i==0)"\n| "+row.joinToString(" | "){"---"}+" |" else ""}.joinToString("\n")
         "task"->b.prefix+"- ["+(if(b.checked)"x" else " ")+"] "+b.content
         "quote"->"> "+b.content.replace("\n","\n> ")
         "code"->{val fence=b.prefix.takeWhile{it=='`'||it=='~'}.ifEmpty{"```"};b.prefix.ifEmpty{"```"}+"\n"+b.content+"\n"+fence}

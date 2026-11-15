@@ -38,12 +38,12 @@ internal static class NativeSmoke
             var reread=MarkdownDocument.Render(savedRich.Content,15,savedRich.Variables).Blocks.OfType<Table>().Single();if(reread.RowGroups[0].Rows[0].Cells.Count!=3||!new TextRange(reread.ContentStart,reread.ContentEnd).Text.Contains("left|right"))throw new Exception("Table text broke columns after reopen");
             var copied=RichDocument.PlainText(savedRich);if(copied.Contains("**")||copied.Contains("moji-variable:")||!copied.Contains("受众")||!copied.Contains("{{原样保留}}"))throw new Exception("Copy full text leaked source or lost literal text");
             Capture(window,Path.Combine(output,"07-rich-tools.png"));checks.Add("table add-column, undo, redo, literal pipe round-trip and plain full-text copy work in native controls");
-            var passwordBook = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Password); window.Navigate(passwordBook.Id); window.AddNote();
+            var passwordBook = vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Password); window.Navigate(passwordBook.Id); window.AddNote(); await Render();
             if (vm.State.Notes.First(n=>n.Id==vm.SelectedId).NotebookId!=passwordBook.Id || Find<PasswordBox>(window)==null) throw new Exception("New password did not open in its own notebook editor");
             var credentialId=vm.SelectedId; vm.EditNote(credentialId,n=>n with { Username="test@example.com",Password="Test-only-2026!" }); window.Navigate(passwordBook.Id,credentialId); await Render();
             var readAccount=FindNamed<TextBox>(window,"AccountValue"); if(readAccount?.IsReadOnly!=true || FindNamed<Button>(window,"EditCredential")?.Content?.ToString()!="编辑密码")throw new Exception("Password view must be read-only with an edit action");
-            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if(Find<PasswordBox>(window)==null)throw new Exception("Edit button did not enable password editor");
-            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); if(FindNamed<TextBox>(window,"AccountValue")?.IsReadOnly!=true)throw new Exception("Done did not return to read-only");
+            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(Find<PasswordBox>(window)==null)throw new Exception("Edit button did not enable password editor");
+            FindNamed<Button>(window,"EditCredential")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Render(); if(FindNamed<TextBox>(window,"AccountValue")?.IsReadOnly!=true)throw new Exception("Done did not return to read-only");
             await Render(); Capture(window,Path.Combine(output,"03-password.png")); checks.Add("password records open read-only; Edit password and Done change the editing state");
             window.Navigate(vm.State.LiveBooks.First(b=>b.Mode==NoteMode.Prompt).Id); window.AddNote(); await Render(); Capture(window,Path.Combine(output,"04-prompt.png"));
             if(vm.State.Notebooks.First(b=>b.Id==vm.View).Mode!=NoteMode.Prompt)throw new Exception("Prompt created in wrong notebook");
