@@ -94,7 +94,7 @@ class SharedEditorBridge(private val web:WebView,private val vm:MojiViewModel,pr
                     override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){if(request.isForMainFrame)failure=true}
                 }
                 webChromeClient=object:WebChromeClient(){
-                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {android.util.Log.d("MojiEditor","Opening system image picker");current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent());true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
+                    override fun onShowFileChooser(view:WebView,callback:ValueCallback<Array<Uri>>,params:FileChooserParams):Boolean {android.util.Log.d("MojiEditor","Opening system image picker");current.fileResult?.onReceiveValue(null);current.fileResult=callback;return try{picker.launch(params.createIntent().apply{action=Intent.ACTION_OPEN_DOCUMENT;addCategory(Intent.CATEGORY_OPENABLE);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)});true}catch(e:Exception){current.fileResult=null;callback.onReceiveValue(null);vm.message("无法打开图片选择器");true}}
                     override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
                 }
                 loadUrl("https://appassets.androidplatform.net/assets/editor/index.html")

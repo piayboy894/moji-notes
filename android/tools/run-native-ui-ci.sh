@@ -19,14 +19,16 @@ moji_test_status=$?
 adb pull /sdcard/Download/moji-native-ui ../android-ui-screenshots
 moji_capture_status=$?
 
-if [ "$moji_test_status" -ne 0 ]; then
-  exit "$moji_test_status"
-fi
-if [ "$moji_capture_status" -ne 0 ]; then
-  exit "$moji_capture_status"
-fi
-set -e
+# The signed APK checks are independent of the instrumentation package. Always
+# collect both results, so a failing harness cannot hide a production regression.
+moji_install_status=0
+moji_editor_status=0
 if [ -n "${MOJI_KEYSTORE_PATH:-}" ]; then
   python3 tools/release-install-smoke.py
+  moji_install_status=$?
   python3 tools/release-editor-smoke.py
+  moji_editor_status=$?
+fi
+if [ "$moji_test_status" -ne 0 ] || [ "$moji_capture_status" -ne 0 ] || [ "$moji_install_status" -ne 0 ] || [ "$moji_editor_status" -ne 0 ]; then
+  exit 1
 fi

@@ -31,8 +31,8 @@ class AdaptiveUiTest {
     private fun js(code:String):String {val done=java.util.concurrent.CountDownLatch(1);var result="";val web=webView();compose.activityRule.scenario.onActivity{web.evaluateJavascript(code){result=it;done.countDown()}};check(done.await(10,java.util.concurrent.TimeUnit.SECONDS)){"Editor script timed out"};return result}
     private fun focusWeb(){val web=webView();compose.activityRule.scenario.onActivity{web.requestFocus()};js("window.MojiEditor.editor.commands.focus()");compose.waitUntil(5000){js("Boolean(document.activeElement?.matches('.tiptap'))")=="true"}}
     private fun jsText():String=org.json.JSONTokener(js("window.MojiEditor.editor.getText() ")).nextValue().toString()
-    private fun webReady(){compose.waitForIdle();compose.waitUntil(30000){runCatching{js("Boolean(window.MojiEditor?.editor && window.MojiEditor.editor.isEditable && window.MojiEditor.recordId)")=="true"}.getOrDefault(false)}}
-    private fun tapWeb(selector:String){js("document.querySelector('$selector').scrollIntoView({block:'center'})");Thread.sleep(200);val raw=js("JSON.stringify((()=>{const r=document.querySelector('$selector').getBoundingClientRect();const v=visualViewport;return {x:r.x+r.width/2-v.offsetLeft,y:r.y+r.height/2-v.offsetTop,width:v.width,height:r.height}})())");val point=org.json.JSONObject(org.json.JSONTokener(raw).nextValue().toString());val location=IntArray(2);var width=0;val web=webView();compose.activityRule.scenario.onActivity{web.getLocationOnScreen(location);width=web.width};val ratio=width/point.getDouble("width");println("Web tap $point native=${location.toList()} width=$width ratio=$ratio");shell("input tap ${(location[0]+point.getDouble("x")*ratio).toInt()} ${(location[1]+point.getDouble("y")*ratio).toInt()}")}
+    private fun webReady(){compose.waitForIdle();val expected=org.json.JSONObject.quote(compose.activity.vm.state.value.selectedId);compose.waitUntil(30000){runCatching{js("Boolean(window.MojiEditor?.editor && window.MojiEditor.editor.isEditable)")=="true"&&js("window.MojiEditor.recordId")==expected}.getOrDefault(false)}}
+    private fun tapWeb(selector:String){hideKeyboard();val native=webView();compose.activityRule.scenario.onActivity{native.scrollTo(0,0)};js("document.querySelector('.simple-editor-wrapper').scrollTop=0;window.scrollTo(0,0);document.querySelector('$selector').scrollIntoView({block:'start'})");Thread.sleep(250);val raw=js("JSON.stringify((()=>{const r=document.querySelector('$selector').getBoundingClientRect();const v=visualViewport;return {x:r.x+r.width/2-v.offsetLeft,y:r.y+r.height/2-v.offsetTop,width:v.width,height:r.height}})())");val point=org.json.JSONObject(org.json.JSONTokener(raw).nextValue().toString());val location=IntArray(2);var width=0;val web=webView();compose.activityRule.scenario.onActivity{web.getLocationOnScreen(location);width=web.width};val ratio=width/point.getDouble("width");println("Web tap $point native=${location.toList()} width=$width ratio=$ratio");shell("input tap ${(location[0]+point.getDouble("x")*ratio).toInt()} ${(location[1]+point.getDouble("y")*ratio).toInt()}")}
 
     private fun hideKeyboard() { compose.activityRule.scenario.onActivity { androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime()) }; Thread.sleep(350); compose.waitForIdle() }
     private fun screenshot(name: String) { compose.waitForIdle(); Thread.sleep(500); val path="/sdcard/Download/moji-native-ui/$name.png"; shell("mkdir -p /sdcard/Download/moji-native-ui"); shell("screencap -p $path"); check((shell("stat -c %s $path").trim().toLongOrNull()?:0)>1024) }
@@ -110,7 +110,7 @@ class AdaptiveUiTest {
         js("window.MojiEditor.editor.chain().focus().toggleBlockquote().insertContent('Quote').run()")
         focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         InstrumentationRegistry.getInstrumentation().sendStringSync("Normal")
-        compose.waitUntil(5000){jsText().contains("Normal")};assertTrue(js("window.MojiEditor.editor.getHTML()").contains("</blockquote><p>Normal"))
+        compose.waitUntil(5000){jsText().contains("Normal")};assertTrue(org.json.JSONTokener(js("window.MojiEditor.editor.getHTML()")).nextValue().toString(),js("Boolean(window.MojiEditor.editor.state.doc.content.content.find(n=>n.type.name==='paragraph'&&n.textContent.includes('Normal')))")=="true")
         js("window.MojiEditor.editor.chain().clearContent().toggleTaskList().insertContent('Task').run()")
         focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendStringSync("Second")
         js("document.querySelector('li input[type=checkbox]').click()")
@@ -166,7 +166,7 @@ class AdaptiveUiTest {
         runBlocking{compose.activity.vm.flush()}
         val id=compose.activity.vm.selectedNote()!!.id;val book=compose.activity.vm.selectedNote()!!.notebookId
         compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithTag("home-title").assertIsDisplayed()
-        compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)}
+        compose.activityRule.scenario.onActivity{it.vm.navigate(book);it.vm.select(id)};webReady()
         compose.waitUntil(5000){jsText().contains(marker)}
         }catch(t:Throwable){runCatching{screenshot("failure-physical-keyboard")};throw t}
     }
