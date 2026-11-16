@@ -59,7 +59,7 @@ public partial class MainWindow
     }
     private async Task CheckUpdates(bool userInitiated,Action<string>? status=null)
     {
-        try{availableUpdate=await updater.CheckAsync(App.CurrentVersion,RuntimeInformation.OSArchitecture==Architecture.Arm64?"arm64":"x64");if(availableUpdate!=null){status?.Invoke($"发现新版本 {availableUpdate.Version}");if(!userInitiated)Toast($"墨记 {availableUpdate.Version} 已发布，可在「关于与更新」中更新");}else status?.Invoke("你已在使用最新版本");}catch(Exception e){if(userInitiated)status?.Invoke("检查失败，请稍后重试："+UserMessages.For(e));}
+        try{availableUpdate=await updater.CheckAsync(App.CurrentVersion,RuntimeInformation.OSArchitecture==Architecture.Arm64?"arm64":"x64");if(availableUpdate!=null){status?.Invoke($"发现新版本 {availableUpdate.Version}");if(!userInitiated)Toast($"墨记 {availableUpdate.Version} 已发布，可在「关于与更新」中更新");}else status?.Invoke("你已在使用最新版本");}catch(Exception e){if(userInitiated)status?.Invoke(UserMessages.For(e,"检查更新未完成，请稍后重试。"));}
     }
     private async Task InstallUpdate()
     {if(downloadedUpdate==null)return;try{await VM.SaveAsync();UpdateService.StartReplacement(downloadedUpdate,Environment.ProcessPath!);Close();}catch(Exception e){Toast("更新未能启动："+UserMessages.For(e));}}

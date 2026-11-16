@@ -67,6 +67,7 @@ public static class UserMessages
     {
         if(Known.Contains(error.Message))return error.Message;
         return error switch {
+            UpdateCheckException => error.Message,
             UnauthorizedAccessException=>"没有写入权限，请换一个保存位置或检查系统权限。",
             HttpRequestException or TaskCanceledException=>"暂时无法连接，请检查网络后重试。",
             System.Text.Json.JsonException or FormatException=>"文件无法读取，请检查文件是否完整。",

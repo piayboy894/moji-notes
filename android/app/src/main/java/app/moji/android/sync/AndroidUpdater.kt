@@ -6,32 +6,19 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
 import app.moji.android.BuildConfig
-import app.moji.android.data.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-@Serializable private data class ReleaseAsset(val name: String, @SerialName("browser_download_url") val url: String, val size: Long, val digest: String? = null)
-@Serializable private data class AndroidRelease(@SerialName("tag_name") val tag: String, val draft: Boolean, val prerelease: Boolean, @SerialName("html_url") val url: String, val assets: List<ReleaseAsset>)
 data class AndroidUpdate(val version: String, val versionCode: Int, val url: String, val size: Long, val sha256: String, val releaseUrl: String)
 class AndroidUpdater(private val context: Context) {
     private val http = OkHttpClient.Builder().callTimeout(15, TimeUnit.MINUTES).build()
     private fun request(url: String) = Request.Builder().url(url).header("User-Agent", "Moji-Android/${BuildConfig.VERSION_NAME}").build()
-    suspend fun check(): AndroidUpdate? = withContext(Dispatchers.IO) {
-        val text = http.newCall(request("https://api.github.com/repos/piayboy894/moji-notes/releases?per_page=50")).execute().use { require(it.isSuccessful) { "更新服务暂时不可用（${it.code}）" }; it.body!!.string() }
-        json.decodeFromString<List<AndroidRelease>>(text).filter { !it.draft && !it.prerelease && it.tag.startsWith("android-v") }.mapNotNull { release ->
-            val version = release.tag.removePrefix("android-v"); val code = versionCode(version) ?: return@mapNotNull null
-            val asset = release.assets.firstOrNull { it.name == "Moji-Notes-Android-$version.apk" } ?: return@mapNotNull null
-            val hash = asset.digest?.removePrefix("sha256:")?.lowercase()?.takeIf { it.matches(Regex("[a-f0-9]{64}")) } ?: return@mapNotNull null
-            if (code > BuildConfig.VERSION_CODE) AndroidUpdate(version, code, asset.url, asset.size, hash, release.url) else null
-        }.maxByOrNull { it.versionCode }
-    }
+    suspend fun check(): AndroidUpdate? = UpdateCatalog(http).check(BuildConfig.VERSION_CODE)
     suspend fun download(update: AndroidUpdate, progress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val uri = android.net.Uri.parse(update.url)
         require(uri.scheme == "https" && uri.host == "github.com" && uri.path?.startsWith("/piayboy894/moji-notes/releases/download/android-v") == true) { "更新来源不受信任" }

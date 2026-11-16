@@ -6,33 +6,23 @@ using System.Text;
 namespace Moji.Core;
 public record UpdateAsset(long Id, string Name, string BrowserDownloadUrl, long Size);
 public record ReleaseInfo(string TagName, bool Draft, bool Prerelease, string HtmlUrl, List<UpdateAsset> Assets);
-public record UpdatePackage(Version Version, UpdateAsset Asset, UpdateAsset Checksums, string ReleaseUrl);
+public record UpdatePackage(Version Version, UpdateAsset Asset, UpdateAsset Checksums, string ReleaseUrl, string? Sha256 = null);
 public sealed class UpdateService
 {
     private const string Repository = "piayboy894/moji-notes";
     private readonly HttpClient http;
     public UpdateService(HttpClient? client = null) { http = client ?? new HttpClient { Timeout = TimeSpan.FromMinutes(15) }; http.DefaultRequestHeaders.UserAgent.ParseAdd("Moji-Notes/1.0"); }
-    public async Task<UpdatePackage?> CheckAsync(Version current, string arch, CancellationToken cancellation = default)
-    {
-        // Public Releases: no account, token or saved sync credentials are used.
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repository}/releases?per_page=30");
-        using var response = await http.SendAsync(request, cancellation); response.EnsureSuccessStatusCode();
-        using var document = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
-        foreach (var release in document.RootElement.EnumerateArray().Where(r => !r.GetProperty("draft").GetBoolean() && !r.GetProperty("prerelease").GetBoolean()).OrderByDescending(r => Version.TryParse(r.GetProperty("tag_name").GetString()?.TrimStart('v'), out var v) ? v : new Version()))
-        {
-            if (!Version.TryParse(release.GetProperty("tag_name").GetString()?.TrimStart('v'), out var version) || version <= current) continue;
-            var assets = release.GetProperty("assets").EnumerateArray().Select(a => new UpdateAsset(a.GetProperty("id").GetInt64(), a.GetProperty("name").GetString()!, a.GetProperty("browser_download_url").GetString()!, a.GetProperty("size").GetInt64())).ToList();
-            var asset = assets.FirstOrDefault(a => a.Name == $"Moji-Notes-{version.ToString(3)}-win-{arch}.exe"); var hashes = assets.FirstOrDefault(a => a.Name == "SHA256SUMS.json");
-            if (asset != null && hashes != null) return new(version, asset, hashes, release.GetProperty("html_url").GetString()!);
-        }
-        return null;
-    }
+    public Task<UpdatePackage?> CheckAsync(Version current, string arch, CancellationToken cancellation = default) => UpdateDiscovery.Check(http, current, arch, cancellation);
     private static Uri AssetUri(UpdateAsset asset)
     { var uri = new Uri(asset.BrowserDownloadUrl); if (uri.Scheme != "https" || uri.Host != "github.com" || !uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/", StringComparison.Ordinal)) throw new InvalidDataException("更新来源不受信任"); return uri; }
     public async Task<string> DownloadAsync(UpdatePackage package, string directory, IProgress<double>? progress = null, CancellationToken cancellation = default)
     {
-        var checksumsText = await http.GetStringAsync(AssetUri(package.Checksums), cancellation); var checksums = Json.Deserialize<Dictionary<string,string>>(checksumsText.TrimStart('\uFEFF'));
-        if (!checksums.TryGetValue(package.Asset.Name, out var expected) || expected.Length != 64) throw new InvalidDataException("更新包缺少有效的校验值");
+        var expected = package.Sha256;
+        if (expected is null) {
+            var checksumsText = await http.GetStringAsync(AssetUri(package.Checksums), cancellation); var checksums = Json.Deserialize<Dictionary<string,string>>(checksumsText.TrimStart('\uFEFF'));
+            checksums.TryGetValue(package.Asset.Name, out expected);
+        }
+        if (expected is null || expected.Length != 64 || !expected.All(char.IsAsciiHexDigit)) throw new InvalidDataException("更新包缺少有效的校验值");
         Directory.CreateDirectory(directory); var path = Path.Combine(directory, "Moji.Notes.download.exe"); var temp = path + ".tmp";
         using var response = await http.GetAsync(AssetUri(package.Asset), HttpCompletionOption.ResponseHeadersRead, cancellation); response.EnsureSuccessStatusCode();
         await using (var input = await response.Content.ReadAsStreamAsync(cancellation))

@@ -89,12 +89,13 @@ try:
         # This is a foreground-feedback check. A public GitHub rate limit or
         # unavailable network must also produce visible, actionable feedback.
         outcomes={'你已在使用最新版本','检查更新失败','暂时无法连接，请检查网络后重试。','文件无法读取，请检查文件是否完整。'}
-        feedback=next((label for label in labels if label in outcomes or label.startswith('发现新版本 ')),None)
+        feedback=next((label for label in labels if label in outcomes or label.startswith(('发现新版本 ','GitHub 请求','更新服务','无法解析更新服务器','与更新服务器','暂时无法连接更新服务器','更新信息暂时'))),None)
         if feedback is not None and '偏好设置' in labels:
             (REPORT.parent/'update-feedback-window.xml').write_bytes(ET.tostring(root,encoding='utf-8'))
             capture('05-update-feedback');break
         time.sleep(.2)
     if feedback is None:raise RuntimeError('Update result was not visible in the foreground settings window: '+repr(sorted(observed)))
+    if feedback != '你已在使用最新版本' and not feedback.startswith('发现新版本 '):raise RuntimeError('Public update check did not succeed: '+feedback)
     (REPORT.parent/'update-feedback.json').write_text(json.dumps({'text':feedback,'githubReached':feedback=='你已在使用最新版本' or feedback.startswith('发现新版本 ')},ensure_ascii=False,indent=2))
     checks.append('signed APK check-update feedback is visible inside the foreground settings window: '+feedback)
     tap(wait_node(description='关闭'));wait_editor(contains='Normal');wait_saved_variable('Audience');wait_saved_image('Moji-Editor-Test.png')

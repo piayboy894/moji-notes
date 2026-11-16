@@ -75,6 +75,16 @@ jobs:
           path: verified/android-ui
       - name: Verify and publish exact tested packages
         run: python3 tools/publish-tested.py
+      - name: Publish public update feeds from the released assets
+        run: |
+          if [[ "$MOJI_PLATFORM" == windows ]]; then
+            version=$(git show "$MOJI_TESTED_SHA:src/Moji.App/Moji.App.csproj" | sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p')
+            tag="v$version"
+          else
+            version=$(git show "$MOJI_TESTED_SHA:android/app/build.gradle.kts" | sed -n 's/.*versionName = "\([0-9.]*\)".*/\1/p')
+            tag="android-v$version"
+          fi
+          python3 tools/update-feed.py --platform "$MOJI_PLATFORM" --tag "$tag" --publish
       - uses: actions/upload-artifact@v4
         if: inputs.platform == 'windows'
         with:

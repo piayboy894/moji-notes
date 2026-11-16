@@ -75,8 +75,10 @@ jobs:
           path: |
             artifacts/smoke/*.png
             artifacts/smoke/report.json
+            artifacts/smoke/public-update-check.json
             artifacts/standard-smoke/report.json
             artifacts/standard-smoke/launch.json
+            artifacts/standard-smoke/public-update-check.json
       - name: Package portable builds
         shell: pwsh
         run: |
@@ -114,3 +116,5 @@ jobs:
           $tag = "v$version"
           $files = (Get-ChildItem artifacts/release/*).FullName
           gh release create $tag @files --target $env:GITHUB_SHA --title "墨记 $tag" --notes-file docs/RELEASE.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/update-feed.py --platform windows --tag $tag --publish

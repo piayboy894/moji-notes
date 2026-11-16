@@ -63,6 +63,7 @@ object UserMessages {
     fun forError(error:Exception,fallback:String="操作未完成，请重试。"):String {
         if(error.message in known)return error.message!!
         return when(error){
+            is app.moji.android.sync.UpdateCheckException -> error.message ?: fallback
             is java.net.SocketException,is java.net.SocketTimeoutException,is java.net.UnknownHostException -> "暂时无法连接，请检查网络后重试。"
             is SecurityException -> "没有访问权限，请重新选择文件或检查系统权限。"
             is kotlinx.serialization.SerializationException -> "文件无法读取，请检查文件是否完整。"

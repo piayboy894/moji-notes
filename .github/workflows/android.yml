@@ -176,3 +176,4 @@ jobs:
           cp app/build/outputs/release-smoke/report.json ../artifacts/android-release/native-release-test-report.json
           (cd ../artifacts/android-release && sha256sum "Moji-Notes-Android-$version.apk" > SHA256SUMS.txt)
           gh release create "android-v$version" ../artifacts/android-release/* --target "$GITHUB_SHA" --title "墨记 Android $version" --notes-file RELEASE.md
+          python3 ../tools/update-feed.py --platform android --tag "android-v$version" --publish
