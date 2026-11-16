@@ -1,5 +1,7 @@
 package app.moji.android
 
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.toArgb
 import android.content.pm.ActivityInfo
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -305,7 +307,11 @@ class AdaptiveUiTest {
         try{
             resize(720,1600,320);ready(false);val a=Notebook(name="First",mode=NoteMode.Text,color="#C06C68");val b=Notebook(name="Second",mode=NoteMode.Prompt,color="#6D89A6");val c=Notebook(name="Third",mode=NoteMode.Password,color="#6F8B67")
             runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(a,b,c))))};compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.waitForIdle()
-            fun drag(sourceTag:String,targetTag:String){val source=compose.onNodeWithTag(sourceTag).fetchSemanticsNode().boundsInRoot;val target=compose.onNodeWithTag(targetTag).fetchSemanticsNode().boundsInRoot;compose.onNodeWithTag(sourceTag).performTouchInput{down(center);advanceEventTime(700);moveTo(androidx.compose.ui.geometry.Offset(target.center.x-source.left,target.center.y-source.top),600);up()};compose.waitForIdle()}
+            fun coverPixel():Int{val pixels=compose.onNodeWithTag("book-Text").captureToImage().toPixelMap();return pixels[(pixels.width*.64f).toInt(),(pixels.height*.82f).toInt()].toArgb()}
+            val lightCover=coverPixel();compose.activityRule.scenario.onActivity{it.vm.preferences{p->p.copy(theme="dark")}};compose.waitForIdle();assertEquals(lightCover,coverPixel());compose.activityRule.scenario.onActivity{it.vm.preferences{p->p.copy(theme="light")}};compose.waitForIdle();screenshot("40-opaque-cover-consistent")
+            val sourceBounds=compose.onNodeWithTag("book-Text").fetchSemanticsNode().boundsInRoot;val targetBounds=compose.onNodeWithTag("book-Prompt").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("book-Text").performTouchInput{down(center);advanceEventTime(700);moveTo(androidx.compose.ui.geometry.Offset(targetBounds.center.x-sourceBounds.left,targetBounds.center.y-sourceBounds.top),600)};compose.waitForIdle();assertEquals(listOf(a.id,b.id,c.id),compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id});compose.onNodeWithTag("book-Text").performTouchInput{cancel()};compose.waitForIdle();assertEquals(listOf(a.id,b.id,c.id),compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id});assertEquals(sourceBounds,compose.onNodeWithTag("book-Text").fetchSemanticsNode().boundsInRoot)
+            fun drag(sourceTag:String,targetTag:String){val saved=compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id};val source=compose.onNodeWithTag(sourceTag).fetchSemanticsNode().boundsInRoot;val target=compose.onNodeWithTag(targetTag).fetchSemanticsNode().boundsInRoot;compose.onNodeWithTag(sourceTag).performTouchInput{down(center);advanceEventTime(700);moveTo(androidx.compose.ui.geometry.Offset(target.center.x-source.left,target.center.y-source.top),600)};compose.waitForIdle();assertEquals(saved,compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id});compose.onAllNodesWithTag(sourceTag).assertCountEquals(1);compose.onNodeWithTag(sourceTag).performTouchInput{up()};compose.waitForIdle()}
             drag("book-Text","book-Prompt");compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.liveBooks.first().id==b.id};screenshot("29-notebook-drag-dashboard")
             compose.onNodeWithContentDescription("打开导航").performClick();compose.onNodeWithTag("notebook-sidebar-list").performScrollToKey(b.id);drag("sidebar-book-${b.id}","sidebar-book-${a.id}");compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.liveBooks.first().id==a.id};screenshot("30-notebook-drag-sidebar")
             runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertEquals(listOf(a.id,b.id,c.id),compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id})
@@ -327,7 +333,7 @@ class AdaptiveUiTest {
             runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=listOf(old,active))))};compose.activityRule.scenario.onActivity{it.vm.navigate(book.id);it.vm.select(active.id)};webReady();val native=webView()
             compose.onNodeWithTag("pin-record-${old.id}").performClick();compose.waitUntil(5000){compose.activity.vm.filtered().first().id==old.id};assertEquals(active.id,compose.activity.vm.selectedNote()!!.id);assertSame(native,webView());assertEquals("Active body",jsText());assertEquals(1L,compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.updatedAt)
             for(sort in listOf("name","created","updated")){compose.activityRule.scenario.onActivity{it.vm.sort(sort)};assertEquals(old.id,compose.activity.vm.filtered().first().id)}
-            screenshot("31-card-pin-and-copy");compose.onNodeWithTag("duplicate-record-${old.id}").performClick();webReady();val copy=compose.activity.vm.selectedNote()!!;assertNotEquals(old.id,copy.id);assertEquals(book.id,copy.notebookId);assertFalse(copy.pinned);assertTrue(copy.history.isEmpty());assertEquals(old.fields,copy.fields);assertEquals("Original body",jsText());compose.activityRule.scenario.onActivity{it.vm.edit(copy.id){it.copy(fields=it.fields.map{f->f.copy(value="New")})}};assertEquals("Value",compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.fields.single().value)
+            screenshot("31-card-pin-only");compose.onAllNodesWithTag("duplicate-record-${old.id}").assertCountEquals(0);compose.onNodeWithTag("record-card-${old.id}").performMouseInput{click(button=MouseButton.Secondary)};compose.onNodeWithText("创建副本").performClick();webReady();val copy=compose.activity.vm.selectedNote()!!;assertNotEquals(old.id,copy.id);assertEquals(book.id,copy.notebookId);assertFalse(copy.pinned);assertTrue(copy.history.isEmpty());assertEquals(old.fields,copy.fields);assertEquals("Original body",jsText());compose.activityRule.scenario.onActivity{it.vm.edit(copy.id){it.copy(fields=it.fields.map{f->f.copy(value="New")})}};assertEquals("Value",compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.fields.single().value)
             runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertTrue(compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.pinned)
         }finally{shell("wm size reset");shell("wm density reset")}
     }
@@ -367,6 +373,57 @@ class AdaptiveUiTest {
             search.performClick();search.performTextReplacement("no-such-search-result");compose.waitUntil(10000){compose.onAllNodesWithText("没有找到记录").fetchSemanticsNodes().isNotEmpty()};compose.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()};compose.waitForIdle();compose.onAllNodesWithTag("global-search-results").assertCountEquals(0);assertEquals(text.id,compose.activity.vm.selectedNote()!!.id)
             hideKeyboard();resize(720,1600,320);compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithContentDescription("全局搜索").performClick();compose.waitUntil(10000){compose.onAllNodesWithTag("global-search-results").fetchSemanticsNodes().isNotEmpty()};compose.onAllNodes(isDialog()).assertCountEquals(0);screenshot("36-global-search-phone")
         }finally{shell(if(original=="null")"settings delete secure show_ime_with_hard_keyboard"else"settings put secure show_ime_with_hard_keyboard $original");shell("wm size reset");shell("wm density reset")}
+    }
+
+    private fun sidebarBook(id:String)=compose.onNode(hasTestTag("sidebar-book-$id") and SemanticsMatcher("onscreen notebook"){it.boundsInRoot.right>0&&it.boundsInRoot.left>=0})
+    private fun recordChord(key:Key){compose.onRoot().performKeyInput{keyDown(Key.CtrlLeft);pressKey(key);keyUp(Key.CtrlLeft)};compose.waitForIdle()}
+    private fun clipboardToken():String?=compose.activity.getSystemService(android.content.ClipboardManager::class.java).primaryClipDescription?.extras?.getString("moji-record-token")
+    @Test fun recordClipboardCopiesCutsAtomicallyAndTextSelectionKeepsItsOwnShortcuts(){
+        try{
+            resize(1440,1080,160);ready(false)
+            val a=Notebook(name="Copy source",mode=NoteMode.Password);val b=Notebook(name="Copy target",mode=NoteMode.Password);val wrong=Notebook(name="Text target",mode=NoteMode.Text)
+            val n=Note(notebookId=a.id,title="First account",password="test-only",updatedAt=10,fields=listOf(CredentialField(name="Region",value="Stored")));val n2=Note(notebookId=a.id,title="Second account",updatedAt=11)
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(a,b,wrong),notes=listOf(n,n2))))};compose.activityRule.scenario.onActivity{it.vm.navigate(a.id)}
+            compose.onNodeWithTag("record-card-${n.id}").performClick();recordChord(Key.C);compose.waitUntil(8000){compose.activity.vm.state.value.recordClipboardReady}
+            sidebarBook(b.id).performClick();recordChord(Key.V);compose.waitUntil(8000){compose.activity.vm.state.value.workspace!!.liveNotes.any{it.notebookId==b.id}}
+            val copy=compose.activity.vm.state.value.workspace!!.liveNotes.first{it.notebookId==b.id};assertNotEquals(n.id,copy.id);assertEquals(n.fields,copy.fields);assertEquals(n.password,copy.password)
+            sidebarBook(a.id).performClick();compose.onNodeWithTag("select-records").performClick();compose.onNodeWithTag("select-all-records").performClick();val oldToken=clipboardToken();recordChord(Key.X);compose.waitUntil(8000){clipboardToken()!=oldToken};assertEquals(a.id,compose.activity.vm.state.value.workspace!!.notes.first{it.id==n.id}.notebookId)
+            sidebarBook(wrong.id).performClick();recordChord(Key.V);compose.waitUntil(8000){compose.onAllNodesWithText("记事本类型不兼容，未移动任何记录。").fetchSemanticsNodes().isNotEmpty()};assertTrue(compose.activity.vm.state.value.workspace!!.notes.filter{it.id in setOf(n.id,n2.id)}.all{it.notebookId==a.id})
+            sidebarBook(b.id).performClick();recordChord(Key.V);compose.waitUntil(8000){compose.activity.vm.state.value.workspace!!.notes.first{it.id==n.id}.notebookId==b.id};assertTrue(compose.activity.vm.state.value.workspace!!.notes.filter{it.id in setOf(n.id,n2.id)}.all{it.notebookId==b.id});assertEquals(10L,compose.activity.vm.state.value.workspace!!.notes.first{it.id==n.id}.updatedAt)
+            compose.onNodeWithTag("record-card-${n.id}").performClick();recordChord(Key.C);compose.waitUntil(8000){compose.activity.vm.state.value.recordClipboardReady};compose.onNodeWithTag("credential-password").performClick();compose.onNodeWithTag("credential-password").performTextInputSelection(androidx.compose.ui.text.TextRange(0,n.password.length));recordChord(Key.C)
+            compose.waitUntil(8000){compose.activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip?.getItemAt(0)?.text?.toString()==n.password};assertFalse(compose.activity.vm.hasRecordClipboard());screenshot("37-record-clipboard-and-text-selection")
+        }finally{shell("wm size reset");shell("wm density reset")}
+    }
+    private fun recordBounds(tag:String):android.graphics.Rect?{
+        fun find(node:android.view.accessibility.AccessibilityNodeInfo?):android.graphics.Rect?{
+            if(node==null)return null
+            if(node.viewIdResourceName==tag&&node.isVisibleToUser)return android.graphics.Rect().also{node.getBoundsInScreen(it)}
+            for(i in 0 until node.childCount){val found=find(node.getChild(i));if(found!=null)return found}
+            return null
+        }
+        return find(InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow)
+    }
+    private fun nativeRecordDrag(source:String,target:String){
+        val origin=recordBounds(source)?:error("Record drag source has no screen bounds")
+        try{
+            shell("input touchscreen motionevent DOWN ${origin.centerX()} ${origin.centerY()}");Thread.sleep(850)
+            compose.waitUntil(8000){recordBounds(target)!=null};val goal=recordBounds(target)!!
+            shell("input touchscreen motionevent MOVE ${goal.centerX()} ${goal.centerY()}");Thread.sleep(250);screenshot("38-record-drag-target")
+            shell("input touchscreen motionevent UP ${goal.centerX()} ${goal.centerY()}");compose.waitForIdle()
+        }finally{shell("input touchscreen motionevent UP 1 1")}
+    }
+    @Test fun selectedRecordsLongPressDragIntoSidebarAndRejectWrongMode(){
+        try{
+            resize(720,1600,320);ready(false)
+            val a=Notebook(name="Drag source",mode=NoteMode.Text);val b=Notebook(name="Drag target",mode=NoteMode.Text);val wrong=Notebook(name="Passwords",mode=NoteMode.Password)
+            val n=Note(notebookId=a.id,title="Drag one",content="One",updatedAt=10);val n2=Note(notebookId=a.id,title="Drag two",content="Two",updatedAt=11)
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(a,b,wrong),notes=listOf(n,n2))))};compose.activityRule.scenario.onActivity{it.vm.navigate(a.id)}
+            compose.onNodeWithTag("select-records").performClick();compose.onNodeWithTag("select-all-records").performClick();nativeRecordDrag("record-card-${n.id}","sidebar-book-${b.id}")
+            compose.waitUntil(8000){compose.activity.vm.state.value.workspace!!.notes.filter{it.id in setOf(n.id,n2.id)}.all{it.notebookId==b.id}};assertEquals(10L,compose.activity.vm.state.value.workspace!!.notes.first{it.id==n.id}.updatedAt);webReady();assertEquals("false",js("['c','x','v'].some(key=>{const e=new KeyboardEvent('keydown',{key,ctrlKey:true,bubbles:true,cancelable:true});document.dispatchEvent(e);return e.defaultPrevented})"))
+            compose.activityRule.scenario.onActivity{it.vm.navigate(b.id)};compose.onNodeWithTag("select-records").performClick();compose.onNodeWithTag("select-all-records").performClick();nativeRecordDrag("record-card-${n.id}","sidebar-book-${wrong.id}")
+            compose.waitUntil(8000){compose.onAllNodesWithText("记事本类型不兼容，未移动任何记录。").fetchSemanticsNodes().isNotEmpty()};assertTrue(compose.activity.vm.state.value.workspace!!.notes.filter{it.id in setOf(n.id,n2.id)}.all{it.notebookId==b.id});screenshot("39-incompatible-record-drop")
+            runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertEquals(2,compose.activity.vm.state.value.workspace!!.notes.count{it.notebookId==b.id})
+        }finally{shell("input touchscreen motionevent UP 1 1");shell("wm size reset");shell("wm density reset")}
     }
 
 }

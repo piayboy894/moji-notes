@@ -3,6 +3,7 @@ namespace Moji.Core;
 public static class Shortcuts
 {
     public static readonly (string Id, string Label, string Default)[] Actions = [
+        ("recordCopy", "复制记录", "Ctrl+C"), ("recordCut", "剪切记录", "Ctrl+X"), ("recordPaste", "粘贴记录", "Ctrl+V"),
         ("search", "全局搜索", "Ctrl+K"), ("new", "新建记录", "Ctrl+N"),
         ("save", "保存历史版本", "Ctrl+S"), ("cloud", "云存档", "Ctrl+Shift+S"),
         ("undo", "撤销", "Ctrl+Z"), ("redo", "重做", "Ctrl+Y"),
@@ -14,7 +15,7 @@ public static class Shortcuts
     {
         if (chord.Length == 0) return null;
         if (!Regex.IsMatch(chord, @"^(?:(?:Ctrl\+)(?:Alt\+)?(?:Shift\+)?|(?:Alt\+)(?:Shift\+)?)(?:[A-Z0-9]|F(?:[1-9]|1[0-2]))$|^F(?:[1-9]|1[0-2])$")) return "请使用 Ctrl / Alt 组合键或 F1–F12";
-        if (new[] { "Ctrl+C", "Ctrl+V", "Ctrl+X", "Ctrl+A", "Alt+F4" }.Contains(chord)) return "此组合用于系统或基础编辑";
+        if (new[] { "Ctrl+C", "Ctrl+V", "Ctrl+X", "Ctrl+A", "Alt+F4" }.Contains(chord) && !Actions.Any(a=>a.Id==action&&a.Id.StartsWith("record")&&a.Default==chord)) return "此组合用于系统或基础编辑";
         var conflict = Actions.FirstOrDefault(a => a.Id != action && Binding(preferences, a.Id) == chord);
         return conflict.Id == null ? null : "已用于「" + conflict.Label + "」";
     }

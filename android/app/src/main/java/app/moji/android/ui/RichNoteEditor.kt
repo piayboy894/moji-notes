@@ -91,6 +91,8 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
         settings.javaScriptEnabled=true;settings.domStorageEnabled=false;settings.allowFileAccess=false;settings.allowContentAccess=true;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;isVerticalScrollBarEnabled=false
         setOnTouchListener{v,e->if(e.actionMasked==android.view.MotionEvent.ACTION_DOWN)v.requestFocus();false}
         val loader=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(activity)).addPathHandler("/fonts/"){path->InstalledFonts.response(path)}.build()
+        setOnDragListener{_,event->if(event.clipDescription?.hasMimeType(RecordDragMime)==true){if(event.action==android.view.DragEvent.ACTION_DROP)vm.message("请拖到左侧记事本");true}else false}
+        onFocusChangeListener=android.view.View.OnFocusChangeListener{_,focused->if(focused)vm.recordKeyboardScope=false}
         addJavascriptInterface(this@SharedEditorSession,"MojiNative")
         webViewClient=object:WebViewClient(){
             override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=loader.shouldInterceptRequest(request.url)?:WebResourceResponse("text/plain","UTF-8",java.io.ByteArrayInputStream(ByteArray(0)))
@@ -138,7 +140,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
         visible=true;web.cover(obscured)
         val palette=ThemeCatalog.resolve(prefs,dark)
         web.setBackgroundColor(android.graphics.Color.parseColor(palette.colors.getValue("Panel")))
-        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
+        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,it.third)}})}.toString()
         if(lastAppearance!=configuration){lastAppearance=configuration;web.evaluateJavascript("window.MojiEditor?.configure($configuration)",null)}
         val key="${vm.workspaceEpoch}:${vm.state.value.editorGeneration}:${note.id}"
         if(key==requested){if(loaded.isCompleted&&needsActivation){needsActivation=false;web.evaluateJavascript("window.MojiEditor?.activate()",null)};return}
@@ -150,7 +152,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
                 fileResult?.onReceiveValue(null);fileResult=null
                 val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:return@launch
                 activeId=latest.id;epoch=vm.workspaceEpoch;generation=vm.state.value.editorGeneration;token=uid();loadingToken=token
-                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
+                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,it.third)}})}
                 web.evaluateJavascript("window.MojiEditor.load($payload)",null)
             }finally{gate.unlock()}
         }

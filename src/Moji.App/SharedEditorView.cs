@@ -81,13 +81,13 @@ internal sealed class SharedEditorView : Grid, IDisposable
     private string lastAppearance="";
     public Task RefreshAppearance()
     {
-        if(vm.State==null||disposed)return Task.CompletedTask;var p=vm.State.Preferences;var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+        if(vm.State==null||disposed)return Task.CompletedTask;var p=vm.State.Preferences;var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>a.Default)});
         if(configuration==lastAppearance)return Task.CompletedTask;lastAppearance=configuration;ApplyBackground();return Browser.CoreWebView2!=null&&pageReady.Task.IsCompletedSuccessfully?Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor?.configure("+configuration+")"):Task.CompletedTask;
     }
     public async Task Show(Note note)
     {
         var p=vm.State!.Preferences;
-        var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+        var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>a.Default)});
         if(note.Id==noteId&&epoch==vm.WorkspaceEpoch&&note.Content==lastContent&&ready.Task.IsCompletedSuccessfully){active=true;ApplyBackground();await Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.configure("+configuration+");window.MojiEditor.activate()");return;}
         var version=++request;var external=note.Id==noteId&&note.Content!=lastContent;
         var completion=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);ready.TrySetCanceled();ready=completion;readySession="";active=true;CanConvert=false;SelectionChanged?.Invoke(false);ApplyBackground();
@@ -97,7 +97,7 @@ internal sealed class SharedEditorView : Grid, IDisposable
             if(external){session="";}else await FlushCurrent();
             if(disposed||version!=request)return;
             note=vm.State?.Notes.FirstOrDefault(n=>n.Id==note.Id)??note;noteId=note.Id;epoch=vm.WorkspaceEpoch;session=Guid.NewGuid().ToString("N");readySession=session;lastContent=note.Content;
-            var payload=Json.Serialize(new{id=note.Id,session,content=note.Content,variables=note.Variables,theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+            var payload=Json.Serialize(new{id=note.Id,session,content=note.Content,variables=note.Variables,theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,fontFamily=InstalledFonts.CssFamily(p.FontFamily),shortcuts=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.Where(a=>!a.Id.StartsWith("record")).ToDictionary(a=>a.Id,a=>a.Default)});
             await Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.load("+payload+")");
         }finally{switching.Release();}
     }

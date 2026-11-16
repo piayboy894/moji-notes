@@ -45,11 +45,13 @@ public partial class MainWindow : Window
         toastTimer.Tick += (_, _) => { ToastPopup.IsOpen=false; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Closed += (_,_) => { Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        Root.SizeChanged += (_,_) => AbortNotebookDrag();
+        Deactivated += (_,_) => AbortNotebookDrag();
+        Closed += (_,_) => { AbortNotebookDrag(); Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
         VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
-    private void SystemThemeChanged(object sender,Microsoft.Win32.UserPreferenceChangedEventArgs e){Dispatcher.BeginInvoke(()=>{if(!IsLoaded||VM.State?.Preferences.Theme!="system")return;Ui.Theme(VM.State.Preferences);if(cachedEditor!=null)_=cachedEditor.RefreshAppearance();if(VM.View=="home")RenderDashboard();});}
+    private void SystemThemeChanged(object sender,Microsoft.Win32.UserPreferenceChangedEventArgs e){Dispatcher.BeginInvoke(()=>{if(!IsLoaded||VM.State?.Preferences.Theme!="system")return;AbortNotebookDrag();Ui.Theme(VM.State.Preferences);if(cachedEditor!=null)_=cachedEditor.RefreshAppearance();if(VM.View=="home")RenderDashboard();});}
     private void SessionTick()
     {
         if (!VM.IsUnlocked) return;
@@ -58,14 +60,15 @@ public partial class MainWindow : Window
     }
     private void DataChanged(string kind)
     {
-        if(kind is "open" or "replace"){CloseGlobalSearch();cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
+        if(kind is "open" or "replace"){AbortNotebookDrag();CloseGlobalSearch();cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { Ui.Theme(VM.State!.Preferences);var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
+        if(kind == "notebook-order") { ReorderNotebookPanels(); return; }
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
-    { CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    { AbortNotebookDrag();CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();
@@ -74,8 +77,8 @@ public partial class MainWindow : Window
             var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Style = (Style)FindResource("NavButton");
             var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); notebookCounts[book.Id]=count;count.Tag="count";count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
             row.Children.Add(new NativeIcon { Tag=book.Id, Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = new SolidColorBrush(NotebookAppearance.Parse(book.Color)), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row;SetNavigationSelection(button,VM.View==book.Id);
-            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book); button.ContextMenu = menu;
-            button.AllowDrop = true; button.DragOver += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; AttachNotebookDrag(button,book,false);BooksPanel.Children.Add(button);
+            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book);var pasteRecords=MenuItem("粘贴记录",()=>_ = PasteRecords(book.Id));pasteRecords.IsEnabled=HasRecordClipboard();menu.Opened+=(_,_)=>pasteRecords.IsEnabled=HasRecordClipboard();menu.Items.Add(pasteRecords); button.ContextMenu = menu;
+            AttachRecordDrop(button,book); AttachNotebookDrag(button,book,false);BooksPanel.Children.Add(button);
         }
         SetNavigationSelection(HomeNav,VM.View=="home");SetNavigationSelection(AllNav,VM.View=="all");SetNavigationSelection(StarNav,VM.View=="star");SetNavigationSelection(TrashNav,VM.View=="trash");SetNavigationSelection(ArchiveNav,VM.View=="archive");
         NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
@@ -131,9 +134,13 @@ public partial class MainWindow : Window
     private void KeyDownHandler(object sender, KeyEventArgs e)
     {
         if (!VM.IsUnlocked || e.IsRepeat) return;
+        if(e.Key==Key.Escape && draggingNotebook){e.Handled=true;_ = EndNotebookDrag(false);return;}
+        if(draggingNotebook)return;
         if(e.Key==Key.Escape&&SearchDropdownOpen){e.Handled=true;CloseGlobalSearch();return;}
         var action = Shortcuts.Resolve(VM.State!.Preferences, KeyChord(e));
         switch (action) {
+            case "recordCopy": case "recordCut": if(InRecordKeyboardContext){e.Handled=true;_ = CopyRecords(SelectedIds(),action=="recordCut");}break;
+            case "recordPaste": if(InRecordKeyboardContext){e.Handled=true;_ = PasteRecords();}break;
             case "search": e.Handled = true; FocusGlobalSearch(); break;
             case "new": if (CanCreateRecord) { e.Handled = true; AddNote(); } break;
             case "cloud": e.Handled = true; ShowCloudSaves(); break;

@@ -1,9 +1,11 @@
 package app.moji.android.ui
 
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.flow.collectLatest
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -93,16 +95,22 @@ import java.util.zip.ZipOutputStream
     fun exportBackup() { scope.launch { try { val content = vm.localBackup(); createDocument("墨记-存档-${java.time.LocalDate.now()}.moji", "application/octet-stream") { it.write(content.toByteArray(Charsets.UTF_8)) } } catch (error: Exception) { vm.message(UserMessages.forError(error,"备份失败")) } } }
     fun exportTexts() { val w = s.workspace ?: return; createDocument("墨记-文本集-${java.time.LocalDate.now()}.zip", "application/zip") { stream -> ZipOutputStream(stream).use { zip -> w.liveNotes.forEach { note -> val b = w.notebooks.first { it.id == note.notebookId }; if (b.mode != NoteMode.Password) { zip.putNextEntry(ZipEntry("${Records.safeName(b.name)}/${Records.safeName(note.title)}-${note.id.take(6)}.txt")); zip.write("${note.title}\n\n${visibleText(activity,note)}".toByteArray(Charsets.UTF_8)); zip.closeEntry() } } } } }
     LaunchedEffect(s.view) { vm.editorActions.collect { action -> when(action){"image-error"->vm.message("图片无法插入，请换一张图片重试");"search"->globalSearch=true;"cloud"->cloudSaves=true;"new"->addRecord();"save"->{vm.flush();vm.selectedNote()?.let{vm.checkpoint(it.id)}}} } }
-    LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    var recordDragNeedsDrawer by remember{mutableStateOf(true)}
+    LaunchedEffect(vm){vm.recordFocusRequests.collect{keyboardFocus.requestFocus()}}
+    LaunchedEffect(vm){var opened=false;vm.recordDrags.collect{started->if(started){keyboardFocus.requestFocus();if(recordDragNeedsDrawer){opened=true;drawer.open()}}else if(opened){opened=false;drawer.close()}}}
+    LaunchedEffect(Unit) { vm.messages.collectLatest { snackbar.currentSnackbarData?.dismiss();snackbar.showSnackbar(it) } }
     LaunchedEffect(s.workspace == null) { if (s.workspace == null) { cloudSaves = false; settings = null; bookDialog = null; newBook = false; globalSearch = false; backup = null; exportWriter = null } else { backup = null } }
     val dark = s.workspace?.preferences?.theme == "dark" || ((s.workspace?.preferences?.theme ?: "system") == "system" && isSystemInDarkTheme())
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences ?: Preferences()) {
         CompositionLocalProvider(LocalFeedbackLayers provides layers, LocalEditorObscured provides (drawerVisible || layers.dialogOpen || searchOwner!=null)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            BoxWithConstraints(Modifier.fillMaxSize().focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
-                if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || backup != null) false
+            BoxWithConstraints(Modifier.fillMaxSize().recordDragRoot(vm).focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
+                if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || searchOwner!=null || backup != null) false
                 else when (Shortcuts.resolve(s.workspace!!.preferences, keyChord(event))) {
+                    "recordCopy" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordSelection,false);true}else false
+                    "recordCut" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordSelection,true);true}else false
+                    "recordPaste" -> if(vm.recordKeyboardScope){vm.pasteRecords();true}else false
                     "search" -> { globalSearch = true; true }
                     "new" -> { if (canCreateRecord) { addRecord(); true } else false }
                     "cloud" -> { cloudSaves = true; true }
@@ -113,6 +121,7 @@ import java.util.zip.ZipOutputStream
                 if (s.workspace == null) { StartupScreen(s, vm); ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter)); return@BoxWithConstraints }
                 val stableHeight=maxHeight+with(density){(WindowInsets.ime.getBottom(density)-WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0).toDp()};val wide = maxWidth >= 1100.dp && stableHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && stableHeight >= 480.dp
                 LaunchedEffect(globalSearch,wide){if(globalSearch){searchTarget=if(wide)"wide"else"drawer";if(!wide)drawer.open();searchRequest++;globalSearch=false}}
+                SideEffect{recordDragNeedsDrawer=!wide}
                 val navigationWidth = if (wide) 224.dp else if (rail) 72.dp else 0.dp
                 val twoPane = maxWidth - navigationWidth >= 680.dp && stableHeight >= 480.dp
                 val active = s.workspace?.notes?.firstOrNull { it.id == s.selectedId && it.purgedAt == null }
@@ -166,13 +175,15 @@ import java.util.zip.ZipOutputStream
 @Composable private fun SideNavigation(s: AppState, vm: MojiViewModel, done: () -> Unit, settings: () -> Unit, newBook: () -> Unit, sync: () -> Unit,searchRequest:Int,searchActive:Boolean,searchVisible:(Boolean)->Unit) {
     val w = s.workspace ?: return
     val listState=rememberLazyListState();val haptic=LocalHapticFeedback.current
-    val reordering=rememberReorderableLazyListState(listState){from,to->vm.reorderBook(from.key.toString(),to.key.toString(),from.index<to.index)}
+    val (preview,dragInteractions)=rememberNotebookReorderPreview(w.id,w.liveBooks.map{it.id},vm::setBookOrder)
+    val booksById=w.liveBooks.associateBy{it.id}
+    val reordering=rememberReorderableLazyListState(listState){from,to->preview.move(from.key.toString(),to.key.toString())}
     Column(Modifier.fillMaxHeight().padding(16.dp,24.dp)) {
         Brand();Spacer(Modifier.height(24.dp));GlobalSearchField(s,vm,searchRequest,searchActive,done,searchVisible);Spacer(Modifier.height(17.dp))
         LazyColumn(Modifier.weight(1f).testTag("notebook-sidebar-list"),state=listState){
             item(key="navigation"){listOf(Triple("home","工作台",MojiIcons.Dashboard),Triple("all","全部记录",MojiIcons.Description),Triple("star","我的收藏",MojiIcons.StarOutline)).forEach{(id,title,icon)->NavigationDrawerItem(colors=solidNavigationColors(),label={Text(title,style=MaterialTheme.typography.bodyMedium)},selected=s.view==id,onClick={vm.navigate(id);done()},icon={Icon(icon,null,Modifier.size(19.dp))},modifier=Modifier.padding(vertical=2.dp))}}
             item(key="notebooks-label"){Row(Modifier.padding(start=14.dp,top=20.dp),verticalAlignment=Alignment.CenterVertically){Text("我的记事本",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Tool(MojiIcons.Add,"新建记事本"){newBook();done()}}}
-            items(w.liveBooks,key={it.id}){book->ReorderableItem(reordering,key=book.id){dragging->val lift by animateFloatAsState(if(dragging)1.025f else 1f,label="sidebar-lift");val elevation by animateDpAsState(if(dragging)10.dp else 0.dp,label="sidebar-shadow");NavigationDrawerItem(colors=solidNavigationColors(),label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).graphicsLayer{scaleX=lift;scaleY=lift;shadowElevation=elevation.toPx();shape=RoundedCornerShape(12.dp)}.background(if(dragging)MaterialTheme.colorScheme.surface else Color.Transparent,RoundedCornerShape(12.dp)).testTag("sidebar-book-${book.id}").longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
+            items(preview.order.mapNotNull{booksById[it]},key={it.id}){book->ReorderableItem(reordering,key=book.id,animateItemModifier=Modifier.animateItem(fadeInSpec=null,placementSpec=tween(150),fadeOutSpec=null)){dragging->NavigationDrawerItem(colors=solidNavigationColors(),label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);vm.focusRecords();done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).recordDropTarget(vm,book).testTag("sidebar-book-${book.id}").longPressDraggableHandle(interactionSource=dragInteractions,onDragStarted={preview.begin();haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
             item(key="management"){
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(colors=solidNavigationColors(),label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }

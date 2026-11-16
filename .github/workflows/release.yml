@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   windows:
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]') || contains(github.event.head_commit.message, '[build-native]')
     runs-on: windows-latest
     timeout-minutes: 45
     steps:

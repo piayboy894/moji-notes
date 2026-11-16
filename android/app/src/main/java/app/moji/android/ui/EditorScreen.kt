@@ -11,9 +11,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -40,7 +42,7 @@ import kotlinx.coroutines.delay
     val credentialFocus=remember { androidx.compose.ui.focus.FocusRequester() }
     val titleEpoch=vm.workspaceEpoch
     fun focusContent(){if(vm.workspaceEpoch!=titleEpoch||vm.state.value.selectedId!=note.id)return;if(book.mode==NoteMode.Password)credentialFocus.requestFocus() else activity.editorSession.command("focus")}
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)){
+    Column(modifier.fillMaxSize().onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.focusGroup().background(MaterialTheme.colorScheme.surface)){
         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
             if(showBack)Tool(MojiIcons.ArrowBack,"返回记录",action=back)
             Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))

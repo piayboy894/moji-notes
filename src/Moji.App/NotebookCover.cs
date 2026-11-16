@@ -27,7 +27,6 @@ public sealed class NativeIcon : FrameworkElement
 public sealed class NotebookCover : FrameworkElement
 {
     public NoteMode Mode { get; set; }
-    public bool Dark { get; set; }
     public string CoverColor { get; set; } = "#75876D";
     public string CoverColorEnd { get; set; } = "";
     private static Color C(string value) => (Color)ColorConverter.ConvertFromString(value);
@@ -62,6 +61,5 @@ public sealed class NotebookCover : FrameworkElement
         var bandX = w * .825;
         dc.DrawRectangle(Gradient(edge, band, band, edge), null, new Rect(bandX, 0, 12, h - 14));
         for (var i = 1; i < 6; i++) dc.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(33, 255, 255, 255)), .5), new Point(bandX + i * 1.7, 0), new Point(bandX + i * 1.7, h - 14));
-        if (Dark) dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(40, 13, 27, 13)), null, new Rect(3, 1, w - 8, h - 25), 17, 17);
     }
 }

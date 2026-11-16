@@ -21,14 +21,14 @@ public partial class MainWindow
         foreach (var book in state.LiveBooks)
         {
             var face = new Grid { Width = 210, Height = 250, Margin = new Thickness(0, 0, 0, 14) };
-            face.Children.Add(new NotebookCover { Mode = book.Mode, CoverColor=book.Color,CoverColorEnd=book.ColorEnd, Dark = Ui.IsDark(state.Preferences.Theme), IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
+            face.Children.Add(new NotebookCover { Mode = book.Mode, CoverColor=book.Color,CoverColorEnd=book.ColorEnd, IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 19, ShadowDepth = 10, Opacity = .2, Color = Color.FromRgb(47, 61, 40), Direction = 270 } });
             var contents = new StackPanel { Margin = new Thickness(28,28,42,25), IsHitTestVisible = false };
             contents.Children.Add(new NativeIcon { Kind = NativeIcon.ForNotebook(book), Width = 27, Height = 27, Foreground = Ui.Brush(NotebookAppearance.Ink(book.Color)), HorizontalAlignment = HorizontalAlignment.Left });
             var name = Ui.Text(book.Name, 21, "#283025", true); name.Margin = new Thickness(0,22,0,8); name.MaxHeight = 60; name.TextTrimming = TextTrimming.CharacterEllipsis; contents.Children.Add(name);
             contents.Children.Add(Ui.Text($"{state.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived):D2} 条记录", 12, "#53604C"));
             contents.Children.Add(new NativeIcon { Kind = "Arrow", Width = 20, Height = 20, Foreground = Ui.Brush("#57654F"), Margin = new Thickness(0,14,0,0), HorizontalAlignment = HorizontalAlignment.Left }); face.Children.Add(contents);
             var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Background = Brushes.Transparent; button.BorderThickness = new Thickness(0); button.Padding = new Thickness(0); button.Width=210;button.Height=264;button.Margin = new Thickness(10,0,10,12); button.Content = new Viewbox { Child = face, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly };
-            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book);button.ContextMenu = menu;AttachNotebookDrag(button,book,true);cards.Children.Add(button);
+            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book);var pasteRecords=MenuItem("粘贴记录",()=>_ = PasteRecords(book.Id));pasteRecords.IsEnabled=HasRecordClipboard();menu.Opened+=(_,_)=>pasteRecords.IsEnabled=HasRecordClipboard();menu.Items.Add(pasteRecords);button.ContextMenu = menu;AttachNotebookDrag(button,book,true);cards.Children.Add(button);
         }
         var addFace=new Grid{Width=210,Height=250};
         addFace.Children.Add(new System.Windows.Shapes.Rectangle { Stroke=Ui.Resource("Sub"),StrokeThickness=1.4,StrokeDashArray=new DoubleCollection{4,4},RadiusX=14,RadiusY=14,Margin=new Thickness(3,1,5,25) });

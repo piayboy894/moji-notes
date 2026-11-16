@@ -21,6 +21,7 @@ data class AppState(
     val saveError: Boolean = false, val view: String = "home", val selectedId: String? = null,
     val editorGeneration:Int=0, val editingCredentialId: String? = null, val search: String = "", val sort: String = "updated", val update: AndroidUpdate? = null,
     val updateChecking: Boolean = false, val updateProgress: Float? = null, val downloadedApk: File? = null,
+    val recordClipboardReady:Boolean=false,
     val needsMigration: Boolean = false, val textImport:TextImport? = null
 )
 class MojiViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,7 +40,59 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     val editorFlushers=mutableSetOf<suspend ()->Unit>()
     fun releaseEditor(flush:suspend ()->Unit,dispose:()->Unit){viewModelScope.launch{try{flush()}catch(_:Exception){message("请重新打开记录确认内容已保存")}finally{editorFlushers.remove(flush);dispose()}}}
     private var pendingImport: TextImport? = null
-    init { openLocal() }
+    val recordFocusRequests=MutableSharedFlow<Unit>(extraBufferCapacity=8)
+    fun focusRecords(){recordKeyboardScope=true;recordFocusRequests.tryEmit(Unit)}
+    val recordDrags=MutableSharedFlow<Boolean>(extraBufferCapacity=8)
+    var recordSelection:Set<String> = emptySet()
+    var recordKeyboardScope:Boolean = false
+    private var recordClipboard:RecordBundle? = null
+    private var recordClipboardToken = ""
+    private var recordClipboardEpoch = -1L
+    private val recordClipManager = application.getSystemService(android.content.ClipboardManager::class.java)
+    private val recordClipListener = android.content.ClipboardManager.OnPrimaryClipChangedListener { mutable.update{it.copy(recordClipboardReady=hasRecordClipboard())} }
+    private data class RecordDrag(val token:String,val epoch:Long,val bundle:RecordBundle)
+    private var recordDrag:RecordDrag? = null
+    fun hasRecordClipboard():Boolean = try{recordClipboard!=null && recordClipboardEpoch==epoch && recordClipManager.primaryClipDescription?.extras?.getString("moji-record-token")==recordClipboardToken}catch(_:Exception){false}
+    fun copyRecords(ids:Set<String>,cut:Boolean) = viewModelScope.launch {
+        if(ids.isEmpty())return@launch;val generation=epoch
+        try{
+            flush();if(generation!=epoch)return@launch
+            val w=mutable.value.workspace?:return@launch;val bundle=RecordTransfer.capture(w,ids,cut);val token=uid()
+            val description=android.content.ClipDescription("墨记记录",arrayOf("application/vnd.moji.records","text/plain"))
+            description.extras=android.os.PersistableBundle().apply{putString("moji-record-token",token)}
+            recordClipboard=bundle;recordClipboardToken=token;recordClipboardEpoch=epoch
+            recordClipManager.setPrimaryClip(android.content.ClipData(description,android.content.ClipData.Item(bundle.records.joinToString("\n"){it.note.title})))
+            mutable.update{it.copy(recordClipboardReady=true)}
+            message(if(cut)"已剪切 ${ids.size} 条记录，粘贴后移动"else"已复制 ${ids.size} 条记录")
+        }catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}catch(e:Exception){message(UserMessages.forError(e,"剪贴板暂时不可用，请重试。"))}
+    }
+    fun pasteRecords(target:String=mutable.value.view) = viewModelScope.launch {
+        val generation=epoch;if(!hasRecordClipboard()){if(runCatching{recordClipManager.primaryClipDescription?.hasMimeType("application/vnd.moji.records")==true}.getOrDefault(false))message("记录剪贴板已失效，请重新复制。");return@launch}
+        try{
+            flush();if(generation!=epoch||!hasRecordClipboard())return@launch
+            val w=mutable.value.workspace?:return@launch;val bundle=recordClipboard!!;val result=RecordTransfer.apply(w,bundle,target)
+            if(result.state!==w)mutate{result.state}
+            if(bundle.cut){recordClipboard=null;if(android.os.Build.VERSION.SDK_INT>=28)recordClipManager.clearPrimaryClip()else recordClipManager.setPrimaryClip(android.content.ClipData.newPlainText("",""))}
+            navigate(target);result.ids.firstOrNull()?.let(::select);recordKeyboardScope=true
+            mutable.update{it.copy(recordClipboardReady=hasRecordClipboard())};message(if(bundle.cut)"已移动 ${result.ids.size} 条记录"else"已粘贴 ${result.ids.size} 条记录")
+        }catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}catch(e:Exception){message(UserMessages.forError(e,"记录未能粘贴，请重试。"))}
+    }
+    fun beginRecordDrag(ids:Set<String>):String? = try{val w=mutable.value.workspace?:throw RecordTransferException("部分记录已不存在，请重新选择。");val token=uid();recordDrag=RecordDrag(token,epoch,RecordTransfer.capture(w,ids,true));recordKeyboardScope=true;recordDrags.tryEmit(true);token}catch(e:Exception){message(UserMessages.forError(e));null}
+    fun acceptsRecordDrag(token:String?)=recordDrag?.let{it.token==token&&it.epoch==epoch}==true
+    fun recordDragCompatible(target:Notebook)=recordDrag?.bundle?.records?.all{it.mode==target.mode}==true
+    fun endRecordDrag(){if(recordDrag!=null){recordDrag=null;recordDrags.tryEmit(false)}}
+    fun dropRecords(token:String?,target:String):Boolean {
+        val drag=recordDrag?.takeIf{it.token==token&&it.epoch==epoch}?:return false
+        viewModelScope.launch{
+            try{flush();if(drag.epoch!=epoch)return@launch;val w=mutable.value.workspace?:return@launch
+                val ids=drag.bundle.records.map{it.note.id};val result=RecordTransfer.apply(w,RecordTransfer.capture(w,ids,true),target)
+                if(result.state===w){message("记录已在此记事本中");return@launch};mutate{result.state};navigate(target);result.ids.firstOrNull()?.let(::select);recordKeyboardScope=true;message("已移动 ${ids.size} 条记录")
+            }catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}catch(e:Exception){message(UserMessages.forError(e,"记录未能移动，请重试。"))}
+        };return true
+    }
+
+    init { recordClipManager.addPrimaryClipChangedListener(recordClipListener);openLocal() }
+    override fun onCleared(){recordClipManager.removePrimaryClipChangedListener(recordClipListener);super.onCleared()}
     fun message(text: String) { notices.tryEmit(text) }
     fun touch() { }
     fun openLocal() = viewModelScope.launch {
@@ -62,6 +115,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     }
     private fun open(workspace: Workspace) {
         epoch++; serial = 0; savedSerial = 0
+        recordClipboard=null;recordSelection=emptySet();recordKeyboardScope=false;recordDrag=null
         mutable.value = AppState(workspace = workspace, loading = false, exists = true)
         pendingImport?.let { pendingImport = null; importText(it.name,it.text,markdown=it.markdown) }
         if (now() - lastUpdateCheck > 6 * 3_600_000) { lastUpdateCheck = now(); checkUpdate(false) }
@@ -104,6 +158,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun saveBook(existing: Notebook?, name: String, mode: NoteMode, color: String, icon:String="",colorEnd:String="") { if (name.isBlank()) return; if (existing == null) { val b = Notebook(name = name.trim(), mode = mode, color = color, colorEnd=colorEnd, icon=icon); mutate { it.copy(notebooks = it.notebooks + b) }; navigate(b.id) } else mutate { it.copy(notebooks = it.notebooks.map { b -> if (b.id == existing.id) b.copy(name = name.trim(), color = color, colorEnd=colorEnd, icon=icon, revision = uid(), updatedAt = now()) else b }) } }
     fun reorderBook(source:String,target:String,after:Boolean=false){mutate{NotebookOrder.move(it,source,target,after)}}
+    fun setBookOrder(ids:List<String>){val w=mutable.value.workspace?:return;if(NotebookOrder.set(w,ids)!=w)mutate{NotebookOrder.set(it,ids)}}
     fun deleteBook(book: Notebook) { mutate { it.copy(notebooks = it.notebooks.map { b -> if (b.id == book.id) b.copy(deletedAt = now(), updatedAt = now(), revision = uid()) else b }, notes = it.notes.map { n -> if (n.notebookId == book.id && n.deletedAt == null) n.edited(n.copy(deletedAt = now())) else n }) }; navigate("home") }
     fun trash(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = now())) else n }) }; clearAffectedSelection(ids); message("已移到回收站") }
     fun restore(ids: Set<String>) { mutate { w -> val books = w.notes.filter { it.id in ids }.map { it.notebookId }.toSet(); w.copy(notebooks = w.notebooks.map { b -> if (b.id in books && b.deletedAt != null) b.copy(deletedAt = null, updatedAt = now(), revision = uid()) else b }, notes = w.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = null)) else n }) }; clearAffectedSelection(ids); message("记录已恢复") }
@@ -137,7 +192,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
                 val state = mutable.value
                 require(epoch == expectedEpoch) { "空间已变化，请重新读取存档" }
                 val candidate = GameSaves.apply(state.workspace ?: error("本机数据尚未打开"), payload)
-                store.save(candidate); epoch++; serial++; savedSerial = serial
+                store.save(candidate); epoch++; serial++; savedSerial = serial;recordClipboard=null;recordSelection=emptySet();recordKeyboardScope=false;recordDrag=null
                 mutable.value = state.copy(workspace = candidate, saving = false, saveError = false, view = "home", selectedId = null, editingCredentialId = null, search = "")
             }
         } finally { loadingSave = false }

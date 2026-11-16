@@ -26,7 +26,6 @@ import app.moji.android.data.NoteMode
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun NotebookCard(book: Notebook, count: Int, open: () -> Unit, edit: () -> Unit, modifier:Modifier=Modifier) {
-    val dark = MaterialTheme.colorScheme.background.luminance() < .3f
     val chosen=color(book.color)
     val palette=if(book.colorEnd.isBlank())listOf(lerp(chosen,Color.White,.78f),lerp(chosen,Color.White,.58f),lerp(chosen,Color.Black,.15f),chosen)else{
         val end=color(book.colorEnd);val band=lerp(lerp(chosen,end,.5f),Color.Black,.18f)
@@ -46,7 +45,6 @@ import app.moji.android.data.NoteMode
                 var x = -h; val step = (density * 3.5f).coerceAtLeast(3f)
                 while (x < w + h) { drawLine(Color.White.copy(alpha = .13f), Offset(x, 0f), Offset(x + h, h), .7f); drawLine(Color(0xFF566347).copy(alpha = .035f), Offset(x + 2, 0f), Offset(x - h + 2, h), .65f); x += step }
                 drawRect(Brush.horizontalGradient(listOf(palette[2].copy(alpha = .23f), Color.White.copy(alpha = .32f), Color.Transparent)), Offset(w * .016f, 0f), Size(w * .055f, h))
-                if (dark) drawRect(Color(0xFF1B2D1C).copy(alpha = .14f))
             }
             drawPath(face, Color.White.copy(alpha = .45f), style = Stroke(1f))
             val ribbon = Path().apply { moveTo(w * .13f, pageY); lineTo(w * .2f, pageY); lineTo(w * .2f, h); lineTo(w * .165f, h - w * .023f); lineTo(w * .13f, h); close() }; drawPath(ribbon, palette[3])

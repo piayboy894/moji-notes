@@ -1,0 +1,38 @@
+name: Deliver requested verified builds
+on:
+  push:
+    branches: [main]
+    paths: ['.github/verified-delivery.json']
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: requested-verified-delivery
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate requested source and dispatch the gated publisher
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          repository = 'piayboy894/moji-notes'
+          request = json.loads(Path('.github/verified-delivery.json').read_text())
+          for platform, item in request.items():
+              if platform not in ('windows', 'android') or not str(item['run_id']).isdigit():
+                  raise RuntimeError('Invalid requested native build')
+              run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repository}/actions/runs/{item["run_id"]}'], text=True))
+              path = '.github/workflows/' + ('release.yml' if platform == 'windows' else 'android.yml')
+              if run['conclusion'] != 'success' or run['head_sha'] != item['commit'] or run['head_branch'] != 'main' or run['head_repository']['full_name'] != repository or run['path'] != path:
+                  raise RuntimeError('Requested source did not pass native verification')
+              payload = {'ref':'main', 'inputs':{'platform':platform, 'run_id':str(item['run_id']), 'replace_existing':'false'}}
+              subprocess.run(['gh','api',f'repos/{repository}/actions/workflows/publish-tested.yml/dispatches','--method','POST','--input','-'], input=json.dumps(payload), text=True, check=True)
+              print(f'Requested publication of verified {platform} run {item["run_id"]}.')
+          PY
