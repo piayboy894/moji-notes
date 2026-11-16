@@ -72,7 +72,7 @@ public partial class MainWindow : Window
         BooksPanel.Children.Clear();notebookCounts.Clear(); foreach (var book in VM.State.LiveBooks)
         {
             var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Style = (Style)FindResource("NavButton");
-            var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); notebookCounts[book.Id]=count;count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
+            var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); notebookCounts[book.Id]=count;count.Tag="count";count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
             row.Children.Add(new NativeIcon { Tag=book.Id, Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = new SolidColorBrush(NotebookAppearance.Parse(book.Color)), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row;SetNavigationSelection(button,VM.View==book.Id);
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book); button.ContextMenu = menu;
             button.AllowDrop = true; button.DragOver += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; AttachNotebookDrag(button,book,false);BooksPanel.Children.Add(button);
@@ -81,7 +81,12 @@ public partial class MainWindow : Window
         NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else if(VM.View=="trash")RenderTrash();else RenderWorkspace();
     }
-    private static void SetNavigationSelection(Button button,bool selected){button.Background=selected?Ui.Resource("AccentLight"):Brushes.Transparent;button.BorderThickness=new Thickness(3,0,0,0);button.BorderBrush=selected?Ui.Resource("Accent"):Brushes.Transparent;}
+    private void SetNavigationSelection(Button button,bool selected)
+    {
+        button.Background=selected?Ui.Resource("RecordSelected"):Brushes.Transparent;button.BorderThickness=new Thickness(0);button.SetResourceReference(Control.ForegroundProperty,selected?"RecordSelectedInk":"Ink");
+        void Tint(UIElement element){if(element is TextBlock text)text.SetResourceReference(TextBlock.ForegroundProperty,selected?(text.Tag?.ToString()=="count"?"RecordSelectedSub":"RecordSelectedInk"):(text.Tag?.ToString()=="count"?"Sub":"Ink"));else if(element is NativeIcon icon){if(selected)icon.SetResourceReference(NativeIcon.ForegroundProperty,"RecordSelectedInk");else if(VM.State!.LiveBooks.FirstOrDefault(b=>b.Id==icon.Tag?.ToString()) is {} book)icon.Foreground=new SolidColorBrush(NotebookAppearance.Parse(book.Color));else icon.SetResourceReference(NativeIcon.ForegroundProperty,"Sub");}else if(element is Panel panel)foreach(UIElement child in panel.Children)Tint(child);}
+        if(button.Content is UIElement content)Tint(content);
+    }
     private UIElement NavContent(string kind, string title, int? count = null)
     {
         var row = new DockPanel();

@@ -6,7 +6,7 @@ public class ThemePaletteTests
     [Fact]public void SixPalettesHaveReadableTextActionsSelectionAndControlEdges()
     {
         Assert.Equal(3,ThemeCatalog.All.Count(p=>p.Dark));Assert.Equal(3,ThemeCatalog.All.Count(p=>!p.Dark));Assert.Equal(6,ThemeCatalog.All.Select(p=>p.Id).Distinct().Count());
-        foreach(var p in ThemeCatalog.All){var c=p.Colors;foreach(var(a,b,min)in new[]{("Ink","Panel",7d),("Sub","Panel",4.5),("Sub","AccentLight",4.5),("OnAccent","Accent",4.5),("OnSelected","AccentLight",4.5),("Danger","Panel",4.5),("OnDanger","Danger",4.5),("Outline","Panel",3d),("Ink","Selection",4.5),("Selection","Panel",1.5),("Accent","RecordSelected",3d)})Assert.True(Contrast(c[a],c[b])>=min,$"{p.Id}: {a}/{b} fails {min}:1");}
+        foreach(var p in ThemeCatalog.All){var c=p.Colors;foreach(var(a,b,min)in new[]{("Ink","Panel",7d),("Sub","Panel",4.5),("Sub","AccentLight",4.5),("OnAccent","Accent",4.5),("OnSelected","AccentLight",4.5),("Danger","Panel",4.5),("OnDanger","Danger",4.5),("Outline","Panel",3d),("Ink","Selection",4.5),("Selection","Panel",1.5),("RecordSelectedInk","RecordSelected",4.5),("RecordSelectedSub","RecordSelected",4.5),("RecordSelected","Panel",3d)})Assert.True(Contrast(c[a],c[b])>=min,$"{p.Id}: {a}/{b} fails {min}:1");}
     }
     [Fact]public void IndependentLightAndDarkChoicesPersistWithoutChangingTheWorkspace()
     {

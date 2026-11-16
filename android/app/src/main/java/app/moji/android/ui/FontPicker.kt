@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
             OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().testTag("font-search"),singleLine=true,placeholder={Text("搜索字体")},leadingIcon={Icon(MojiIcons.Search,null)})
             LazyColumn(Modifier.fillMaxWidth().height(340.dp).testTag("installed-font-list"),verticalArrangement=Arrangement.spacedBy(7.dp)){
                 items(fonts.filter{it.name.contains(query,true)||it.id.contains(query,true)},key={it.id}){font->
-                    Surface(onClick={selected=font.id},shape=MaterialTheme.shapes.medium,color=if(selected==font.id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,border=BorderStroke(1.dp,if(selected==font.id)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),modifier=Modifier.fillMaxWidth().testTag("font-${font.id}")){
+                    Surface(onClick={selected=font.id},shape=MaterialTheme.shapes.medium,color=if(selected==font.id)color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface,contentColor=if(selected==font.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=BorderStroke(1.dp,if(selected==font.id)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),modifier=Modifier.fillMaxWidth().testTag("font-${font.id}")){
                         Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){Text(font.name,style=MaterialTheme.typography.bodyMedium);Text("墨记 Aa 123",style=MaterialTheme.typography.titleMedium,fontFamily=remember(font.id){InstalledFonts.typeface(font.id)?.let{FontFamily(it)}})}
                     }
                 }

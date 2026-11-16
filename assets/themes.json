@@ -24,7 +24,9 @@
       "DangerSoft": "#FBEDEC",
       "Success": "#34724D",
       "Selection": "#ACCCE3",
-      "RecordSelected": "#FFFFFF"
+      "RecordSelected": "#405E78",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   },
   {
@@ -52,7 +54,9 @@
       "DangerSoft": "#FBEDEC",
       "Success": "#34724D",
       "Selection": "#DBC2A5",
-      "RecordSelected": "#FFFDFA"
+      "RecordSelected": "#885838",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   },
   {
@@ -80,7 +84,9 @@
       "DangerSoft": "#FBEDEC",
       "Success": "#34724D",
       "Selection": "#ACD0BE",
-      "RecordSelected": "#FCFEFD"
+      "RecordSelected": "#356B60",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   },
   {
@@ -108,7 +114,9 @@
       "DangerSoft": "#432B2C",
       "Success": "#97C6A6",
       "Selection": "#435A7C",
-      "RecordSelected": "#292D36"
+      "RecordSelected": "#546D8A",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   },
   {
@@ -136,7 +144,9 @@
       "DangerSoft": "#432B2C",
       "Success": "#97C6A6",
       "Selection": "#315673",
-      "RecordSelected": "#243647"
+      "RecordSelected": "#4D728E",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   },
   {
@@ -164,7 +174,9 @@
       "DangerSoft": "#432B2C",
       "Success": "#97C6A6",
       "Selection": "#65513C",
-      "RecordSelected": "#382E25"
+      "RecordSelected": "#826A54",
+      "RecordSelectedInk": "#FFFFFF",
+      "RecordSelectedSub": "#F1F4F7"
     }
   }
 ]
