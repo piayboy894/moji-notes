@@ -106,25 +106,25 @@ public partial class MainWindow
     private UIElement CredentialReadView(Note note)
     {
         var fields = new StackPanel { Margin = new Thickness(28,12,28,35), MaxWidth = 800,HorizontalAlignment=HorizontalAlignment.Left };
-        Ui.FitWidth(fields,editorHost!);
+        var scroll=new ScrollViewer{Content=fields,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Ui.FitWidth(fields,scroll,widthProperty:"ViewportWidth");
         TextBox Value(string value, string name, bool multi = false) { var box = Ui.Input(value,null,multi); box.Name = name; box.IsReadOnly = true; return box; }
         fields.Children.Add(Ui.Field("账号 / 邮箱", InputActions(Value(note.Username,"AccountValue"),Ui.Small("复制",()=>Copy(note.Username)))));
         fields.Children.Add(Ui.Field("密码",InputActions(Value(note.Password,"PasswordValue"),Ui.Small("复制",()=>Copy(note.Password,true)))));
         fields.Children.Add(Ui.Field("网站",InputActions(Value(note.Url,"WebsiteValue"),Ui.Small("打开",()=>OpenUrl(note.Url)))));
         CredentialCustomFields(fields,note,false);
         fields.Children.Add(Ui.Field("备注",Value(note.Content,"MemoValue",true)));
-        return new ScrollViewer { Content = fields, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        return scroll;
     }
     private UIElement CredentialView(Note note)
     {
         var fieldsEpoch=VM.WorkspaceEpoch;var fields=new StackPanel{Margin=new Thickness(28,12,28,35),MaxWidth=800,HorizontalAlignment=HorizontalAlignment.Left};
-        Ui.FitWidth(fields,editorHost!);
+        var scroll=new ScrollViewer{Content=fields,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Ui.FitWidth(fields,scroll,widthProperty:"ViewportWidth");
         var user=Ui.Input(note.Username);user.TextChanged+=(_,_)=>{if(!loadingEditor&&fieldsEpoch==VM.WorkspaceEpoch)VM.EditNote(note.Id,n=>n with{Username=user.Text});};fields.Children.Add(Ui.Field("账号 / 邮箱",InputActions(user,Ui.Small("复制",()=>Copy(user.Text)))));
         var pw=Ui.Input(note.Password);pw.Name="PasswordEdit";pw.TextChanged+=(_,_)=>{if(!loadingEditor&&fieldsEpoch==VM.WorkspaceEpoch)VM.EditNote(note.Id,n=>n with{Password=pw.Text});};
         fields.Children.Add(Ui.Field("密码",InputActions(pw,Ui.Small("复制",()=>Copy(pw.Text,true)),Ui.Small("生成",()=>PasswordGenerator(value=>pw.Text=value)))));
         var url=Ui.Input(note.Url);url.TextChanged+=(_,_)=>{if(!loadingEditor&&fieldsEpoch==VM.WorkspaceEpoch)VM.EditNote(note.Id,n=>n with{Url=url.Text});};fields.Children.Add(Ui.Field("网站",InputActions(url,Ui.Small("打开",()=>OpenUrl(url.Text)))));
         CredentialCustomFields(fields,note,true);
-        var memo=Ui.Input(note.Content,null,true);memo.MinHeight=110;memo.Margin=new Thickness(0,7,0,0);memo.TextChanged+=(_,_)=>{if(!loadingEditor&&fieldsEpoch==VM.WorkspaceEpoch)VM.EditNote(note.Id,n=>n with{Content=memo.Text});};fields.Children.Add(Ui.Spaced(Ui.Field("备注",memo),new Thickness(0,22,0,0)));return new ScrollViewer{Content=fields,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+        var memo=Ui.Input(note.Content,null,true);memo.MinHeight=110;memo.Margin=new Thickness(0,7,0,0);memo.TextChanged+=(_,_)=>{if(!loadingEditor&&fieldsEpoch==VM.WorkspaceEpoch)VM.EditNote(note.Id,n=>n with{Content=memo.Text});};fields.Children.Add(Ui.Spaced(Ui.Field("备注",memo),new Thickness(0,22,0,0)));return scroll;
     }
     private void CredentialCustomFields(StackPanel host,Note note,bool editing)
     {
