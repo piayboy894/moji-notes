@@ -19,9 +19,12 @@ export function convertVariable(editor:Editor,expected?:{from:number,to:number,n
  const name=selectedVariableName(editor);if(!name)return false
  const {from,to}=selectedRange(editor)
  editor.view.dispatch(closeHistory(editor.state.tr))
- const result=editor.chain().focus().insertContentAt({from,to},{type:'mojiVariable',attrs:{id:crypto.randomUUID().replaceAll('-',''),name,value:''}}).run()
- requestAnimationFrame(()=>{const dom=editor.view.nodeDOM(from) as HTMLElement|null;dom?.querySelector<HTMLTextAreaElement>('.moji-variable-input')?.focus()})
+ const result=editor.chain().insertContentAt({from,to},{type:'mojiVariable',attrs:{id:crypto.randomUUID().replaceAll('-',''),name,value:''}}).run()
  editor.view.dispatch(closeHistory(editor.state.tr))
+ // ProseMirror updates NodeViews synchronously. Focus the field before returning,
+ // so a first keystroke cannot reach the surrounding paragraph or a delayed focus.
+ const dom=editor.view.nodeDOM(from) as HTMLElement|null
+ dom?.querySelector<HTMLElement>('.moji-variable-input')?.focus({preventScroll:true})
  return result
 }
 export const MojiVariable=Node.create({

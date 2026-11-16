@@ -25,7 +25,7 @@ test('selection converts to an empty editable field, retains its name and copies
  await page.keyboard.insertText('开发者');await expect(field).toHaveText('开发者');expect((await js(page,'window.MojiEditor.snapshot()')).variables[0].name).toBe('受众');
 })
 test('field conversion and typing have separate undo boundaries and long values wrap',async({page})=>{
- await load(page,prefix+'<p>主题</p>');await js(page,"window.MojiEditor.editor.commands.setTextSelection({from:1,to:3});window.MojiEditor.action('convertVariable')");await page.keyboard.insertText('很长的填写内容'.repeat(35));
+ await load(page,prefix+'<p>主题</p>');expect(await js(page,"window.MojiEditor.editor.commands.setTextSelection({from:1,to:3});window.MojiEditor.action('convertVariable');document.activeElement.matches('.moji-variable-input')")).toBe(true);await page.keyboard.insertText('很长的填写内容'.repeat(35));
  const field=page.locator('.moji-variable');await expect(field).toContainText('很长的填写内容');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.keyboard.press('Control+z');await expect(field).toHaveText('');await page.keyboard.press('Control+z');await expect(field).toHaveCount(0);await expect(page.getByRole('textbox',{name:'笔记正文'})).toHaveText('主题');
  await page.keyboard.press('Control+y');await expect(field).toHaveCount(1);await page.keyboard.press('Control+y');await expect(field).toContainText('很长的填写内容');
