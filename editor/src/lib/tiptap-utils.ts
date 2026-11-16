@@ -312,10 +312,12 @@ export const handleImageUpload = async (
     if (abortSignal?.aborted||documentToken!==currentDocument()) throw new Error("已取消")
     let ratio=Math.min(1,1800/Math.max(image.naturalWidth,image.naturalHeight))
     const canvas=document.createElement("canvas")
+    let mime:string|undefined=file.type==="image/png"?"image/png":undefined
     while(true){
       canvas.width=Math.max(1,Math.round(image.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(image.naturalHeight*ratio))
-      canvas.getContext("2d")!.drawImage(image,0,0,canvas.width,canvas.height)
-      const data=canvas.toDataURL(file.type==="image/png"?"image/png":"image/jpeg",.85)
+      const context=canvas.getContext("2d")!;context.drawImage(image,0,0,canvas.width,canvas.height)
+      if(!mime){const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;mime="image/jpeg";for(let at=3;at<pixels.length;at+=4)if(pixels[at]<255){mime="image/png";break}}
+      const data=canvas.toDataURL(mime,.85)
       if(data.length<2400000){onProgress?.({progress:100});return data}
       ratio*=.75
     }
