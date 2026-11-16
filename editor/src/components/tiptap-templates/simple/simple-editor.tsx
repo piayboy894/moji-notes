@@ -5,7 +5,7 @@ import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
 
 // --- Tiptap Core Extensions ---
 import { StarterKit } from "@tiptap/starter-kit"
-import { Image } from "@tiptap/extension-image"
+import { MojiImage, ImageBackgroundMenu } from "@/image-background"
 import { TaskItem, TaskList } from "@tiptap/extension-list"
 import { TextAlign } from "@tiptap/extension-text-align"
 import { Typography } from "@tiptap/extension-typography"
@@ -222,7 +222,7 @@ export function SimpleEditor() {
       TaskList,
       TaskItem.configure({ nested: true, a11y:{checkboxLabel:node=>"待办事项："+(node.textContent||"未填写")} }),
       Highlight.configure({ multicolor: true }),
-      Image.configure({allowBase64:true}),
+      MojiImage.configure({allowBase64:true}),
       MojiVariable,
       LegacyAndroidInput,
       Typography,
@@ -280,6 +280,7 @@ export function SimpleEditor() {
           )}
         </Toolbar>
 
+        {editor && <ImageBackgroundMenu editor={editor} />}
         <EditorContent
           editor={editor}
           role="presentation"

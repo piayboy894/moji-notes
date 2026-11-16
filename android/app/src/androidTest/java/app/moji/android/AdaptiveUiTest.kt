@@ -314,7 +314,7 @@ class AdaptiveUiTest {
         try{
             resize(1440,1080,160);ready();val original=compose.activity.vm.state.value.workspace!!.preferences
             compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady();js("window.MojiEditor.editor.commands.insertContent('Theme document remains unchanged')");val content=jsText();val native=webView()
-            compose.onNodeWithContentDescription("偏好设置").performClick()
+            compose.onNode(hasContentDescription("偏好设置") and hasAnyAncestor(hasTestTag("wide-navigation"))).performClick()
             for(palette in ThemeCatalog.all){compose.onNodeWithTag("theme-${palette.id}").performScrollTo().performClick();compose.waitUntil(5000){org.json.JSONTokener(js("document.documentElement.dataset.palette")).nextValue()==palette.id};assertEquals(content,jsText());assertSame(native,webView());screenshot("theme-${palette.id}")}
             compose.onNodeWithContentDescription("关闭").performClick();webReady();runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);val prefs=compose.activity.vm.state.value.workspace!!.preferences;assertEquals("celadon",prefs.lightPalette);assertEquals("dune",prefs.darkPalette);compose.activityRule.scenario.onActivity{it.vm.preferences{original}}
         }finally{shell("wm size reset");shell("wm density reset")}
@@ -328,6 +328,11 @@ class AdaptiveUiTest {
             screenshot("31-card-pin-and-copy");compose.onNodeWithTag("duplicate-record-${old.id}").performClick();webReady();val copy=compose.activity.vm.selectedNote()!!;assertNotEquals(old.id,copy.id);assertEquals(book.id,copy.notebookId);assertFalse(copy.pinned);assertTrue(copy.history.isEmpty());assertEquals(old.fields,copy.fields);assertEquals("Original body",jsText());compose.activityRule.scenario.onActivity{it.vm.edit(copy.id){it.copy(fields=it.fields.map{f->f.copy(value="New")})}};assertEquals("Value",compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.fields.single().value)
             runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertTrue(compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.pinned)
         }finally{shell("wm size reset");shell("wm density reset")}
+    }
+
+    @Test fun imageBackgroundControlsCanBeTappedAndReopenWithTheRecord(){
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady();val note=compose.activity.vm.selectedNote()!!
+        js("window.MojiEditor.editor.commands.setContent('<img width=160 alt=Background src=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAABkCAYAAAABtjuPAAABeElEQVR4nO3RQQ0CABDEQBRjCDk4QBEW+JBesjNJFfTxAAAAAAAAAAAAAAAAAAAAAOBHz9f7o/9WPz6tnrNQ/fi0es5C9ePT6jkL1Y9Pq+csVD8+rZ6zUP34tHrOQvXj0+o5C9WPT6vnLFQ/Pq2es1D9+LR6zkL149PqOQvVj0+r5yxUPz6tnrNQ/fi0es5C9ePT6jkL1Y9Pq+csVD8+rZ6zUP34tHrOQvXj0+o5C9WPT6vnLFQ/Pq2es1D9+LR6zkL149PqOQvVj0+r5yxUPz6tnrNQ/fi0es5C9ePT6jkL1Y9Pq+csVD8+rZ6zUP34tHrOQvXj0+o5C9WPT6vnLFQ/Pq2es1D9+LR6zkL149PqOQvVj0+r5yxUPz6tnrNQ/fi0es5C9ePT6jkL1Y9Pq+csVD8+rZ6zUP34tHrOQvXj0+o5C9WPT6vnLFQ/Pq2es1D9+LR6zkL149PqOQvVj0+r5yxUPwYAAAAAAAAAAAAAAAAAAICffQGkmZgjyMdk4wAAAABJRU5ErkJggg==><p></p>');window.MojiEditor.editor.commands.setNodeSelection(0)");tapWeb(".tiptap img");compose.waitUntil(5000){js("getComputedStyle(document.querySelector('.moji-image-backgrounds')).visibility")=="\"visible\""};tapWeb("button[aria-label=透明网格]");compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data-moji-image-background=\"checker\"")};screenshot("32-image-checker-background");runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.navigate("home");it.vm.navigate(note.notebookId);it.vm.select(note.id)};webReady();assertEquals("checker",org.json.JSONTokener(js("document.querySelector('.tiptap img').dataset.mojiImageBackground")).nextValue())
     }
 
 }
