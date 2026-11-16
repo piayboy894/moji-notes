@@ -137,7 +137,9 @@ class AdaptiveUiTest {
         compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("data-checked=\"true\"")}
         focusWeb();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER);InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         InstrumentationRegistry.getInstrumentation().sendStringSync("Tail {{literal}}")
+        compose.waitUntil(5000){jsText().contains("Tail {{literal}}") }
         js("const e=window.MojiEditor.editor;e.commands.insertContent('Audience');const end=e.state.selection.from;e.commands.setTextSelection({from:end-8,to:end})")
+        compose.waitUntil(5000){compose.onAllNodes(hasText("转化为变量") and isEnabled()).fetchSemanticsNodes().size==1}
         compose.onNodeWithText("转化为变量").assertIsEnabled().performClick()
         compose.waitUntil(5000){js("Boolean(document.querySelector('.moji-variable'))")=="true"}
         InstrumentationRegistry.getInstrumentation().sendStringSync("Filled audience")
