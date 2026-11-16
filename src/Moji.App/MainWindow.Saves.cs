@@ -66,7 +66,7 @@ public partial class MainWindow
         create.Click += async (_,_) => { var name = AskName(null); if (name != null) await Run(async () => { catalog = await VM.WriteCloudSaveAsync(catalog!, name); Render(); status.Text = "存档已新建"; }); };
         overwrite.Click += async (_,_) => { var target = selected; if (target == null) return; var name = AskName(target); if (name != null) await Run(async () => { catalog = await VM.WriteCloudSaveAsync(catalog!, name, target); Render(target.Id); status.Text = "存档已覆盖"; }); };
         read.Click += async (_,_) => { var target = selected; if (target != null && Confirm("读取「"+target.Name+"」？", "将替换本机全部记事本和记录，不合并。")) await Run(async () => { await VM.ReadCloudSaveAsync(catalog!, target); status.Text = "存档已读取"; }); };
-        delete.Click += async (_,_) => { var target = selected; if (target != null && Confirm("删除「"+target.Name+"」？", "删除这份云存档，本机内容保持不变。")) await Run(async () => { catalog = await VM.DeleteCloudSaveAsync(catalog!, target); Render(); status.Text = "存档已删除"; }); };
+        delete.Click += async (_,_) => { var target = selected; if (target != null && Confirm("删除「"+target.Name+"」？", "删除这份云存档，本机内容保持不变。","删除存档",true)) await Run(async () => { catalog = await VM.DeleteCloudSaveAsync(catalog!, target); Render(); status.Text = "存档已删除"; }); };
         window.Closing += (_,e) => { if (busy && VM.IsUnlocked) e.Cancel = true; }; Enable();
         return window;
     }

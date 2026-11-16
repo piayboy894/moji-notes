@@ -8,7 +8,7 @@ public static partial class RecordTools
 {
     public static int Strength(string password) => (password.Length >= 12 ? 1 : 0) + (password.Length >= 18 ? 1 : 0) + (password.Any(char.IsLower) && password.Any(char.IsUpper) ? 1 : 0) + (password.Any(char.IsDigit) && password.Any(c => !char.IsLetterOrDigit(c)) ? 1 : 0);
     public static bool Matches(Note note, string search, NoteMode mode)
-    { if (string.IsNullOrWhiteSpace(search)) return true; return string.Join('\n', note.Title, note.Username, note.Url, mode == NoteMode.Password ? "" : Plain(PromptVariables.Display(note))).Contains(search, StringComparison.OrdinalIgnoreCase); }
+    { if (string.IsNullOrWhiteSpace(search)) return true; return string.Join('\n', note.Title, note.Username, note.Url, string.Join("\n",note.Fields.Select(f=>f.Name+"\n"+f.Value)), mode == NoteMode.Password ? "" : Plain(PromptVariables.Display(note))).Contains(search, StringComparison.OrdinalIgnoreCase); }
     public static string Plain(string content) => Regex.Replace(EditorContent.Plain(content), @"\s+", " ").Trim();
     public static string ModeName(NoteMode mode) => mode switch { NoteMode.Text => "普通文本", NoteMode.Prompt => "提示词", _ => "账号密码" };
     public static string Relative(long time)

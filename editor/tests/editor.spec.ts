@@ -21,7 +21,7 @@ test('selection converts to an empty editable field, retains its name and copies
  await page.keyboard.insertText('产品设计师');await expect(field).toHaveText('产品设计师');expect(await js(page,'window.MojiEditor.editor.getText()')).toBe('原样 {{变量}} 产品设计师');
  const saved=await js(page,'window.MojiEditor.snapshot()');await load(page,saved.content,saved.variables);await expect(field).toHaveText('产品设计师');
  await field.click();await page.keyboard.press('End');await page.keyboard.press('Backspace');await expect(field).toHaveText('产品设计');
- await field.locator('textarea').press('Control+a');await page.keyboard.press('Backspace');await expect(field).toHaveText('');await expect(field).toHaveCount(1);
+ await field.locator('.moji-variable-content').press('Control+a');await page.keyboard.press('Backspace');await expect(field).toHaveText('');await expect(field).toHaveCount(1);
  await page.keyboard.insertText('开发者');await expect(field).toHaveText('开发者');expect((await js(page,'window.MojiEditor.snapshot()')).variables[0].name).toBe('受众');
 })
 test('field conversion and typing have separate undo boundaries and long values wrap',async({page})=>{

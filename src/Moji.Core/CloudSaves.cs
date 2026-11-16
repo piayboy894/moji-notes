@@ -14,7 +14,7 @@ public static class GameSaves
     public static SyncPayload Capture(Workspace workspace)
     {
         workspace.Validate();
-        return Json.Deserialize<SyncPayload>(Json.Serialize(new SyncPayload(workspace.Schema, workspace.Id, workspace.Notebooks, workspace.Notes)));
+        return Json.Deserialize<SyncPayload>(Json.Serialize(new SyncPayload(workspace.Notes.Any(n=>n.Fields.Count>0||n.History.Any(h=>h.Fields.Count>0))?2:workspace.Schema, workspace.Id, workspace.Notebooks, workspace.Notes)));
     }
     public static Workspace Apply(Workspace local, SyncPayload save)
     {

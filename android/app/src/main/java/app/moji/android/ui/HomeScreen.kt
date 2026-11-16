@@ -13,6 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import sh.calvin.reorderable.*
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,17 +27,21 @@ import app.moji.android.data.*
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun HomeScreen(vm: MojiViewModel, s: AppState, newBook: () -> Unit, editBook: (Notebook) -> Unit) {
     val w = s.workspace ?: return
+    val gridState=rememberLazyGridState();val haptic=LocalHapticFeedback.current
+    val reordering=rememberReorderableLazyGridState(gridState){from,to->vm.reorderBook(from.key.toString(),to.key.toString(),from.index<to.index)}
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 600.dp
         val padding = if (compact) 22.dp else 38.dp
-        LazyVerticalGrid(modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().align(Alignment.TopCenter), columns = if(compact)GridCells.Fixed(2) else GridCells.Adaptive(180.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        LazyVerticalGrid(state=gridState,modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().align(Alignment.TopCenter), columns = if(compact)GridCells.Fixed(2) else GridCells.Adaptive(180.dp), contentPadding = PaddingValues(padding), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 15.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("我的记事本  ${w.liveBooks.size}", fontSize = if (compact) 24.sp else 30.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).testTag("home-title"))
 
                 }
             }
-            items(w.liveBooks, key = { it.id }) { book -> NotebookCard(book, w.liveNotes.count { it.notebookId == book.id && !it.archived }, { vm.navigate(book.id) }, { editBook(book) }) }
+            items(w.liveBooks, key = { it.id }) { book -> ReorderableItem(reordering,key=book.id){dragging->
+                NotebookCard(book,w.liveNotes.count{it.notebookId==book.id&&!it.archived},{vm.navigate(book.id)},{editBook(book)},Modifier.longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))
+            } }
             item(key="add-notebook"){AddNotebookCard(newBook)}
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(Modifier.padding(top = 14.dp)) {

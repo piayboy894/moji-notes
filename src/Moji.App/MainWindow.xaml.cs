@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer sessionTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private bool closing, closePending, loadingEditor, focusMode;
     private ListBox? noteList;
+    private readonly Dictionary<string,TextBlock> notebookCounts=[];
     private readonly ObservableCollection<NoteRow> noteRows = [];
     private ContentControl? editorHost;
     private SharedEditorView? sharedEditor;
@@ -35,12 +37,13 @@ public partial class MainWindow : Window
     private readonly UpdateService updater = new();
     public MainWindow(WorkspaceViewModel? viewModel = null, bool smoke = false)
     {
-        InitializeComponent(); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
+        InitializeComponent(); SourceInitialized+=(_,_)=>DesktopNativeUi.ApplyCaption(this); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
         VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = VM.SaveStatus; };
-        toastTimer.Tick += (_, _) => { ToastBorder.Visibility = Visibility.Collapsed; toastTimer.Stop(); };
+        ToastPopup.PlacementTarget=Root;ToastPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new CustomPopupPlacement(new Point((target.Width-popup.Width)/2,Math.Max(0,target.Height-popup.Height-24)),PopupPrimaryAxis.Vertical)];
+        toastTimer.Tick += (_, _) => { ToastPopup.IsOpen=false; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Closed += (_,_) => { ClearSecretClipboard(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        Closed += (_,_) => { ClearSecretClipboard();ToastPopup.IsOpen=false; sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
         VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
@@ -55,7 +58,7 @@ public partial class MainWindow : Window
         if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
-        if (kind == "edit") { foreach (var row in noteRows) { var n = VM.State!.Notes.FirstOrDefault(n => n.Id == row.Note.Id); if (n != null) row.Replace(n); } UpdateStats(); return; }
+        if (kind == "edit") { var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
@@ -63,38 +66,40 @@ public partial class MainWindow : Window
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences.Theme); UpdateStats();
-        BooksPanel.Children.Clear(); foreach (var book in VM.State.LiveBooks)
+        BooksPanel.Children.Clear();notebookCounts.Clear(); foreach (var book in VM.State.LiveBooks)
         {
-            var button = Ui.Button("", () => Navigate(book.Id)); button.Style = (Style)FindResource("NavButton");
-            var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
-            row.Children.Add(new NativeIcon { Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
-            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); button.ContextMenu = menu;
-            button.AllowDrop = true; button.DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; BooksPanel.Children.Add(button);
+            var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Style = (Style)FindResource("NavButton");
+            var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); notebookCounts[book.Id]=count;count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
+            row.Children.Add(new NativeIcon { Tag=book.Id, Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = new SolidColorBrush(NotebookAppearance.Parse(book.Color)), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
+            var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book); button.ContextMenu = menu;
+            button.AllowDrop = true; button.DragOver += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; AttachNotebookDrag(button,book,false);BooksPanel.Children.Add(button);
         }
         HomeNav.Background = VM.View == "home" ? Ui.Resource("AccentLight") : Brushes.Transparent; AllNav.Background = VM.View == "all" ? Ui.Resource("AccentLight") : Brushes.Transparent; StarNav.Background = VM.View == "star" ? Ui.Resource("AccentLight") : Brushes.Transparent;
         NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else RenderWorkspace();
+        PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else if(VM.View=="trash")RenderTrash();else RenderWorkspace();
     }
     private UIElement NavContent(string kind, string title, int? count = null)
     {
         var row = new DockPanel();
-        if (count != null) { var number = Ui.Text(count.Value.ToString(), 11); number.Foreground = Ui.Resource("Sub"); DockPanel.SetDock(number, Dock.Right); row.Children.Add(number); }
+        if (count != null) { var number = Ui.Text(count.Value.ToString(), 11); number.Tag="count";number.Foreground = Ui.Resource("Sub"); DockPanel.SetDock(number, Dock.Right); row.Children.Add(number); }
         row.Children.Add(new NativeIcon { Kind = kind, Width = 22, Height = 22, Foreground = Ui.Resource("Sub"), Margin = new Thickness(0,0,14,0) }); row.Children.Add(Ui.Text(title, 13)); return row;
     }
+    private void SetNavContent(Button button,string icon,string title,int? count=null){if(button.Content is not DockPanel row){button.Content=NavContent(icon,title,count);return;}if(count!=null&&row.Children.OfType<TextBlock>().FirstOrDefault(t=>t.Tag?.ToString()=="count") is {} number&&number.Text!=count.ToString())number.Text=count.ToString();}
     private void UpdateStats()
     {
         if (VM.State == null) return;
-        HomeNav.Content = NavContent("Dashboard", "工作台");
-        AllNav.Content = NavContent("Document", "全部记录", VM.State.LiveNotes.Count(n => !n.Archived));
-        StarNav.Content = NavContent("Star", "我的收藏", VM.State.LiveNotes.Count(n => n.Favorite && !n.Archived));
-        TrashNav.Content = NavContent("Trash", "回收站", VM.State.Notes.Count(n => n.DeletedAt != null && n.PurgedAt == null));
+        SetNavContent(HomeNav,"Dashboard","工作台");
+        SetNavContent(AllNav,"Document","全部记录",VM.State.LiveNotes.Count(n=>!n.Archived));
+        SetNavContent(StarNav,"Star","我的收藏",VM.State.LiveNotes.Count(n=>n.Favorite&&!n.Archived));
+        SetNavContent(TrashNav,"Trash","回收站",VM.State.Notes.Count(n=>n.DeletedAt!=null&&n.PurgedAt==null));
+        var counts=VM.State.LiveNotes.Where(n=>!n.Archived).GroupBy(n=>n.NotebookId).ToDictionary(g=>g.Key,g=>g.Count());foreach(var (id,label)in notebookCounts){var count=counts.GetValueOrDefault(id).ToString();if(label.Text!=count)label.Text=count;}
         SyncButton.Content = "云存档  ↗";
         SaveText.Text = VM.SaveStatus;
     }
     private bool CanCreateRecord => VM.State?.LiveBooks.Any(b => b.Id == VM.View) == true;
     private string ViewTitle() => VM.State?.LiveBooks.FirstOrDefault(b => b.Id == VM.View)?.Name ?? VM.View switch { "home" => "工作台", "star" => "我的收藏", "archive" => "归档记录", "trash" => "回收站", _ => "全部记录" };
     internal Note? CurrentNote() => VM.State?.Notes.FirstOrDefault(n => n.Id == VM.SelectedId);
-    public void Toast(string message) { ToastText.Text = message; ToastBorder.Visibility = Visibility.Visible; toastTimer.Stop(); toastTimer.Start(); }
+    public void Toast(string message) { var owner=Application.Current.Windows.OfType<Window>().LastOrDefault(w=>w.IsActive);var target=owner?.Content as FrameworkElement??Root;ToastPopup.PlacementTarget=target;ToastBorder.MaxWidth=Math.Max(160,Math.Min(780,target.ActualWidth-40));ToastText.Text=message;ToastPopup.IsOpen=true;toastTimer.Stop();toastTimer.Start(); }
     public void Copy(string value, bool secret = false)
     { try { Clipboard.SetText(value); if (secret) { clipboardSecret = value; clipboardAt = Clock.Now; } Toast(secret ? "已复制，30 秒后清除剪贴板" : "已复制"); } catch { Toast("复制失败，剪贴板正被其他应用使用"); } }
     private void ClearSecretClipboard() { try { if (Clipboard.ContainsText() && Clipboard.GetText() == clipboardSecret) Clipboard.Clear(); } catch { } clipboardSecret = ""; }
@@ -142,7 +147,7 @@ public partial class MainWindow : Window
     private void SettingsClick(object sender, RoutedEventArgs e) => SettingsDialog();
     private void SyncClick(object sender, RoutedEventArgs e) => ShowCloudSaves();
     private void ImportClick(object sender, RoutedEventArgs e) => _ = ImportFiles();
-    private MenuItem MenuItem(string title, Action action) { var item = new MenuItem { Header = title }; item.Click += (_, _) => action(); return item; }
+    private MenuItem MenuItem(string title, Action action)=>DesktopNativeUi.Item(title,action);
     private void ToggleFocus() { focusMode = !focusMode; Shell.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 270); if (Body.Content is Grid grid && grid.ColumnDefinitions.Count > 1) grid.ColumnDefinitions[0].Width = new GridLength(focusMode ? 0 : 285); }
 }
 internal sealed class NoteRow(Note note) : INotifyPropertyChanged

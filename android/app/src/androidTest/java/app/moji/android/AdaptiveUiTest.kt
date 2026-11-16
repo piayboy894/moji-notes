@@ -161,7 +161,7 @@ class AdaptiveUiTest {
     @Test fun notebookAppearanceIsEditableAndSurvivesLocalAndGlobalSaves() {
         ready();compose.activityRule.scenario.onActivity{it.vm.navigate("home")}
         val original=compose.activity.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Prompt}
-        compose.onNodeWithTag("book-Prompt").performTouchInput{longClick()}
+        compose.onNode(hasContentDescription("编辑记事本") and hasAnyAncestor(hasTestTag("book-Prompt"))).performClick()
         compose.onNodeWithText("编辑记事本").assertIsDisplayed()
         compose.onNodeWithTag("notebook-color-#A5849D").performScrollTo().performClick()
         compose.onNodeWithContentDescription("绿叶").performScrollTo().performClick()
@@ -282,6 +282,32 @@ class AdaptiveUiTest {
         compose.onNodeWithTag("empty-trash").assertIsEnabled().performClick();compose.onNodeWithText("确认",substring=false).performClick()
         compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.notes.none{it.deletedAt!=null&&it.purgedAt==null}}
         val notes=compose.activity.vm.state.value.workspace!!.notes;assertEquals("Live",notes.first{it.id==live.id}.content);assertEquals("",notes.first{it.id==b.id}.password)
+    }
+
+    @Test fun credentialAttributesArePerRecordReadOnlyUntilEditAndSurviveReopen() {
+        ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Password}.id);a.vm.addNote()}
+        compose.onNodeWithTag("new-credential-field-name").performScrollTo().performTextInput("账户地区");hideKeyboard();compose.onNodeWithTag("add-credential-field").performClick()
+        val field=compose.activity.vm.selectedNote()!!.fields.single();compose.onNodeWithTag("credential-field-${field.id}").performScrollTo().performTextInput("新加坡");hideKeyboard();compose.onNodeWithTag("edit-credential").performClick()
+        compose.onNodeWithTag("credential-field-${field.id}").performScrollTo().assert(hasSetTextAction().not());compose.onNodeWithContentDescription("复制账户地区").assertIsEnabled();val id=compose.activity.vm.selectedNote()!!.id
+        runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready();val saved=compose.activity.vm.state.value.workspace!!.notes.first{it.id==id};assertEquals("新加坡",saved.fields.single().value);assertEquals(2,compose.activity.vm.state.value.workspace!!.schema)
+        compose.activityRule.scenario.onActivity{it.vm.navigate(saved.notebookId);it.vm.select(id)};compose.onNodeWithTag("credential-field-${field.id}").performScrollTo().assert(hasSetTextAction().not());screenshot("27-custom-password-attributes")
+    }
+    @Test fun trashUsesIndependentCardsAndCheckboxesRestoreSelectedRecords() {
+        ready();val book=compose.activity.vm.state.value.workspace!!.liveBooks.first().id;val a=Note(notebookId=book,title="Restore A",deletedAt=now()+3);val b=Note(notebookId=book,title="Restore B",deletedAt=now()+2);val c=Note(notebookId=book,title="Leave C",deletedAt=now()+1)
+        compose.activityRule.scenario.onActivity{it.vm.mutate{w->w.copy(notes=w.notes+listOf(a,b,c))};it.vm.navigate("trash")}
+        compose.onNodeWithTag("trash-page").assertIsDisplayed();compose.onAllNodesWithTag("shared-editor").assertCountEquals(0)
+        compose.onNodeWithTag("trash-select-${a.id}").performScrollTo().performClick();compose.onNodeWithTag("trash-select-${b.id}").performScrollTo().performClick();compose.onNodeWithTag("restore-trash").assertIsEnabled();screenshot("28-trash-card-selection");compose.onNodeWithTag("restore-trash").performClick()
+        compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.notes.first{it.id==a.id}.deletedAt==null};assertNull(compose.activity.vm.state.value.workspace!!.notes.first{it.id==b.id}.deletedAt);assertNotNull(compose.activity.vm.state.value.workspace!!.notes.first{it.id==c.id}.deletedAt)
+    }
+    @Test fun notebooksDragInDashboardAndSidebarAndPersistOneOrder() {
+        try{
+            resize(720,1600,320);ready(false);val a=Notebook(name="First",mode=NoteMode.Text,color="#C06C68");val b=Notebook(name="Second",mode=NoteMode.Prompt,color="#6D89A6");val c=Notebook(name="Third",mode=NoteMode.Password,color="#6F8B67")
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(a,b,c))))};compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.waitForIdle()
+            fun drag(sourceTag:String,targetTag:String){val source=compose.onNodeWithTag(sourceTag).fetchSemanticsNode().boundsInRoot;val target=compose.onNodeWithTag(targetTag).fetchSemanticsNode().boundsInRoot;compose.onNodeWithTag(sourceTag).performTouchInput{down(center);advanceEventTime(700);moveTo(androidx.compose.ui.geometry.Offset(target.center.x-source.left,target.center.y-source.top),600);up()};compose.waitForIdle()}
+            drag("book-Text","book-Prompt");compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.liveBooks.first().id==b.id};screenshot("29-notebook-drag-dashboard")
+            compose.onNodeWithContentDescription("打开导航").performClick();compose.onNodeWithTag("sidebar-book-${a.id}").performScrollTo();drag("sidebar-book-${b.id}","sidebar-book-${a.id}");compose.waitUntil(5000){compose.activity.vm.state.value.workspace!!.liveBooks.first().id==a.id};screenshot("30-notebook-drag-sidebar")
+            runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertEquals(listOf(a.id,b.id,c.id),compose.activity.vm.state.value.workspace!!.liveBooks.map{it.id})
+        }finally{shell("wm size reset");shell("wm density reset")}
     }
 
 }

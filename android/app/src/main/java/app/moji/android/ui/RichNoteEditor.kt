@@ -136,11 +136,11 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     fun show(note:Note,dark:Boolean,obscured:Boolean){
         visible=true;web.cover(obscured);web.setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
         val prefs=vm.state.value.workspace!!.preferences
-        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
+        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
         if(lastAppearance!=configuration){lastAppearance=configuration;web.evaluateJavascript("window.MojiEditor?.configure($configuration)",null)}
         val key="${vm.workspaceEpoch}:${vm.state.value.editorGeneration}:${note.id}"
         if(key==requested){if(loaded.isCompleted&&needsActivation){needsActivation=false;web.evaluateJavascript("window.MojiEditor?.activate()",null)};return}
-        requested=key;web.alpha=0f;val request=++version;canConvert=false;loadingToken="";loaded.cancel();loaded=CompletableDeferred();needsActivation=false
+        requested=key;if(activeId.isEmpty())web.alpha=0f;val request=++version;canConvert=false;loadingToken="";loaded.cancel();loaded=CompletableDeferred();needsActivation=false
         scope.launch {
             page.await();gate.lock();try{
                 if(request!=version||disposed)return@launch
@@ -148,7 +148,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
                 fileResult?.onReceiveValue(null);fileResult=null
                 val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:return@launch
                 activeId=latest.id;epoch=vm.workspaceEpoch;generation=vm.state.value.editorGeneration;token=uid();loadingToken=token
-                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
+                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
                 web.evaluateJavascript("window.MojiEditor.load($payload)",null)
             }finally{gate.unlock()}
         }

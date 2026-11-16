@@ -4,8 +4,8 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.1.1](https://github.com/piayboy894/moji-notes/releases/tag/v2.1.1)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
-- [Android 2.1.1](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.1.1)：固定发行密钥签名的 APK。
+- [Windows 2.2.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.2.0)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
+- [Android 2.2.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.2.0)：固定发行密钥签名的 APK。
 
 ## 编辑器
 
@@ -50,3 +50,7 @@ Windows 标准包内含 .NET，启用官方单文件压缩，不裁剪 WPF 或�
 2.1.0 可读取以前的文档；新的填写区内容采用新版文档标记，手机与电脑均更新至 2.1.0 后交换新存档。安装时直接覆盖，保留本机记录与 GitHub 连接。源码 ZIP 与 `BUILD-PROVENANCE.json` 对应各自测试的构建来源。
 
 发布工作流分别验证 Windows 内嵌编辑器、Android 手机/平板窗口、真实签名 APK 的输入、变量、图片选择与重开。完整设计和边界见 [架构说明](docs/ARCHITECTURE.md)，开源来源见 [editor/UPSTREAM.md](editor/UPSTREAM.md)。
+
+2.2.0 增加密码记录自定义属性、统一的手动记事本顺序，以及独立的回收站卡片网格。电脑支持拖动框选，手机支持复选框多选。提示词填写区随段落自然换行，正文与标题对齐。新存档 schema 2 保护新增属性，继续读取 schema 1；交换新存档前请同时升级手机和电脑。
+
+Android 拖动排序采用 [Reorderable 2.5.1](https://github.com/Calvin-LL/Reorderable)（Apache 2.0），许可随源码和 APK 的 assets/reorderable-LICENSE.txt 提供。

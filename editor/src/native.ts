@@ -5,7 +5,7 @@ import {EditorState} from '@tiptap/pm/state'
 import {closeHistory} from '@tiptap/pm/history'
 export const PREFIX='<!--moji:tiptap:2-->'
 type Variable={id:string,name:string}
-type Payload={id:string,session?:string,content:string,variables:Variable[],theme:string,fontSize:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean}
+type Payload={id:string,session?:string,content:string,variables:Variable[],theme:string,fontSize:number,contentInset?:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean}
 let editor:Editor|null=null
 let current:Payload|null=null
 let dirty=false
@@ -17,15 +17,16 @@ function snapshot(){const variables:Variable[]=[];editor?.state.doc.descendants(
 function emit(){if(!editor||!current||!dirty)return;native({type:'change',id:current.id,session:current.session,...snapshot()});dirty=false}
 function literal(content:string,variables:Variable[]){const box=document.createElement('div');const pattern=/!\[[^\]]*\]\(moji-variable:([a-f0-9]{32})\)/g
  for(const line of content.split('\n')){const p=document.createElement('p');let at=0;for(const m of line.matchAll(pattern)){const v=variables.find(v=>v.id===m[1]);if(!v)continue;p.append(document.createTextNode(line.slice(at,m.index)));const span=document.createElement('span');span.dataset.mojiVariable=v.id;span.dataset.name=v.name;span.dataset.mojiField='true';p.append(span);at=m.index!+m[0].length}p.append(document.createTextNode(line.slice(at)));box.append(p)}return box.innerHTML}
-function theme(payload:Partial<Payload>){document.documentElement.classList.toggle('dark',payload.theme==='dark');document.documentElement.style.setProperty('--moji-font-size',`${payload.fontSize||16}px`)}
+function theme(payload:Partial<Payload>){if(payload.contentInset!==undefined)document.documentElement.style.setProperty('--moji-content-inset',payload.contentInset+'px');document.documentElement.classList.toggle('dark',payload.theme==='dark');document.documentElement.style.setProperty('--moji-font-size',`${payload.fontSize||16}px`)}
 function load(payload:Payload){current=payload;theme(payload);if(!editor)return;dirty=false;editor.commands.setContent(/^<!--moji:tiptap:[12]-->/.test(payload.content)?payload.content.slice(PREFIX.length):literal(payload.content,payload.variables||[]),{emitUpdate:false,parseOptions:{preserveWhitespace:'full'}});editor.view.updateState(EditorState.create({schema:editor.schema,doc:editor.state.doc,plugins:editor.state.plugins}));editor.setEditable(!payload.readOnly,false);editor.view.dispatch(editor.state.tr);dirty=false;if((payload.variables||[]).length&&payload.content!==snapshot().content){dirty=true;emit()};document.querySelector('.simple-editor-wrapper')?.scrollTo(0,0);window.dispatchEvent(new Event('moji-document'));requestAnimationFrame(()=>requestAnimationFrame(()=>{native({type:'loaded',id:payload.id,session:payload.session});selection()}))}
+document.addEventListener('focusin',()=>selection());
 function selection(){if(editor&&current){const name=selectedVariableName(editor);native({type:'selection',id:current.id,session:current.session,canConvert:!!name,selection:name?{...selectedRange(editor),name}:null})}}
 function activate(){if(editor){editor.setEditable(true,false);editor.view.dispatch(editor.state.tr)}}
 function deactivate(){if(editor?.view.dom.contains(document.activeElement)) (document.activeElement as HTMLElement)?.blur();editor?.commands.blur();if(editor){editor.setEditable(false,false);editor.view.dispatch(editor.state.tr)}}
-function configure(payload:Partial<Payload>){if(current){for(const key of ['theme','fontSize','shortcuts','defaults'] as const)if(payload[key]!==undefined)(current as any)[key]=payload[key]}theme(payload);selection()}
+function configure(payload:Partial<Payload>){if(current){for(const key of ['theme','fontSize','contentInset','shortcuts','defaults'] as const)if(payload[key]!==undefined)(current as any)[key]=payload[key]}theme(payload);selection()}
 function action(name:string,value?:any){
  if(!editor||editor.isDestroyed)return false
- const field=document.activeElement?.classList.contains('moji-variable-input')
+ const field=!!document.activeElement?.closest('.moji-variable-content')
  switch(name){
   case 'undo':return field?editor.commands.undo():editor.chain().focus().undo().run()
   case 'redo':return field?editor.commands.redo():editor.chain().focus().redo().run()

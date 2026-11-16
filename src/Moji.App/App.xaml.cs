@@ -9,7 +9,7 @@ public partial class App : Application
     private Mutex? instance;
     protected override async void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
+        base.OnStartup(e);Ui.InitializeTheme();Ui.Theme("system");
         DispatcherUnhandledException += (_, error) => { MessageBox.Show("操作未能完成：" + UserMessages.For(error.Exception), "墨记", MessageBoxButton.OK, MessageBoxImage.Warning); error.Handled = true; };
         if (e.Args.FirstOrDefault() == "--apply-update")
         { try { var result = await UpdateService.ApplyReplacementAsync(e.Args); if (result != 0) MessageBox.Show("更新未能自动替换。已下载的新版本保存在：\n" + Environment.ProcessPath + "\n\n请将它复制到可写的程序目录后启动。", "墨记更新"); Shutdown(result); } catch (Exception error) { MessageBox.Show(UserMessages.For(error), "墨记更新"); Shutdown(3); } return; }

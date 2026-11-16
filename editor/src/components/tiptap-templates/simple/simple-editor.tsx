@@ -80,11 +80,14 @@ const MainToolbarContent = ({
   onHighlighterClick,
   onLinkClick,
   isMobile,
+  editingField,
 }: {
   onHighlighterClick: () => void
   onLinkClick: () => void
   isMobile: boolean
+  editingField:boolean
 }) => {
+  const inactive=editingField?{disabled:true}:{}
   return (
     <>
       <Spacer />
@@ -97,51 +100,51 @@ const MainToolbarContent = ({
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <HeadingDropdownMenu levels={[1, 2, 3, 4]} portal={isMobile} />
+        <HeadingDropdownMenu {...inactive} levels={[1, 2, 3, 4]} portal={isMobile} />
         <ListDropdownMenu
           types={["bulletList", "orderedList", "taskList"]}
           portal={isMobile}
         />
-        <BlockquoteButton />
-        <CodeBlockButton />
+        <BlockquoteButton {...inactive} />
+        <CodeBlockButton {...inactive} />
       </ToolbarGroup>
 
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <MarkButton type="bold" />
-        <MarkButton type="italic" />
-        <MarkButton type="strike" />
-        <MarkButton type="code" />
-        <MarkButton type="underline" />
+        <MarkButton {...inactive} type="bold" />
+        <MarkButton {...inactive} type="italic" />
+        <MarkButton {...inactive} type="strike" />
+        <MarkButton {...inactive} type="code" />
+        <MarkButton {...inactive} type="underline" />
         {!isMobile ? (
-          <ColorHighlightPopover />
+          <ColorHighlightPopover {...inactive} />
         ) : (
-          <ColorHighlightPopoverButton onClick={onHighlighterClick} />
+          <ColorHighlightPopoverButton {...inactive} onClick={onHighlighterClick} />
         )}
-        {!isMobile ? <LinkPopover /> : <LinkButton onClick={onLinkClick} />}
+        {!isMobile ? <LinkPopover {...inactive} /> : <LinkButton {...inactive} onClick={onLinkClick} />}
       </ToolbarGroup>
 
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <MarkButton type="superscript" />
-        <MarkButton type="subscript" />
+        <MarkButton {...inactive} type="superscript" />
+        <MarkButton {...inactive} type="subscript" />
       </ToolbarGroup>
 
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <TextAlignButton align="left" />
-        <TextAlignButton align="center" />
-        <TextAlignButton align="right" />
-        <TextAlignButton align="justify" />
+        <TextAlignButton {...inactive} align="left" />
+        <TextAlignButton {...inactive} align="center" />
+        <TextAlignButton {...inactive} align="right" />
+        <TextAlignButton {...inactive} align="justify" />
       </ToolbarGroup>
 
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <ImageUploadButton text="图片" />
+        <ImageUploadButton {...inactive} text="图片" />
       </ToolbarGroup>
 
       <Spacer />
@@ -182,6 +185,8 @@ const MobileToolbarContent = ({
 
 export function SimpleEditor() {
   const isMobile = useIsMobile()
+  const [editingField,setEditingField]=React.useState(false)
+  React.useEffect(()=>{const update=()=>setEditingField(!!document.activeElement?.closest('.moji-variable-input'));document.addEventListener('focusin',update);document.addEventListener('focusout',update);window.addEventListener('moji-document',update);return()=>{document.removeEventListener('focusin',update);document.removeEventListener('focusout',update);window.removeEventListener('moji-document',update)}},[])
   const { height } = useWindowSize()
   const [mobileView, setMobileView] = React.useState<
     "main" | "highlighter" | "link"
@@ -265,6 +270,7 @@ export function SimpleEditor() {
               onHighlighterClick={() => setMobileView("highlighter")}
               onLinkClick={() => setMobileView("link")}
               isMobile={isMobile}
+              editingField={editingField}
             />
           ) : (
             <MobileToolbarContent

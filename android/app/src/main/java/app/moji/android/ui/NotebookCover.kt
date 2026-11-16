@@ -25,14 +25,14 @@ import app.moji.android.data.Notebook
 import app.moji.android.data.NoteMode
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun NotebookCard(book: Notebook, count: Int, open: () -> Unit, edit: () -> Unit) {
+@Composable fun NotebookCard(book: Notebook, count: Int, open: () -> Unit, edit: () -> Unit, modifier:Modifier=Modifier) {
     val dark = MaterialTheme.colorScheme.background.luminance() < .3f
     val chosen=color(book.color)
     val palette=if(book.colorEnd.isBlank())listOf(lerp(chosen,Color.White,.78f),lerp(chosen,Color.White,.58f),lerp(chosen,Color.Black,.15f),chosen)else{
         val end=color(book.colorEnd);val band=lerp(lerp(chosen,end,.5f),Color.Black,.18f)
         listOf(notebookPaper(chosen),notebookPaper(end),lerp(band,Color.Black,.15f),band)
     }
-    BoxWithConstraints(Modifier.widthIn(max=210.dp).fillMaxWidth().aspectRatio(.87f).combinedClickable(onClick = open, onLongClick = edit).testTag("book-${book.mode.name}")) {
+    BoxWithConstraints(modifier.widthIn(max=210.dp).fillMaxWidth().aspectRatio(.87f).clickable(onClick=open).testTag("book-${book.mode.name}")) {
         val small = maxWidth < 220.dp
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height; val corner = w * .065f; val pageY = h - w * .09f
@@ -64,6 +64,7 @@ import app.moji.android.data.NoteMode
             Spacer(Modifier.height(if (small) 10.dp else 24.dp))
             Icon(MojiIcons.ArrowForward, null, Modifier.size(if (small) 18.dp else 24.dp), tint = Color(0xFF57654F))
         }
+        IconButton(onClick=edit,modifier=Modifier.align(Alignment.TopEnd).padding(end=maxWidth*.2f,top=(maxWidth*.16f-5.dp).coerceAtLeast(0.dp)).size(36.dp)){Icon(MojiIcons.MoreHoriz,"编辑记事本",Modifier.size(17.dp),tint=ink.copy(alpha=.65f))}
     }
 }
 

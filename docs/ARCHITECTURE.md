@@ -8,7 +8,7 @@ Windows 为 .NET 10 / WPF，Android 为 Kotlin / Jetpack Compose。记事本、�
 
 每条新文档的 `content` 是 `<!--moji:tiptap:2-->` 加 Tiptap HTML，继续读取版本 1。原生宿主不重建段落、引用、待办或图片，不接管 Enter、Backspace、选区和输入法。这些行为、样式和 SVG 工具图标来自官方编辑器。旧正文作为文字段落载入，不解析 Markdown 或旧表格结构；只有已登记的提示词变量会转换为新的填写区。
 
-变量节点记录 ID、名称和填写值，作为 Tiptap NodeView 嵌入标准 HTML textarea。使用浏览器内置输入处理中文组合、选区、删除与多行文字，不在 contenteditable 的空内联节点里模拟光标。不可见的尺寸镜像只参与布局，不进入文档或复制数据；占位文字是原生 placeholder。选择正文文字后转化，名称固定为选中文字、值初始为空。每个 input 事件更新节点属性，由 Tiptap 管理文档撤销和持久化；输入过程中不回填相同值，不打断组合输入。HTML 使用 `data-moji-field` 标记，正文包含实际填写值，名称保留在属性中，纯文本复制不包含占位。普通 `{{` 没有特殊规则。
+变量节点记录 ID、名称和填写值，作为 Tiptap NodeView 嵌入独立的 HTML plaintext-only 行内编辑宿主。使用浏览器内置输入处理中文组合、选区、删除与多行文字，宿主与 ProseMirror 文档隔离，用输入事件提交节点 value，不把填写内容嵌套为 ProseMirror 的子文档。不再使用不可换行的 textarea 或尺寸镜像；行内 span 可跨段落行框，背景使用 box-decoration-break。空值占位和换行末尾的 BR 只用于显示，不进入文档或复制数据。选择正文文字后转化，名称固定为选中文字、值初始为空。每个 input 事件更新节点属性，由 Tiptap 管理文档撤销和持久化；输入过程中不回填相同值，不打断组合输入。HTML 使用 `data-moji-field` 标记，正文包含实际填写值，名称保留在属性中，纯文本复制不包含占位。普通 `{{` 没有特殊规则。
 
 Chrome 124 及更早的 Android WebView 可能在隐藏软键盘的已提交输入中返回旧光标。兼容插件让系统完成原生输入，只在 ProseMirror 默认事务中修正这个错误选区；官方输入规则先运行，组合输入和替换输入不受影响。
 
@@ -45,3 +45,10 @@ Android 继续沿用固定发行证书，后续 APK 可覆盖升级。系统 Web
 - [Microsoft WebView2 分发指南](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)：推荐共享 Evergreen，缺失时通过小型 bootstrapper 安装；完整 Fixed Runtime 的体积超过 250 MB。
 - [.NET 单文件与压缩](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview)及 [WPF trimming 限制](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/incompatibilities)：使用受支持的压缩，不通过不兼容的裁剪缩小 WPF。
 - [Tauri Windows 分发方案](https://v2.tauri.app/distribute/windows-installer/)与[维护者社区讨论](https://github.com/orgs/tauri-apps/discussions/3048)：共享 WebView2、缺失时补装，是同类桌面软件常用的分发方式。
+
+
+2.2.0 继续保持一个 WPF 记录界面和原生正文宿主，记录切换不重建标题、工具条或重新挂载浏览器。永久的填充容器与固定高度变量操作行避免异步载入期间 LastChildFill 拉伸按钮。字体、主题和快捷键仅在配置变化时发送；主题更新复用颜色画刷，导航计数只更新对应文本。
+
+密码自定义字段是 Note / NoteVersion 内的有序 id/name/value 列表，参与历史、存档、搜索、清除；新存档 schema 2，读取旧 schema 1。记事本顺序是 notebooks 数组的顺序，移动只重排活跃槽位，不改变已删除记事本位置或记录归属。Android 采用 Reorderable 2.5.1 的 LazyGrid / LazyList，提供长按拖动和自动滚动；Windows 使用独立的数据格式和插入指示线。回收站有自己的多选卡片网格，Windows 的矩形选择映射实际项边界、保留 Ctrl / Shift 选择并支持边缘滚动，不挂载正文编辑器。
+
+Windows 应用内控件和弹层统一由 Themes/Controls.xaml 绘制，保留 WPF 原有键盘和无障碍行为。WebView2 右键命令经 ContextMenuRequested 映射到同一菜单样式；复制、粘贴等仍由原生引擎执行，撤销/重做调用共享编辑器。文件选择、保存和打印保留系统标准窗口。通知使用不抢焦点的原生 Popup，定位到当前活动窗口，避免被 WebView 的 HWND 或模态窗口遮挡。Windows 声明 PerMonitorV2 DPI，并使用支持时的 DWM 标题栏色彩。

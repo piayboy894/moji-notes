@@ -9,6 +9,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import sh.calvin.reorderable.*
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -116,6 +122,7 @@ import java.util.zip.ZipOutputStream
                         ) { padding ->
                             Box(Modifier.padding(padding).fillMaxSize()) {
                                 if (s.view == "home") HomeScreen(vm, s, { newBook = true }, { bookDialog = it })
+                                else if(s.view=="trash")TrashScreen(vm,s)
                                 else if (twoPane) {
                                     var contentX by remember { mutableFloatStateOf(0f) }; val density = LocalDensity.current
                                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { contentX = it.positionInWindow().x }) {
@@ -154,12 +161,14 @@ import java.util.zip.ZipOutputStream
 @Composable private fun EmptyEditor(modifier: Modifier) { Box(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.MenuBook, null, Modifier.size(53.dp), tint = MaterialTheme.colorScheme.outline); Text("选择记录", color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
 @Composable private fun SideNavigation(s: AppState, vm: MojiViewModel, done: () -> Unit, settings: () -> Unit, newBook: () -> Unit, search: () -> Unit, sync: () -> Unit) {
     val w = s.workspace ?: return
-    Column(Modifier.fillMaxHeight().padding(16.dp, 24.dp)) {
-        Brand(); Spacer(Modifier.height(24.dp)); OutlinedButton(onClick = { search(); done() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(11.dp)) { Icon(MojiIcons.Search, null, Modifier.size(17.dp)); Spacer(Modifier.width(9.dp)); Text("搜索", style = MaterialTheme.typography.labelSmall) }; Spacer(Modifier.height(17.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            listOf(Triple("home", "工作台", MojiIcons.Dashboard), Triple("all", "全部记录", MojiIcons.Description), Triple("star", "我的收藏", MojiIcons.StarOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.bodyMedium) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(19.dp)) }, modifier = Modifier.padding(vertical = 2.dp)) }
-            Row(Modifier.padding(start = 14.dp, top = 20.dp), verticalAlignment = Alignment.CenterVertically) { Text("我的记事本", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Tool(MojiIcons.Add, "新建记事本") { newBook(); done() } }
-            w.liveBooks.forEach { book -> NavigationDrawerItem(label = { Text(book.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1) }, selected = s.view == book.id, onClick = { vm.navigate(book.id); done() }, icon = { Icon(notebookIcon(book), null, Modifier.size(19.dp), tint = color(book.color)) }, badge = { Text("${w.liveNotes.count { it.notebookId == book.id && !it.archived }}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }, modifier = Modifier.padding(vertical = 2.dp)) }
+    val listState=rememberLazyListState();val haptic=LocalHapticFeedback.current
+    val reordering=rememberReorderableLazyListState(listState){from,to->vm.reorderBook(from.key.toString(),to.key.toString(),from.index<to.index)}
+    Column(Modifier.fillMaxHeight().padding(16.dp,24.dp)) {
+        Brand();Spacer(Modifier.height(24.dp));OutlinedButton(onClick={search();done()},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(11.dp)){Icon(MojiIcons.Search,null,Modifier.size(17.dp));Spacer(Modifier.width(9.dp));Text("搜索",style=MaterialTheme.typography.labelSmall)};Spacer(Modifier.height(17.dp))
+        LazyColumn(Modifier.weight(1f),state=listState){
+            item(key="navigation"){listOf(Triple("home","工作台",MojiIcons.Dashboard),Triple("all","全部记录",MojiIcons.Description),Triple("star","我的收藏",MojiIcons.StarOutline)).forEach{(id,title,icon)->NavigationDrawerItem(label={Text(title,style=MaterialTheme.typography.bodyMedium)},selected=s.view==id,onClick={vm.navigate(id);done()},icon={Icon(icon,null,Modifier.size(19.dp))},modifier=Modifier.padding(vertical=2.dp))}}
+            item(key="notebooks-label"){Row(Modifier.padding(start=14.dp,top=20.dp),verticalAlignment=Alignment.CenterVertically){Text("我的记事本",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Tool(MojiIcons.Add,"新建记事本"){newBook();done()}}}
+            items(w.liveBooks,key={it.id}){book->ReorderableItem(reordering,key=book.id){dragging->NavigationDrawerItem(label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).testTag("sidebar-book-${book.id}").longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
         }
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }
@@ -171,7 +180,7 @@ import java.util.zip.ZipOutputStream
     NavigationRail(containerColor = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxHeight().width(72.dp).verticalScroll(rememberScrollState()), header = { Tool(MojiIcons.Menu, "打开导航", action = menu) }) {
         NavigationRailItem(s.view == "home", { vm.navigate("home") }, icon = { Icon(MojiIcons.Dashboard, "工作台") })
         NavigationRailItem(s.view == "all", { vm.navigate("all") }, icon = { Icon(MojiIcons.Description, "全部记录") })
-        s.workspace?.liveBooks?.take(8)?.forEach { book -> NavigationRailItem(s.view == book.id, { vm.navigate(book.id) }, icon = { Icon(notebookIcon(book), book.name) }) }
+        s.workspace?.liveBooks?.take(8)?.forEach { book -> NavigationRailItem(s.view == book.id, { vm.navigate(book.id) }, icon = { Icon(notebookIcon(book), book.name,tint=color(book.color)) }) }
         Spacer(Modifier.height(20.dp)); Tool(MojiIcons.Settings, "偏好设置", action = settings)
     }
 }
