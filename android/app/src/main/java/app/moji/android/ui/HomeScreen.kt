@@ -1,5 +1,7 @@
 package app.moji.android.ui
 
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -40,7 +42,8 @@ import app.moji.android.data.*
                 }
             }
             items(w.liveBooks, key = { it.id }) { book -> ReorderableItem(reordering,key=book.id){dragging->
-                NotebookCard(book,w.liveNotes.count{it.notebookId==book.id&&!it.archived},{vm.navigate(book.id)},{editBook(book)},Modifier.longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))
+                val lift by animateFloatAsState(if(dragging)1.035f else 1f,label="notebook-lift");val elevation by animateDpAsState(if(dragging)18.dp else 0.dp,label="notebook-shadow")
+                NotebookCard(book,w.liveNotes.count{it.notebookId==book.id&&!it.archived},{vm.navigate(book.id)},{editBook(book)},Modifier.graphicsLayer{scaleX=lift;scaleY=lift;shadowElevation=elevation.toPx();shape=RoundedCornerShape(12.dp)}.longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))
             } }
             item(key="add-notebook"){AddNotebookCard(newBook)}
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -69,31 +72,36 @@ import app.moji.android.data.*
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit) {
     val w = s.workspace ?: return; val notes = vm.filtered()
-    var selected by remember(s.view) { mutableStateOf(emptySet<String>()) }; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface)) {
+    var selected by remember(s.view) { mutableStateOf(emptySet<String>()) }; var selecting by remember(s.view){mutableStateOf(false)}; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
+    Column(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                w.liveBooks.firstOrNull { it.id == s.view }?.let { Tool(MojiIcons.MoreHoriz, "记事本设置") { editBook(it) } }
+
             }
             OutlinedTextField(s.search, vm::search, Modifier.fillMaxWidth().testTag("list-search"), placeholder = { Text("搜索记录…", style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(MojiIcons.Search, null, Modifier.size(18.dp)) }, trailingIcon = if (s.search.isNotBlank()) ({ Tool(MojiIcons.Close, "清除搜索") { vm.search("") } }) else null, singleLine = true, shape = RoundedCornerShape(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box { TextButton(onClick = { sortMenu = true }, contentPadding = PaddingValues(0.dp)) { Text(when (s.sort) { "name" -> "名称顺序"; "created" -> "创建时间"; else -> "最近编辑" }, style = MaterialTheme.typography.labelSmall); Icon(MojiIcons.ExpandMore, null, Modifier.size(16.dp)) }; DropdownMenu(sortMenu, { sortMenu = false }) { listOf("updated" to "最近编辑", "created" to "创建时间", "name" to "名称顺序").forEach { (id, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { vm.sort(id); sortMenu = false }) } } }
-                Spacer(Modifier.weight(1f)); Text("${notes.size}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f));if(!selecting)TextButton(onClick={selecting=true;selected=emptySet()},modifier=Modifier.testTag("select-records")){Text("选择")}
                 if (s.view == "trash") TextButton(onClick = { selected = w.notes.filter { it.deletedAt != null && it.purgedAt == null }.map { it.id }.toSet(); purge = true }, enabled = w.notes.any { it.deletedAt != null && it.purgedAt == null }, modifier = Modifier.testTag("empty-trash")) { Text("清空回收站") }
             }
         }
-        if (selected.isNotEmpty()) Surface(color = MaterialTheme.colorScheme.primaryContainer) { Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(selected.size == notes.size, { selected = if (selected.size == notes.size) emptySet() else notes.map { it.id }.toSet() }); Text("已选 ${selected.size}", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall); if (s.view == "trash") Tool(MojiIcons.RestoreFromTrash, "恢复所选") { vm.restore(selected); selected = emptySet() } else Tool(MojiIcons.StarOutline, "收藏所选") { selected.forEach { id -> vm.edit(id) { it.copy(favorite = true) } }; selected = emptySet() }; Tool(MojiIcons.DeleteOutline, "删除所选") { if (s.view == "trash") purge = true else { vm.trash(selected); selected = emptySet() } }; Tool(MojiIcons.Close, "取消多选") { selected = emptySet() } } }
+        if(selecting)Surface(color=MaterialTheme.colorScheme.primaryContainer){Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically){
+            Text("已选 ${selected.size}",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall)
+            TextButton(onClick={selected=if(selected.size==notes.size)emptySet()else notes.map{it.id}.toSet()},modifier=Modifier.testTag("select-all-records")){Text(if(selected.isNotEmpty()&&selected.size==notes.size)"取消全选"else"全选")}
+            TextButton(onClick={if(s.view=="trash")purge=true else{vm.trash(selected);selected=emptySet();selecting=false}},enabled=selected.isNotEmpty(),modifier=Modifier.testTag("delete-selected-records")){Text("删除",color=if(selected.isNotEmpty())MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)}
+            TextButton(onClick={selected=emptySet();selecting=false},modifier=Modifier.testTag("cancel-record-selection")){Text("取消")}
+        }}
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        LazyColumn(Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(7.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(notes, key = { it.id }) { note -> val mode = w.notebooks.first { it.id == note.notebookId }.mode
-                Surface(shape = RoundedCornerShape(13.dp), color = if (s.selectedId == note.id || note.id in selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .75f) else Color.Transparent, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { if (selected.isEmpty()) vm.select(note.id) else selected = if (note.id in selected) selected - note.id else selected + note.id }, onLongClick = { selected = selected + note.id })) {
+        LazyColumn(Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(7.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            items(notes, key = { it.id }) { note -> val mode = w.notebooks.first { it.id == note.notebookId }.mode;val chosen=if(selecting)note.id in selected else s.selectedId==note.id
+                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { if (!selecting) vm.select(note.id) else selected = if (note.id in selected) selected - note.id else selected + note.id }, onLongClick = { selecting=true;selected = selected + note.id })) {
                     Row(Modifier.padding(15.dp, 17.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (selected.isNotEmpty()) Checkbox(note.id in selected, { selected = if (note.id in selected) selected - note.id else selected + note.id }, Modifier.padding(end = 6.dp))
+                        if (selecting) Checkbox(note.id in selected, { selected = if (note.id in selected) selected - note.id else selected + note.id }, Modifier.padding(end = 6.dp).testTag("select-record-${note.id}"))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) { Text(note.title.ifBlank { "未命名记录" }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); if (note.favorite) Icon(MojiIcons.Star, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.secondary) }
                             Text(if (mode == NoteMode.Password) note.username else Records.plain(PromptVariables.display(note)).take(100), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(Records.relative(note.updatedAt),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);IconButton(onClick={vm.duplicate(note)},modifier=Modifier.size(34.dp).testTag("duplicate-record-${note.id}")){Icon(MojiIcons.ContentCopy,"创建副本",Modifier.size(17.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)};IconToggleButton(checked=note.pinned,onCheckedChange={vm.togglePin(note.id)},modifier=Modifier.size(34.dp).testTag("pin-record-${note.id}"),colors=IconButtonDefaults.iconToggleButtonColors(contentColor=MaterialTheme.colorScheme.onSurfaceVariant,checkedContentColor=MaterialTheme.colorScheme.onPrimaryContainer,checkedContainerColor=MaterialTheme.colorScheme.primaryContainer)){Icon(MojiIcons.PushPin,if(note.pinned)"取消置顶"else"置顶记录",Modifier.size(17.dp))}}
+                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(Records.relative(note.updatedAt),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);if(!selecting){IconButton(onClick={vm.duplicate(note)},modifier=Modifier.size(34.dp).testTag("duplicate-record-${note.id}")){Icon(MojiIcons.ContentCopy,"创建副本",Modifier.size(17.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)};IconToggleButton(checked=note.pinned,onCheckedChange={vm.togglePin(note.id)},modifier=Modifier.size(34.dp).testTag("pin-record-${note.id}"),colors=IconButtonDefaults.iconToggleButtonColors(contentColor=MaterialTheme.colorScheme.onSurfaceVariant,checkedContentColor=MaterialTheme.colorScheme.onPrimary,checkedContainerColor=MaterialTheme.colorScheme.primary)){Icon(if(note.pinned)MojiIcons.PushPinFilled else MojiIcons.PushPin,if(note.pinned)"取消置顶"else"置顶记录",Modifier.size(17.dp))}}}
                         }
                     }
                 }
@@ -101,6 +109,6 @@ import app.moji.android.data.*
             if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         }
     }
-    if (purge) Confirm("永久删除 ${selected.size} 条记录？", "正文、密码和历史版本会被清除，无法从回收站恢复。", { purge = false }) { vm.purge(selected); selected = emptySet() }
+    if (purge) Confirm("永久删除 ${selected.size} 条记录？", "正文、密码和历史版本会被清除，无法从回收站恢复。", { purge = false }) { vm.purge(selected); selected = emptySet();selecting=false }
 }
 fun viewTitle(s: AppState) = s.workspace?.liveBooks?.firstOrNull { it.id == s.view }?.name ?: when (s.view) { "home" -> "工作台"; "star" -> "我的收藏"; "archive" -> "归档记录"; "trash" -> "回收站"; else -> "全部记录" }

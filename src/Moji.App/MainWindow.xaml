@@ -22,7 +22,7 @@
             <StackPanel x:Name="BooksPanel"/>
             <TextBlock Text="管理" Foreground="{DynamicResource Sub}" FontSize="11" Margin="11,13,0,8"/>
             <Separator Margin="8,2,8,12"/>
-            <Button Style="{StaticResource NavButton}" Click="ArchiveClick"><StackPanel Orientation="Horizontal"><local:NativeIcon Kind="Archive" Width="22" Height="22" Foreground="{DynamicResource Sub}" Margin="0,0,14,0"/><TextBlock Text="归档记录" FontSize="13"/></StackPanel></Button>
+            <Button x:Name="ArchiveNav" Style="{StaticResource NavButton}" Click="ArchiveClick"><StackPanel Orientation="Horizontal"><local:NativeIcon Kind="Archive" Width="22" Height="22" Foreground="{DynamicResource Sub}" Margin="0,0,14,0"/><TextBlock Text="归档记录" FontSize="13"/></StackPanel></Button>
             <Button x:Name="TrashNav" Style="{StaticResource NavButton}" Click="TrashClick"/>
           </StackPanel></ScrollViewer>
         </DockPanel>

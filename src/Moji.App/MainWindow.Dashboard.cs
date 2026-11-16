@@ -17,6 +17,7 @@ public partial class MainWindow
         var title = new DockPanel { Margin = new Thickness(0, 0, 0, 30) };
         title.Children.Add(Ui.Text($"我的记事本   {state.LiveBooks.Count()}", 27, null, true)); content.Children.Add(title);
         var cards = new WrapPanel { Margin = new Thickness(-10,0,-10,0) };
+        notebookCards=cards;
         foreach (var book in state.LiveBooks)
         {
             var face = new Grid { Width = 210, Height = 250, Margin = new Thickness(0, 0, 0, 14) };

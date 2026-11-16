@@ -13,16 +13,18 @@
       "Line": "#E0E3EA",
       "Outline": "#858B98",
       "Soft": "#EEF1F6",
-      "Accent": "#4058B6",
+      "Accent": "#405E78",
       "OnAccent": "#FFFFFF",
-      "AccentLight": "#E9EDFB",
-      "OnSelected": "#263B83",
+      "AccentLight": "#E5EDF3",
+      "OnSelected": "#293F53",
       "Hover": "#EDF0F5",
       "ScrollThumb": "#B3BAC7",
       "Danger": "#AD3935",
       "OnDanger": "#FFFFFF",
       "DangerSoft": "#FBEDEC",
-      "Success": "#34724D"
+      "Success": "#34724D",
+      "Selection": "#ACCCE3",
+      "RecordSelected": "#FFFFFF"
     }
   },
   {
@@ -41,14 +43,16 @@
       "Soft": "#F1EDE6",
       "Accent": "#885838",
       "OnAccent": "#FFFFFF",
-      "AccentLight": "#F1E5D9",
-      "OnSelected": "#714224",
+      "AccentLight": "#ECE3D8",
+      "OnSelected": "#543D2D",
       "Hover": "#EBE5DC",
       "ScrollThumb": "#BEB3A5",
       "Danger": "#AD3935",
       "OnDanger": "#FFFFFF",
       "DangerSoft": "#FBEDEC",
-      "Success": "#34724D"
+      "Success": "#34724D",
+      "Selection": "#DBC2A5",
+      "RecordSelected": "#FFFDFA"
     }
   },
   {
@@ -61,20 +65,22 @@
       "Side": "#EAF0ED",
       "Raised": "#FFFFFF",
       "Ink": "#273530",
-      "Sub": "#5C6C64",
+      "Sub": "#53645B",
       "Line": "#DCE5DF",
       "Outline": "#7E9186",
       "Soft": "#ECF2EE",
       "Accent": "#356B60",
       "OnAccent": "#FFFFFF",
-      "AccentLight": "#E0EEE8",
-      "OnSelected": "#205448",
+      "AccentLight": "#DFEAE4",
+      "OnSelected": "#244C3D",
       "Hover": "#E5EDE8",
       "ScrollThumb": "#A8BDB1",
       "Danger": "#AD3935",
       "OnDanger": "#FFFFFF",
       "DangerSoft": "#FBEDEC",
-      "Success": "#34724D"
+      "Success": "#34724D",
+      "Selection": "#ACD0BE",
+      "RecordSelected": "#FCFEFD"
     }
   },
   {
@@ -100,7 +106,9 @@
       "Danger": "#F09A94",
       "OnDanger": "#3E1919",
       "DangerSoft": "#432B2C",
-      "Success": "#97C6A6"
+      "Success": "#97C6A6",
+      "Selection": "#435A7C",
+      "RecordSelected": "#292D36"
     }
   },
   {
@@ -126,7 +134,9 @@
       "Danger": "#F09A94",
       "OnDanger": "#3E1919",
       "DangerSoft": "#432B2C",
-      "Success": "#97C6A6"
+      "Success": "#97C6A6",
+      "Selection": "#315673",
+      "RecordSelected": "#243647"
     }
   },
   {
@@ -152,7 +162,9 @@
       "Danger": "#F09A94",
       "OnDanger": "#3E1919",
       "DangerSoft": "#432B2C",
-      "Success": "#97C6A6"
+      "Success": "#97C6A6",
+      "Selection": "#65513C",
+      "RecordSelected": "#382E25"
     }
   }
 ]

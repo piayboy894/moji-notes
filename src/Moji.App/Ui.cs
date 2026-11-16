@@ -42,13 +42,19 @@ internal static class Ui
     }
     public static void InitializeTheme()
     {
+        Application.Current.Resources["AppFont"]=new FontFamily("Microsoft YaHei UI, Segoe UI");
         paletteState.Values=Moji.Core.ThemeCatalog.All.First().Colors;
         foreach(var key in paletteState.Values.Keys){var brush=new SolidColorBrush();System.Windows.Data.BindingOperations.SetBinding(brush,SolidColorBrush.ColorProperty,new System.Windows.Data.Binding("["+key+"]"){Source=paletteState});Application.Current.Resources[key]=brush;}
+    }
+    private static string appliedFont="";
+    private static void ApplyFont(string requested)
+    {
+        var font=InstalledFonts.Resolve(requested);if(appliedFont==font)return;appliedFont=font;Application.Current.Resources["AppFont"]=new FontFamily(font);
     }
     public static void Theme(string theme)=>Theme(new Moji.Core.Preferences{Theme=theme});
     public static void Theme(Moji.Core.Preferences preferences)
     {
-        var palette=Palette(preferences);if(appliedPalette==palette.Id)return;appliedPalette=palette.Id;paletteState.Update(palette.Colors);
+        ApplyFont(preferences.FontFamily);var palette=Palette(preferences);if(appliedPalette==palette.Id)return;appliedPalette=palette.Id;paletteState.Update(palette.Colors);
         foreach(Window window in Application.Current.Windows)DesktopNativeUi.ApplyCaption(window);
     }
 }

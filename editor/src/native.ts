@@ -6,7 +6,7 @@ import {EditorState} from '@tiptap/pm/state'
 import {closeHistory} from '@tiptap/pm/history'
 export const PREFIX='<!--moji:tiptap:2-->'
 type Variable={id:string,name:string}
-type Payload={id:string,session?:string,content:string,variables:Variable[],theme:string,fontSize:number,contentInset?:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean,palette?:string}
+type Payload={id:string,session?:string,content:string,variables:Variable[],theme:string,fontSize:number,fontFamily?:string,fontUrl?:string,contentInset?:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean,palette?:string}
 let editor:Editor|null=null
 let current:Payload|null=null
 let dirty=false
@@ -24,8 +24,16 @@ function theme(payload:Partial<Payload>){
  root.dataset.palette=palette.id
  if(payload.contentInset!==undefined)root.style.setProperty('--moji-content-inset',payload.contentInset+'px')
  root.style.setProperty('--moji-font-size',`${payload.fontSize||16}px`)
+ const family=payload.fontFamily?.trim()||''
+ root.style.setProperty('--moji-font-family',family?(/^(serif|sans-serif|monospace|system-ui)$/.test(family)?family:JSON.stringify(family))+',system-ui,sans-serif':'system-ui,"Microsoft YaHei",sans-serif')
+ let font=document.querySelector<HTMLStyleElement>('#moji-display-font');if(!font){font=document.createElement('style');font.id='moji-display-font';document.head.append(font)}
+ const url=payload.fontUrl||''
+ const face=/^https:\/\/appassets\.androidplatform\.net\/fonts\/[a-z0-9.-]+$/.test(url)?'@font-face{font-family:"Moji Display";src:url('+JSON.stringify(url)+');font-display:swap}':''
+ if(font.textContent!==face)font.textContent=face
+ if(face)root.style.setProperty('--moji-font-family','"Moji Display",system-ui,sans-serif')
+
  for(const [key,value]of Object.entries(c))root.style.setProperty('--moji-'+key.toLowerCase(),value)
- const tokens:Record<string,string>={'--tt-bg-color':c.Panel,'--tt-theme-text':c.Ink,'--tt-border-color':c.Line,'--tt-border-color-tint':c.Line,'--tt-sidebar-bg-color':c.Side,'--tt-scrollbar-color':c.ScrollThumb,'--tt-cursor-color':c.Accent,'--tt-selection-color':c.AccentLight,'--tt-card-bg-color':c.Raised,'--tt-card-border-color':c.Line,'--tt-toolbar-bg-color':c.Panel,'--tt-toolbar-border-color':c.Line,'--white':c.Panel,'--black':c.Panel}
+ const tokens:Record<string,string>={'--tt-bg-color':c.Panel,'--tt-theme-text':c.Ink,'--tt-border-color':c.Line,'--tt-border-color-tint':c.Line,'--tt-sidebar-bg-color':c.Side,'--tt-scrollbar-color':c.ScrollThumb,'--tt-cursor-color':c.Accent,'--tt-selection-color':c.Selection,'--tt-card-bg-color':c.Raised,'--tt-card-border-color':c.Line,'--tt-toolbar-bg-color':c.Panel,'--tt-toolbar-border-color':c.Line,'--white':c.Panel,'--black':c.Panel}
  for(const [key,value]of Object.entries(tokens))root.style.setProperty(key,value)
  const rgb=(hex:string)=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)).join(',')
  for(const mode of ['light','dark'])for(const [i,key]of [ [50,'Panel'],[100,'Soft'],[200,'Line'],[300,'Outline'],[400,'Sub'],[500,'Sub'],[600,'Sub'],[700,'Ink'],[800,'Ink'],[900,'Ink']] as const){root.style.setProperty(`--tt-gray-${mode}-${i}`,c[key]);root.style.setProperty(`--tt-gray-${mode}-a-${i}`,i<=300?`rgba(${rgb(c.Ink)},${i===50?.04:i===100?.06:i===200?.1:.18})`:c[key])}
@@ -38,7 +46,7 @@ document.addEventListener('focusin',()=>selection());
 function selection(){if(editor&&current){const name=selectedVariableName(editor);native({type:'selection',id:current.id,session:current.session,canConvert:!!name,selection:name?{...selectedRange(editor),name}:null})}}
 function activate(){if(editor){editor.setEditable(true,false);editor.view.dispatch(editor.state.tr)}}
 function deactivate(){if(editor?.view.dom.contains(document.activeElement)) (document.activeElement as HTMLElement)?.blur();editor?.commands.blur();if(editor){editor.setEditable(false,false);editor.view.dispatch(editor.state.tr)}}
-function configure(payload:Partial<Payload>){if(current){for(const key of ['theme','palette','fontSize','contentInset','shortcuts','defaults'] as const)if(payload[key]!==undefined)(current as any)[key]=payload[key]}theme(current||payload);selection()}
+function configure(payload:Partial<Payload>){if(current){for(const key of ['theme','palette','fontSize','fontFamily','fontUrl','contentInset','shortcuts','defaults'] as const)if(payload[key]!==undefined)(current as any)[key]=payload[key]}theme(current||payload);selection()}
 function action(name:string,value?:any){
  if(!editor||editor.isDestroyed)return false
  const field=!!document.activeElement?.closest('.moji-variable-content')

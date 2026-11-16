@@ -61,11 +61,11 @@ public partial class MainWindow : Window
         if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
-        if (kind == "edit") { var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
+        if (kind == "edit") { Ui.Theme(VM.State!.Preferences);var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
-    { editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    { if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();
@@ -73,14 +73,15 @@ public partial class MainWindow : Window
         {
             var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Style = (Style)FindResource("NavButton");
             var row = new DockPanel(); var count = Ui.Text(VM.State.LiveNotes.Count(n => n.NotebookId == book.Id && !n.Archived).ToString(), 10); notebookCounts[book.Id]=count;count.Foreground = Ui.Resource("Sub"); count.HorizontalAlignment = HorizontalAlignment.Right; DockPanel.SetDock(count, Dock.Right); row.Children.Add(count);
-            row.Children.Add(new NativeIcon { Tag=book.Id, Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = new SolidColorBrush(NotebookAppearance.Parse(book.Color)), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row; button.Background = VM.View == book.Id ? Ui.Resource("AccentLight") : Brushes.Transparent;
+            row.Children.Add(new NativeIcon { Tag=book.Id, Kind = NativeIcon.ForNotebook(book), Width = 22, Height = 22, Foreground = new SolidColorBrush(NotebookAppearance.Parse(book.Color)), Margin = new Thickness(0,0,13,0) }); row.Children.Add(Ui.Text(book.Name, 13)); button.Content = row;SetNavigationSelection(button,VM.View==book.Id);
             var menu = new ContextMenu(); menu.Items.Add(MenuItem("编辑记事本", () => NotebookDialog(book))); menu.Items.Add(MenuItem("删除记事本", () => DeleteNotebook(book))); AddOrderActions(menu,book); button.ContextMenu = menu;
             button.AllowDrop = true; button.DragOver += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; e.Effects = e.Data.GetDataPresent("MojiNote") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }; button.Drop += (_, e) => { if(e.Data.GetDataPresent("MojiNotebook"))return; var id = e.Data.GetData("MojiNote") as string; var note = VM.State.Notes.FirstOrDefault(n => n.Id == id); if (note != null && VM.State.Notebooks.First(b => b.Id == note.NotebookId).Mode == book.Mode) { VM.EditNote(note.Id, n => n with { NotebookId = book.Id }); Navigate(book.Id, note.Id); } }; AttachNotebookDrag(button,book,false);BooksPanel.Children.Add(button);
         }
-        HomeNav.Background = VM.View == "home" ? Ui.Resource("AccentLight") : Brushes.Transparent; AllNav.Background = VM.View == "all" ? Ui.Resource("AccentLight") : Brushes.Transparent; StarNav.Background = VM.View == "star" ? Ui.Resource("AccentLight") : Brushes.Transparent;
+        SetNavigationSelection(HomeNav,VM.View=="home");SetNavigationSelection(AllNav,VM.View=="all");SetNavigationSelection(StarNav,VM.View=="star");SetNavigationSelection(TrashNav,VM.View=="trash");SetNavigationSelection(ArchiveNav,VM.View=="archive");
         NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else if(VM.View=="trash")RenderTrash();else RenderWorkspace();
     }
+    private static void SetNavigationSelection(Button button,bool selected){button.Background=selected?Ui.Resource("AccentLight"):Brushes.Transparent;button.BorderThickness=new Thickness(3,0,0,0);button.BorderBrush=selected?Ui.Resource("Accent"):Brushes.Transparent;}
     private UIElement NavContent(string kind, string title, int? count = null)
     {
         var row = new DockPanel();
@@ -157,7 +158,10 @@ internal sealed class NoteRow(Note note) : INotifyPropertyChanged
 {
     public Note Note { get; private set; } = note;
     public string Title => Note.Title;
+    public bool IsSelecting {get;private set;}
+    public void SetSelecting(bool value){IsSelecting=value;PropertyChanged?.Invoke(this,new(nameof(IsSelecting)));}
     public bool IsPinned=>Note.Pinned;
+    public string PinIcon=>Note.Pinned?"PinFilled":"Pin";
     public string PinLabel=>Note.Pinned?"取消置顶":"置顶记录";
     public string Snippet => (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordTools.Plain(PromptVariables.Display(Note))).Truncate(82);
     public string Meta => RecordTools.Relative(Note.UpdatedAt);

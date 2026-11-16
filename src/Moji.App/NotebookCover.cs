@@ -17,7 +17,7 @@ public sealed class NativeIcon : FrameworkElement
         var size = Math.Min(ActualWidth,ActualHeight); dc.PushTransform(new TranslateTransform((ActualWidth-size)/2,(ActualHeight-size)/2));
         dc.PushTransform(new ScaleTransform(size/24,size/24));
         var pen = new Pen(brush, 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
-        dc.DrawGeometry(null, pen, Paths.GetValueOrDefault(Kind,Paths["Document"])); dc.Pop();
+        dc.DrawGeometry(Kind=="PinFilled"?brush:null, pen, Paths.GetValueOrDefault(Kind,Paths["Document"])); dc.Pop();
         dc.Pop();
     }
     public static string ForNotebook(Notebook book)=>IconPaths.Data.ContainsKey(book.Icon)?book.Icon:ForMode(book.Mode);

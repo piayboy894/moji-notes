@@ -1,5 +1,9 @@
 package app.moji.android.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -168,7 +172,7 @@ import java.util.zip.ZipOutputStream
         LazyColumn(Modifier.weight(1f).testTag("notebook-sidebar-list"),state=listState){
             item(key="navigation"){listOf(Triple("home","工作台",MojiIcons.Dashboard),Triple("all","全部记录",MojiIcons.Description),Triple("star","我的收藏",MojiIcons.StarOutline)).forEach{(id,title,icon)->NavigationDrawerItem(label={Text(title,style=MaterialTheme.typography.bodyMedium)},selected=s.view==id,onClick={vm.navigate(id);done()},icon={Icon(icon,null,Modifier.size(19.dp))},modifier=Modifier.padding(vertical=2.dp))}}
             item(key="notebooks-label"){Row(Modifier.padding(start=14.dp,top=20.dp),verticalAlignment=Alignment.CenterVertically){Text("我的记事本",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Tool(MojiIcons.Add,"新建记事本"){newBook();done()}}}
-            items(w.liveBooks,key={it.id}){book->ReorderableItem(reordering,key=book.id){dragging->NavigationDrawerItem(label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).testTag("sidebar-book-${book.id}").longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
+            items(w.liveBooks,key={it.id}){book->ReorderableItem(reordering,key=book.id){dragging->val lift by animateFloatAsState(if(dragging)1.025f else 1f,label="sidebar-lift");val elevation by animateDpAsState(if(dragging)10.dp else 0.dp,label="sidebar-shadow");NavigationDrawerItem(label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).graphicsLayer{scaleX=lift;scaleY=lift;shadowElevation=elevation.toPx();shape=RoundedCornerShape(12.dp)}.background(if(dragging)MaterialTheme.colorScheme.surface else Color.Transparent,RoundedCornerShape(12.dp)).testTag("sidebar-book-${book.id}").longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
         }
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }

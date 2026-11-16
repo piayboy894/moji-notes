@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
             "general" -> {
                 SectionTitle("通用设置")
                 ThemePicker(w.preferences,vm)
+                DisplayFontSetting(w.preferences,vm)
                 Text("编辑器字号 · ${w.preferences.fontSize.toInt()}", style = MaterialTheme.typography.labelLarge)
                 Slider(w.preferences.fontSize.toFloat(), { value -> vm.preferences { it.copy(fontSize = value.toInt().toDouble()) } }, valueRange = 11f..28f, steps = 16)
 

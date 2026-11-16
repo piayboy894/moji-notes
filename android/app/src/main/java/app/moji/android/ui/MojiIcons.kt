@@ -4,8 +4,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.*
 import androidx.compose.ui.unit.dp
 object MojiIcons {
-    private fun icon(name:String, data:String) = ImageVector.Builder(name,24.dp,24.dp,24f,24f).addPath(
-        pathData=PathParser().parsePathString(data).toNodes(), fill=null, stroke=SolidColor(Color.Black),
+    private fun icon(name:String, data:String,filled:Boolean=false) = ImageVector.Builder(name,24.dp,24.dp,24f,24f).addPath(
+        pathData=PathParser().parsePathString(data).toNodes(), fill=if(filled)SolidColor(Color.Black)else null, stroke=SolidColor(Color.Black),
         strokeLineWidth=1.8f, strokeLineCap=StrokeCap.Round, strokeLineJoin=StrokeJoin.Round).build()
     val Add by lazy { icon("Add","M0 0 M5 12h14 M0 0 M12 5v14") }
     val Archive by lazy { icon("Archive","M0 0 M3 3H21Q22 3 22 4V7Q22 8 21 8H3Q2 8 2 7V4Q2 3 3 3Z M0 0 M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8 M0 0 M10 12h4") }
@@ -50,6 +50,7 @@ object MojiIcons {
     val MoreHoriz by lazy { icon("MoreHoriz","M0 0 M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M0 0 M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M0 0 M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0") }
     val NorthEast by lazy { icon("NorthEast","M0 0 M7 7h10v10 M0 0 M7 17 17 7") }
     val OpenInNew by lazy { icon("OpenInNew","M0 0 M15 3h6v6 M0 0 M10 14 21 3 M0 0 M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6") }
+    val PushPinFilled by lazy { icon("PushPinFilled","M8 2h8a2 2 0 0 1 0 4v5l3 3v3H5v-3l3-3V6a2 2 0 0 1 0-4z M12 17v5",true) }
     val PushPin by lazy { icon("PushPin","M0 0 M12 17v5 M0 0 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z") }
     val Redo by lazy { icon("Redo","M0 0 m15 14 5-5-5-5 M0 0 M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13") }
     val Refresh by lazy { icon("Refresh","M0 0 M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8 M0 0 M21 3v5h-5 M0 0 M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16 M0 0 M8 16H3v5") }

@@ -65,6 +65,7 @@ public record Preferences
     public string LightPalette { get; init; } = "cloud";
     public string DarkPalette { get; init; } = "obsidian";
     public double FontSize { get; init; } = 15;
+    public string FontFamily { get; init; } = "";
     public bool LineNumbers { get; init; }
     public bool WordWrap { get; init; } = true;
     public bool AutoSync { get; init; }

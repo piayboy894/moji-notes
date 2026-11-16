@@ -22,6 +22,7 @@ public partial class MainWindow
             {
                 Heading("通用设置","");
                 RenderThemeSettings(content);
+                RenderFontSetting(content,dialog);
                 var size=new Slider{Minimum=11,Maximum=28,Value=state.Preferences.FontSize,TickFrequency=1,IsSnapToTickEnabled=true};var sizeLabel=Ui.Text("编辑器字号 · "+state.Preferences.FontSize,11);size.ValueChanged+=(_,_)=>{sizeLabel.Text="编辑器字号 · "+(int)size.Value;VM.Change(v=>v with{Preferences=v.Preferences with{FontSize=(int)size.Value}},"edit");};content.Children.Add(Ui.Spaced(sizeLabel,new Thickness(0,8,0,15)));content.Children.Add(size);
 
             }
