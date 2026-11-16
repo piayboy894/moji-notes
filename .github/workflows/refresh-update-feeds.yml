@@ -1,0 +1,35 @@
+name: Refresh public update feeds
+on:
+  workflow_dispatch:
+    inputs:
+      windows_tag:
+        description: Existing public Windows tag, or blank to skip
+        type: string
+        default: ''
+      android_tag:
+        description: Existing public Android tag, or blank to skip
+        type: string
+        default: ''
+permissions:
+  contents: write
+concurrency:
+  group: refresh-public-update-feeds
+  cancel-in-progress: false
+jobs:
+  feeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WINDOWS_TAG: ${{ inputs.windows_tag }}
+      ANDROID_TAG: ${{ inputs.android_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish only metadata for already-public verified packages
+        run: |
+          if [[ -n "$WINDOWS_TAG" ]]; then
+            python3 tools/update-feed.py --platform windows --tag "$WINDOWS_TAG" --publish
+          fi
+          if [[ -n "$ANDROID_TAG" ]]; then
+            python3 tools/update-feed.py --platform android --tag "$ANDROID_TAG" --publish
+          fi
