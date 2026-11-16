@@ -4,8 +4,8 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.4.1](https://github.com/piayboy894/moji-notes/releases/tag/v2.4.1)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
-- [Android 2.4.1](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.4.1)：固定发行密钥签名的 APK。
+- [Windows 2.5.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.5.0)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
+- [Android 2.5.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.5.0)：固定发行密钥签名的 APK。
 
 ## 编辑器
 
@@ -19,7 +19,7 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 - 本地自动保存、版本历史、收藏、置顶、归档、回收站、搜索和批量管理；回收站可一次清空全部已删除记录。
 - 标题中按 Enter 或 Tab 进入内容；两端复用同一编辑器实例，切换记录不再重新启动编辑器。
-- 自定义记事本名称、图标、纯色和渐变封面；浅色、深色、字号与自定义快捷键。
+- 自定义记事本名称、图标、纯色和渐变封面；封面不叠加深色遮罩。浅色、深色、字号与自定义快捷键。
 - 密码本默认可选择、复制文字，点击“编辑密码”后修改。无密码显示开关、TOTP 或密码健康检查。
 - TXT / Markdown 文件按文字导入，普通文本 / HTML 导出，全库存档和文本 ZIP；Windows 支持系统打印 / PDF。
 - Android 支持手机、平板、折叠屏、旋转、分屏、可调整窗口和桌面模式的布局。
@@ -55,4 +55,4 @@ Windows 标准包内含 .NET，启用官方单文件压缩，不裁剪 WPF 或�
 
 Android 拖动排序采用 [Reorderable 2.5.1](https://github.com/Calvin-LL/Reorderable)（Apache 2.0），许可随源码和 APK 的 assets/reorderable-LICENSE.txt 提供。
 
-外观提供三套浅色和三套深色主题，编辑器与原生界面共用 `assets/themes.json`。记录卡片右下角依次为创建副本与置顶，右键菜单也能创建副本。[设计批评、色卡与参考资料](docs/design/THEMES.md)。
+外观提供三套浅色和三套深色主题，编辑器与原生界面共用 `assets/themes.json`。记录卡片右下角仅保留置顶，创建副本放在菜单中。选中记录后可使用 Ctrl+C / Ctrl+X / Ctrl+V 复制、剪切和粘贴，多选后可长按拖进同类型记事本；输入框内仍执行普通文本操作。[设计批评、色卡与参考资料](docs/design/THEMES.md)。

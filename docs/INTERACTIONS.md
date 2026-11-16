@@ -15,3 +15,5 @@
 多选后可长按已选记录拖入侧栏。Windows 使用一组记录身份作为拖放数据；手机使用系统拖放和简洁数量标记，并展开侧栏。目标有匹配状态，落下时再次校验，正文不会接收记录拖放标识。放到原记事本不改变顺序或内容。
 
 构建使用 `[build-native]` 提交标记，两个平台只生成和测试产物。检查通过并审阅截图后，`.github/verified-delivery.json` 明确记录平台、构建 ID 和来源提交；工作流再调用独立的校验发布器，发布已经验证的原始包。客户端读取的公开版本清单仍由正式发布自动维护。
+
+验证截图：[电脑端拿起原本子](screenshots/windows-notebook-drag.png)、[手机多选拖入记事本](screenshots/android-record-drag.png)、[不兼容时整组保留](screenshots/android-incompatible-record-drop.png)。截图使用测试数据。

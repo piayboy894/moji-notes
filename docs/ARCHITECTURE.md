@@ -49,7 +49,7 @@ Android 继续沿用固定发行证书，后续 APK 可覆盖升级。系统 Web
 
 2.2.0 继续保持一个 WPF 记录界面和原生正文宿主，记录切换不重建标题、工具条或重新挂载浏览器。永久的填充容器与固定高度变量操作行避免异步载入期间 LastChildFill 拉伸按钮。字体、主题和快捷键仅在配置变化时发送；主题更新复用颜色画刷，导航计数只更新对应文本。
 
-密码自定义字段是 Note / NoteVersion 内的有序 id/name/value 列表，参与历史、存档、搜索、清除；新存档 schema 2，读取旧 schema 1。记事本顺序是 notebooks 数组的顺序，移动只重排活跃槽位，不改变已删除记事本位置或记录归属。Android 采用 Reorderable 2.5.1 的 LazyGrid / LazyList，提供长按拖动和自动滚动；Windows 使用独立的数据格式和插入指示线。回收站有自己的多选卡片网格，Windows 的矩形选择映射实际项边界、保留 Ctrl / Shift 选择并支持边缘滚动，不挂载正文编辑器。
+密码自定义字段是 Note / NoteVersion 内的有序 id/name/value 列表，参与历史、存档、搜索、清除；新存档 schema 2，读取旧 schema 1。记事本顺序是 notebooks 数组的顺序，移动只重排活跃槽位，不改变已删除记事本位置或记录归属。Android 采用 Reorderable 2.5.1 的 LazyGrid / LazyList，拖动时使用临时顺序、取消恢复、落下后才写入；Windows 将同一个原控件放在顶层 Canvas，原位留空，以固定布局槽位判断落点，并按绘制帧移动。两端没有截图虚影或插入指示线。详见 [拖拽与记录操作](INTERACTIONS.md)。回收站有自己的多选卡片网格，Windows 的矩形选择映射实际项边界、保留 Ctrl / Shift 选择并支持边缘滚动，不挂载正文编辑器。
 
 Windows 应用内控件和弹层统一由 Themes/Controls.xaml 绘制，保留 WPF 原有键盘和无障碍行为。WebView2 右键命令经 ContextMenuRequested 映射到同一菜单样式；复制、粘贴等仍由原生引擎执行，撤销/重做调用共享编辑器。文件选择、保存和打印保留系统标准窗口。通知使用不抢焦点的原生 Popup，定位到当前活动窗口，避免被 WebView 的 HWND 或模态窗口遮挡。Windows 声明 PerMonitorV2 DPI，并使用支持时的 DWM 标题栏色彩。
 
