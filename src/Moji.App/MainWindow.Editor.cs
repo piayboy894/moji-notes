@@ -26,7 +26,7 @@ public partial class MainWindow
     {
         if(workspaceRoot!=null){if(recordSearch!.Text!=VM.Search){refreshingNotes=true;recordSearch.Text=VM.Search;refreshingNotes=false;}workspaceRoot.ColumnDefinitions[0].Width=new GridLength(focusMode?0:285);Body.Content=workspaceRoot;listHeading!.Text=ViewTitle();UpdateTrashActions();RefreshNoteList();return;}
         var root=new Grid();workspaceRoot=root;root.ColumnDefinitions.Add(new(){Width=new GridLength(focusMode?0:285)});root.ColumnDefinitions.Add(new(){Width=new GridLength(5)});root.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
-        var left=new DockPanel{Background=Ui.Resource("Side")};root.Children.Add(left);
+        var left=new DockPanel{Background=Ui.Resource("Side")};left.SetResourceReference(Panel.BackgroundProperty,"Side");root.Children.Add(left);
         var header=new StackPanel{Margin=new Thickness(18,22,18,12)};var title=new DockPanel();var options=Ui.Icon("More",()=>{},"更多操作");options.Name="ListOptions";options.Click+=(_,_)=>{options.ContextMenu=BuildListMenu();options.ContextMenu.PlacementTarget=options;options.ContextMenu.IsOpen=true;};DockPanel.SetDock(options,Dock.Right);title.Children.Add(options);listHeading=Ui.Text(ViewTitle(),18,null,true);title.Children.Add(listHeading);header.Children.Add(title);
         var search=Ui.Input(VM.Search,"搜索记录");recordSearch=search;search.Name="RecordSearch";search.Padding=new Thickness(34,10,12,10);search.FontSize=13;search.TextChanged+=(_,_)=>{if(refreshingNotes)return;VM.Search=search.Text;RefreshNoteList();};var searchRow=new Grid{Margin=new Thickness(0,16,0,10)};searchRow.Children.Add(search);searchRow.Children.Add(new NativeIcon{Kind="Search",Width=17,Height=17,Foreground=Ui.Resource("Sub"),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12,0,0,0),IsHitTestVisible=false});header.Children.Add(searchRow);
         var sort=new ComboBox{Name="RecordSort",ItemsSource=new[]{"最近编辑","创建时间","名称顺序"},SelectedIndex=VM.Sort=="created"?1:VM.Sort=="name"?2:0,FontSize=12,MinWidth=120};sort.SelectionChanged+=(_,_)=>{VM.Sort=sort.SelectedIndex==1?"created":sort.SelectedIndex==2?"name":"updated";RefreshNoteList();};
@@ -74,7 +74,7 @@ public partial class MainWindow
     private void EnsureRecordSurface()
     {
         if(recordSurface!=null)return;
-        recordSurface=new DockPanel{Background=Ui.Resource("Panel"),Name="RecordSurface"};var top=new DockPanel{Margin=new Thickness(28,15,22,15),Height=44};
+        recordSurface=new DockPanel{Background=Ui.Resource("Panel"),Name="RecordSurface"};recordSurface.SetResourceReference(Panel.BackgroundProperty,"Panel");var top=new DockPanel{Margin=new Thickness(28,15,22,15),Height=44};
         recordFavorite=Ui.Icon("Star",()=>{if(CurrentNote() is {} n){VM.EditNote(n.Id,v=>v with{Favorite=!v.Favorite});recordFavorite!.Background=CurrentNote()!.Favorite?Ui.Resource("AccentLight"):Brushes.Transparent;}},"收藏");
         var more=Ui.Icon("More",()=>{},"更多操作");more.Click+=(_,_)=>{if(CurrentNote() is {} n){more.ContextMenu=NoteMenu(n.Id);more.ContextMenu.PlacementTarget=more;more.ContextMenu.IsOpen=true;}};
         var actions=Ui.Row(recordFavorite,Ui.Icon("Restore",()=>{if(CurrentNote() is {} n)HistoryDialog(n.Id);},"版本历史"),Ui.Icon("Focus",ToggleFocus,"专注模式"),more);DockPanel.SetDock(actions,Dock.Right);top.Children.Add(actions);recordBook=Ui.Text("",11);recordBook.TextWrapping=TextWrapping.NoWrap;recordBook.TextTrimming=TextTrimming.CharacterEllipsis;top.Children.Add(recordBook);DockPanel.SetDock(top,Dock.Top);recordSurface.Children.Add(top);
@@ -83,7 +83,7 @@ public partial class MainWindow
         recordTitle.TextChanged+=(_,_)=>{if(!refreshingTitle&&recordEpoch==VM.WorkspaceEpoch&&recordContext==VM.SelectedId&&VM.State?.Notes.Any(n=>n.Id==recordContext&&n.PurgedAt==null)==true)VM.EditNote(recordContext,n=>n with{Title=recordTitle.Text.Replace("\r\n"," ").Replace('\r',' ').Replace('\n',' ')});};DockPanel.SetDock(recordTitle,Dock.Top);recordSurface.Children.Add(recordTitle);
         convertVariable=Ui.Button("转化为变量",()=>{if(sharedEditor!=null)_ = sharedEditor.Command("convertVariable");});convertVariable.Name="ConvertVariable";convertVariable.Focusable=false;convertVariable.IsEnabled=false;convertVariable.FontSize=12;convertVariable.Padding=new Thickness(12,7,12,7);convertVariable.MinHeight=34;
         variableActions=Ui.Row(convertVariable);variableActions.Height=42;variableActions.VerticalAlignment=VerticalAlignment.Top;variableActions.Margin=new Thickness(28,0,28,8);DockPanel.SetDock(variableActions,Dock.Top);recordSurface.Children.Add(variableActions);
-        recordBody=new Grid{Background=Ui.Resource("Panel"),Name="RecordBodyHost"};recordSurface.Children.Add(recordBody);
+        recordBody=new Grid{Background=Ui.Resource("Panel"),Name="RecordBodyHost"};recordBody.SetResourceReference(Panel.BackgroundProperty,"Panel");recordSurface.Children.Add(recordBody);
     }
     private void UpdateRecordChrome(Note note,Notebook book)
     {
