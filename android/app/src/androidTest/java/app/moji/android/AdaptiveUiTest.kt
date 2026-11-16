@@ -349,7 +349,7 @@ class AdaptiveUiTest {
         try{
             resize(1440,1080,160);ready();compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady();js("window.MojiEditor.editor.commands.insertContent('Display font retained')");compose.waitUntil(5000){compose.activity.vm.selectedNote()!!.content.contains("Display font retained")};val native=webView();val note=compose.activity.vm.selectedNote()!!
             val font=InstalledFonts.all.firstOrNull{it.id=="serif"&&it.index==0}?:InstalledFonts.all.first{it.id.isNotEmpty()&&it.file!=null&&it.index==0};assertNotNull(InstalledFonts.typeface(font.id))
-            compose.onNode(hasContentDescription("偏好设置") and hasAnyAncestor(hasTestTag("wide-navigation"))).performClick();compose.onNodeWithTag("choose-display-font").performScrollTo().performClick();compose.onNodeWithTag("font-search").performTextInput(font.name);hideKeyboard();compose.onNodeWithTag("installed-font-list").performScrollToKey(font.id);compose.onNodeWithTag("font-${font.id}").performClick();screenshot("33-font-picker");compose.onNodeWithTag("apply-display-font").performClick()
+            compose.onNode(hasContentDescription("偏好设置") and hasAnyAncestor(hasTestTag("wide-navigation"))).performClick();compose.onNodeWithTag("choose-display-font").performScrollTo().performClick();compose.onNodeWithTag("font-search").performTextInput(font.name);hideKeyboard();compose.onNodeWithTag("installed-font-list").performScrollToKey(font.id);compose.onNodeWithTag("font-${font.id}").performClick();screenshot("33-font-picker");compose.onNodeWithTag("apply-display-font").assertIsEnabled().performClick()
             compose.waitUntil(10000){compose.activity.vm.state.value.workspace!!.preferences.fontFamily==font.id&&js("getComputedStyle(document.querySelector('.tiptap')).fontFamily").contains("Moji Display")};js("window.__fontLoaded=false;document.fonts.load('16px \"Moji Display\"').then(fonts=>window.__fontLoaded=fonts.length>0)");compose.waitUntil(10000){js("window.__fontLoaded")=="true"};assertSame(native,webView());assertEquals("Display font retained",jsText());assertEquals(note.content,compose.activity.vm.selectedNote()!!.content)
             compose.onNodeWithContentDescription("关闭").performClick();webReady();runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertEquals(font.id,compose.activity.vm.state.value.workspace!!.preferences.fontFamily)
         }finally{shell("wm size reset");shell("wm density reset")}
@@ -397,13 +397,14 @@ class AdaptiveUiTest {
         }finally{shell("wm size reset");shell("wm density reset")}
     }
     private fun recordBounds(tag:String):android.graphics.Rect?{
-        fun find(node:android.view.accessibility.AccessibilityNodeInfo?):android.graphics.Rect?{
-            if(node==null)return null
-            if(node.viewIdResourceName==tag&&node.isVisibleToUser)return android.graphics.Rect().also{node.getBoundsInScreen(it)}
-            for(i in 0 until node.childCount){val found=find(node.getChild(i));if(found!=null)return found}
-            return null
-        }
-        return find(InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow)
+        // Accessibility caches the closed drawer while a platform drag is active.
+        // Read the actual Compose layout; input/drop still go through Android.
+        val root=compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val bounds=compose.onAllNodesWithTag(tag).fetchSemanticsNodes().map{it.boundsInRoot}.firstOrNull{
+            it.left>=0&&it.right>0&&it.right<=root.width&&it.top>=0&&it.bottom<=root.height
+        }?:return null
+        val offset=IntArray(2);compose.activityRule.scenario.onActivity{it.window.decorView.getLocationOnScreen(offset)}
+        return android.graphics.Rect(bounds.left.toInt()+offset[0],bounds.top.toInt()+offset[1],bounds.right.toInt()+offset[0],bounds.bottom.toInt()+offset[1])
     }
     private fun nativeRecordDrag(source:String,target:String){
         // Selection inserts a toolbar and moves the cards. Do not inject a native
@@ -423,13 +424,14 @@ class AdaptiveUiTest {
         try{
             input(android.view.MotionEvent.ACTION_DOWN,origin.centerX(),origin.centerY());Thread.sleep(850)
             compose.waitUntil(8000){true in events}
+            assertEquals("Platform drag must retain both selected records",2,compose.activity.vm.recordsForCommand().size)
             compose.waitUntil(8000){recordBounds(target)!=null};val goal=recordBounds(target)!!
             input(android.view.MotionEvent.ACTION_MOVE,goal.centerX(),goal.centerY());Thread.sleep(250);screenshot("38-record-drag-target")
             input(android.view.MotionEvent.ACTION_UP,goal.centerX(),goal.centerY());compose.waitForIdle()
         }catch(failure:Throwable){
             println("Record drag failed: origin=$origin events=$events selected=${compose.activity.vm.recordsForCommand()} sourceNow=${recordBounds(source)} targetNow=${recordBounds(target)}")
             runCatching{screenshot("failure-record-drag")};compose.onRoot().printToLog("MojiRecordDrag");throw failure
-        }finally{input(android.view.MotionEvent.ACTION_UP,1,1);observer.cancel()}
+        }finally{runCatching{input(android.view.MotionEvent.ACTION_UP,1,1)};observer.cancel()}
     }
     @Test fun selectedRecordsLongPressDragIntoSidebarAndRejectWrongMode(){
         try{

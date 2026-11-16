@@ -32,6 +32,7 @@ import app.moji.android.data.Notebook
 
 internal const val RecordDragMime = "application/vnd.moji.records-drag"
 private fun DragAndDropEvent.recordToken():String? = toAndroidDragEvent().localState as? String
+private class RecordPointerSession { var transferred=false }
 
 @Composable internal fun Modifier.recordDragRoot(vm:MojiViewModel):Modifier {
     val target=remember(vm){object:DragAndDropTarget{
@@ -57,6 +58,7 @@ private fun DragAndDropEvent.recordToken():String? = toAndroidDragEvent().localS
 @Composable internal fun Modifier.recordDragSource(vm:MojiViewModel,ids:Set<String>,click:()->Unit,stillSelected:()->Boolean):Modifier {
     val latestClick by rememberUpdatedState(click)
     val latestSelected by rememberUpdatedState(stillSelected)
+    val gesture=remember{RecordPointerSession()}
     val background=MaterialTheme.colorScheme.primary;val foreground=MaterialTheme.colorScheme.onPrimary
     val measurer=rememberTextMeasurer();val text=measurer.measure(AnnotatedString("${ids.size} 条记录"),MaterialTheme.typography.labelLarge.copy(color=foreground))
     // The platform source owns long press. A second clickable would consume its down
@@ -65,6 +67,7 @@ private fun DragAndDropEvent.recordToken():String? = toAndroidDragEvent().localS
         awaitEachGesture{
             val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
             if(down.isConsumed)return@awaitEachGesture
+            gesture.transferred=false
             var moved=false
             while(true){
                 val event=awaitPointerEvent(PointerEventPass.Final)
@@ -72,7 +75,7 @@ private fun DragAndDropEvent.recordToken():String? = toAndroidDragEvent().localS
                 if(event.changes.size!=1||(pointer.position-down.position).getDistance()>viewConfiguration.touchSlop||
                     (event.type==PointerEventType.Move&&pointer.isConsumed))moved=true
                 if(!pointer.pressed){
-                    if(event.type==PointerEventType.Release&&!moved&&pointer.uptimeMillis-down.uptimeMillis<viewConfiguration.longPressTimeoutMillis&&latestSelected())latestClick()
+                    if(!gesture.transferred&&event.type==PointerEventType.Release&&!moved&&pointer.uptimeMillis-down.uptimeMillis<viewConfiguration.longPressTimeoutMillis&&latestSelected())latestClick()
                     break
                 }
             }
@@ -84,6 +87,9 @@ private fun DragAndDropEvent.recordToken():String? = toAndroidDragEvent().localS
         drawText(text,topLeft=Offset((size.width-text.size.width)/2,(size.height-text.size.height)/2))
     },transferData={
         vm.beginRecordDrag(ids)?.let{token->
+            // Starting platform drag cancels the original touch stream. That
+            // cancellation must never become a short tap and deselect the source.
+            gesture.transferred=true
             val clip=ClipData(ClipDescription("墨记记录",arrayOf(RecordDragMime)),ClipData.Item(token))
             DragAndDropTransferData(clipData=clip,localState=token)
         }

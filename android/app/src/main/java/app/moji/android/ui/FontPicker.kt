@@ -21,7 +21,10 @@ import kotlinx.coroutines.withContext
     OutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth().testTag("choose-display-font")){Text(InstalledFonts.resolve(p.fontFamily).name,Modifier.weight(1f));Icon(MojiIcons.ExpandMore,null)}
     if(open){var query by remember{mutableStateOf("")};var selected by remember{mutableStateOf(p.fontFamily)}
         val fonts by produceState<List<DisplayFont>>(emptyList()){value=withContext(Dispatchers.IO){InstalledFonts.all}}
-        PanelDialog("显示字体",{open=false},width=560,actions={TextButton(onClick={open=false}){Text("取消")};Button(onClick={vm.preferences{it.copy(fontFamily=selected)};open=false},enabled=fonts.isNotEmpty(),modifier=Modifier.testTag("apply-display-font")){Text("应用")}}){
+        // Refresh the dialog footer along with asynchronous font loading and
+        // selection; the separately composed list must not leave a stale action.
+        val canApply=fonts.isNotEmpty();val chosenFont=selected
+        PanelDialog("显示字体",{open=false},width=560,actions={TextButton(onClick={open=false}){Text("取消")};Button(onClick={vm.preferences{it.copy(fontFamily=chosenFont)};open=false},enabled=canApply,modifier=Modifier.testTag("apply-display-font")){Text("应用")}}){
             OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().testTag("font-search"),singleLine=true,placeholder={Text("搜索字体")},leadingIcon={Icon(MojiIcons.Search,null)})
             LazyColumn(Modifier.fillMaxWidth().height(340.dp).testTag("installed-font-list"),verticalArrangement=Arrangement.spacedBy(7.dp)){
                 items(fonts.filter{it.name.contains(query,true)||it.id.contains(query,true)},key={it.id}){font->
