@@ -22,7 +22,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import app.moji.android.*
@@ -31,6 +30,7 @@ import kotlinx.coroutines.*
 
 private data class SearchHit(val id:String,val bookId:String,val title:String,val detail:String,val mode:NoteMode,val archived:Boolean)
 private data class SearchMatches(val hits:List<SearchHit> = emptyList(),val ready:Boolean=false)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable fun GlobalSearchField(s:AppState,vm:MojiViewModel,request:Int,active:Boolean,chosen:()->Unit,visible:(Boolean)->Unit){
     val w=s.workspace?:return
     var input by remember{mutableStateOf(TextFieldValue(""))};var expanded by remember{mutableStateOf(false)};var selected by remember{mutableIntStateOf(0)};var openWhenReady by remember{mutableStateOf(false)};var consumed by remember{mutableIntStateOf(0)}
@@ -54,7 +54,7 @@ private data class SearchMatches(val hits:List<SearchHit> = emptyList(),val read
     DisposableEffect(Unit){onDispose{visibility(false)}}
     LaunchedEffect(selected,expanded,results,menuScroll.viewportSize){if(expanded&&menuScroll.viewportSize>0){val row=with(density){64.dp.toPx()};val padding=with(density){8.dp.toPx()};val top=padding+selected*row;val bottom=top+row;val target=if(top<menuScroll.value)top else if(bottom>menuScroll.value+menuScroll.viewportSize)bottom-menuScroll.viewportSize else menuScroll.value.toFloat();menuScroll.animateScrollTo(target.toInt().coerceAtLeast(0))}}
     BackHandler(enabled=expanded&&active){dismiss()}
-    Box(Modifier.fillMaxWidth()){
+    ExposedDropdownMenuBox(expanded=expanded&&active,onExpandedChange={expanded=it},modifier=Modifier.fillMaxWidth()){
         OutlinedTextField(input,{input=it;expanded=true;openWhenReady=false},modifier=Modifier.fillMaxWidth().testTag("global-search").focusRequester(focus).onFocusChanged{if(it.isFocused)expanded=true;else expanded=false}.onPreviewKeyEvent{event->
             if(event.type!=KeyEventType.KeyDown)false else when(event.key){
                 Key.DirectionDown->{if(!expanded){expanded=true;selected=0}else selected=(selected+1).coerceAtMost((results.size-1).coerceAtLeast(0));true}
@@ -63,8 +63,8 @@ private data class SearchMatches(val hits:List<SearchHit> = emptyList(),val read
                 Key.Escape->{dismiss();true}
                 else->false
             }
-        },singleLine=true,textStyle=MaterialTheme.typography.bodyMedium,shape=RoundedCornerShape(10.dp),placeholder={Text("搜索",style=MaterialTheme.typography.bodyMedium)},leadingIcon={Icon(MojiIcons.Search,null,Modifier.size(20.dp))},trailingIcon=if(input.text.isNotEmpty())({IconButton(onClick={input=TextFieldValue("");focus.requestFocus();expanded=true}){Icon(MojiIcons.Close,"清除搜索",Modifier.size(18.dp))}})else null,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={submit()}))
-        DropdownMenu(expanded=expanded&&active,onDismissRequest={expanded=false},properties=PopupProperties(focusable=false),scrollState=menuScroll,modifier=Modifier.widthIn(min=220.dp,max=340.dp).heightIn(max=340.dp).testTag("global-search-results")){
+        }.menuAnchor(MenuAnchorType.PrimaryEditable),singleLine=true,textStyle=MaterialTheme.typography.bodyMedium,shape=RoundedCornerShape(10.dp),placeholder={Text("搜索",style=MaterialTheme.typography.bodyMedium)},leadingIcon={Icon(MojiIcons.Search,null,Modifier.size(20.dp))},trailingIcon=if(input.text.isNotEmpty())({IconButton(onClick={input=TextFieldValue("");focus.requestFocus();expanded=true}){Icon(MojiIcons.Close,"清除搜索",Modifier.size(18.dp))}})else null,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={submit()}))
+        ExposedDropdownMenu(expanded=expanded&&active,onDismissRequest={expanded=false},matchTextFieldWidth=false,scrollState=menuScroll,modifier=Modifier.widthIn(min=220.dp,max=340.dp).heightIn(max=340.dp).testTag("global-search-results")){
             if(!matches.ready)Box(Modifier.width(250.dp).height(48.dp),contentAlignment=androidx.compose.ui.Alignment.Center){CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)}
             results.forEachIndexed{index,hit->val marked=index==selected
                 DropdownMenuItem(onClick={open(hit)},modifier=Modifier.height(64.dp).background(if(marked)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else Color.Transparent,RoundedCornerShape(7.dp)).testTag("global-result-${hit.id}"),text={Column(verticalArrangement=Arrangement.spacedBy(5.dp)){Text(hit.title,maxLines=1,overflow=TextOverflow.Ellipsis,color=if(marked)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface);Text(hit.detail,style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis,color=if(marked)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant)}},leadingIcon={Icon(modeIcon(hit.mode),null,Modifier.size(19.dp),tint=if(marked)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurfaceVariant)})
