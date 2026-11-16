@@ -59,7 +59,7 @@ import java.util.zip.ZipOutputStream
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable fun MojiRoot(vm: MojiViewModel, activity: MainActivity) {
     val s by vm.state.collectAsStateWithLifecycle(); val posture by activity.posture.collectAsStateWithLifecycle()
-    var cloudSaves by remember { mutableStateOf(false) }; var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) }
+    var cloudSaves by remember { mutableStateOf(false) }; var settings by remember { mutableStateOf<String?>(null) }; var bookDialog by remember { mutableStateOf<Notebook?>(null) }; var newBook by remember { mutableStateOf(false) }; var globalSearch by remember { mutableStateOf(false) };var searchRequest by remember{mutableIntStateOf(0)};var searchTarget by remember{mutableStateOf("")};var searchOwner by remember{mutableStateOf<String?>(null)}
     var exportTarget by remember { mutableStateOf<Note?>(null) }
     var plainBackup by remember { mutableStateOf<SyncPayload?>(null) }
     var backup by remember { mutableStateOf<Envelope?>(null) }; var backupPassword by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf("") }; var restoring by remember { mutableStateOf(false) }
@@ -67,7 +67,7 @@ import java.util.zip.ZipOutputStream
     val canCreateRecord = s.workspace?.liveBooks?.any { it.id == s.view } == true
     fun addRecord() { if (canCreateRecord) vm.addNote(s.view) }
     val keyboardFocus=remember{FocusRequester()}
-    LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves,globalSearch){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
+    LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
     val layers = remember { FeedbackLayers(snackbar) }
     val density = LocalDensity.current
@@ -98,7 +98,7 @@ import java.util.zip.ZipOutputStream
     val dark = s.workspace?.preferences?.theme == "dark" || ((s.workspace?.preferences?.theme ?: "system") == "system" && isSystemInDarkTheme())
     SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }; val selected = s.workspace?.notes?.firstOrNull { it.id == s.selectedId }; activity.secure((selected != null && s.workspace?.notebooks?.firstOrNull { it.id == selected.notebookId }?.mode == NoteMode.Password) || settings != null || backup != null) }
     MojiTheme(s.workspace?.preferences ?: Preferences()) {
-        CompositionLocalProvider(LocalFeedbackLayers provides layers, LocalEditorObscured provides (drawerVisible || layers.dialogOpen)) {
+        CompositionLocalProvider(LocalFeedbackLayers provides layers, LocalEditorObscured provides (drawerVisible || layers.dialogOpen || searchOwner!=null)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize().focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
                 if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || backup != null) false
@@ -111,14 +111,15 @@ import java.util.zip.ZipOutputStream
                 }
             }.focusable()) {
                 if (s.workspace == null) { StartupScreen(s, vm); ForegroundFeedback(modifier = Modifier.align(Alignment.BottomCenter)); return@BoxWithConstraints }
-                val wide = maxWidth >= 1100.dp && maxHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && maxHeight >= 480.dp
+                val stableHeight=maxHeight+with(density){(WindowInsets.ime.getBottom(density)-WindowInsets.navigationBars.getBottom(density)).coerceAtLeast(0).toDp()};val wide = maxWidth >= 1100.dp && stableHeight >= 480.dp; val rail = !wide && maxWidth >= 720.dp && stableHeight >= 480.dp
+                LaunchedEffect(globalSearch,wide){if(globalSearch){searchTarget=if(wide)"wide"else"drawer";if(!wide)drawer.open();searchRequest++;globalSearch=false}}
                 val navigationWidth = if (wide) 224.dp else if (rail) 72.dp else 0.dp
-                val twoPane = maxWidth - navigationWidth >= 680.dp && maxHeight >= 480.dp
+                val twoPane = maxWidth - navigationWidth >= 680.dp && stableHeight >= 480.dp
                 val active = s.workspace?.notes?.firstOrNull { it.id == s.selectedId && it.purgedAt == null }
                 BackHandler(enabled = active != null || s.view != "home") { if (active != null) vm.clearSelection() else vm.navigate("home") }
-                ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !wide && !rail, drawerContent = { ModalDrawerSheet(Modifier.width(280.dp), drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s, vm, { scope.launch { drawer.close() } }, { settings = "general" }, { newBook = true }, { globalSearch = true }, { cloudSaves = true }) } }) {
+                ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !wide && !rail, drawerContent = { ModalDrawerSheet(Modifier.width(280.dp), drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s,vm,done={scope.launch{drawer.close()}},settings={settings="general"},newBook={newBook=true},sync={cloudSaves=true},searchRequest=if(searchTarget=="drawer")searchRequest else 0,searchActive=drawerVisible&&!wide,searchVisible={if(it)searchOwner="drawer"else if(searchOwner=="drawer")searchOwner=null}) } }) {
                     Row(Modifier.fillMaxSize().semantics { stateDescription = if (wide && twoPane && s.view != "home") "三栏布局" else if (twoPane && s.view != "home") "双栏布局" else "单栏布局" }.testTag("adaptive-layout")) {
-                        if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s, vm, {}, { settings = "general" }, { newBook = true }, { globalSearch = true }, { cloudSaves = true }) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
+                        if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s,vm,done={},settings={settings="general"},newBook={newBook=true},sync={cloudSaves=true},searchRequest=if(searchTarget=="wide")searchRequest else 0,searchActive=true,searchVisible={if(it)searchOwner="wide"else if(searchOwner=="wide")searchOwner=null}) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         else if (rail) { CompactNavigation(s, vm, { settings = "general" }, { scope.launch { drawer.open() } }); VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         Scaffold(Modifier.weight(1f).fillMaxHeight(), containerColor = MaterialTheme.colorScheme.background,
                             topBar = { if (twoPane || active == null || s.view == "home") TopAppBar(title = { Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines = 1) }, navigationIcon = { if (!wide && !rail) Tool(MojiIcons.Menu, "打开导航") { scope.launch { drawer.open() } } }, actions = { if (s.saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp) else if (s.saveError) Icon(MojiIcons.ErrorOutline, "保存失败", tint = MaterialTheme.colorScheme.error) ; Tool(MojiIcons.Search, "全局搜索") { globalSearch = true }; if (twoPane && canCreateRecord) Tool(MojiIcons.Add, "新建记录") { addRecord() } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
@@ -150,7 +151,6 @@ import java.util.zip.ZipOutputStream
                 if (settings != null) SettingsDialog(s, vm, activity, settings!!, { settings = null }, ::exportBackup, ::exportTexts, { importFile.launch(arrayOf("text/*", "application/octet-stream", "application/json", "*/*")) }, { settings = null; cloudSaves = true })
                 if (cloudSaves) CloudSavesDialog(vm, s, { cloudSaves = false }, { cloudSaves = false; settings = "sync" })
                 if (newBook || bookDialog != null) NotebookDialog(bookDialog, vm) { newBook = false; bookDialog = null }
-                if (globalSearch) GlobalSearch(s, vm) { globalSearch = false }
                 if (s.textImport != null) PanelDialog("导入到记事本",vm::cancelImport) {
                     s.workspace!!.liveBooks.filter{it.mode!=NoteMode.Password}.forEach{book->TextButton(onClick={vm.importText(s.textImport!!.name,s.textImport!!.text,book.id,s.textImport!!.markdown)}){Text(book.name)}}
                     if(s.workspace!!.liveBooks.none{it.mode!=NoteMode.Password})Text("请先新建文本或提示词记事本")
@@ -163,19 +163,21 @@ import java.util.zip.ZipOutputStream
     }
 }
 @Composable private fun EmptyEditor(modifier: Modifier) { Box(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.MenuBook, null, Modifier.size(53.dp), tint = MaterialTheme.colorScheme.outline); Text("选择记录", color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
-@Composable private fun SideNavigation(s: AppState, vm: MojiViewModel, done: () -> Unit, settings: () -> Unit, newBook: () -> Unit, search: () -> Unit, sync: () -> Unit) {
+@Composable private fun SideNavigation(s: AppState, vm: MojiViewModel, done: () -> Unit, settings: () -> Unit, newBook: () -> Unit, sync: () -> Unit,searchRequest:Int,searchActive:Boolean,searchVisible:(Boolean)->Unit) {
     val w = s.workspace ?: return
     val listState=rememberLazyListState();val haptic=LocalHapticFeedback.current
     val reordering=rememberReorderableLazyListState(listState){from,to->vm.reorderBook(from.key.toString(),to.key.toString(),from.index<to.index)}
     Column(Modifier.fillMaxHeight().padding(16.dp,24.dp)) {
-        Brand();Spacer(Modifier.height(24.dp));OutlinedButton(onClick={search();done()},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(11.dp)){Icon(MojiIcons.Search,null,Modifier.size(17.dp));Spacer(Modifier.width(9.dp));Text("搜索",style=MaterialTheme.typography.labelSmall)};Spacer(Modifier.height(17.dp))
+        Brand();Spacer(Modifier.height(24.dp));GlobalSearchField(s,vm,searchRequest,searchActive,done,searchVisible);Spacer(Modifier.height(17.dp))
         LazyColumn(Modifier.weight(1f).testTag("notebook-sidebar-list"),state=listState){
             item(key="navigation"){listOf(Triple("home","工作台",MojiIcons.Dashboard),Triple("all","全部记录",MojiIcons.Description),Triple("star","我的收藏",MojiIcons.StarOutline)).forEach{(id,title,icon)->NavigationDrawerItem(colors=solidNavigationColors(),label={Text(title,style=MaterialTheme.typography.bodyMedium)},selected=s.view==id,onClick={vm.navigate(id);done()},icon={Icon(icon,null,Modifier.size(19.dp))},modifier=Modifier.padding(vertical=2.dp))}}
             item(key="notebooks-label"){Row(Modifier.padding(start=14.dp,top=20.dp),verticalAlignment=Alignment.CenterVertically){Text("我的记事本",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Tool(MojiIcons.Add,"新建记事本"){newBook();done()}}}
             items(w.liveBooks,key={it.id}){book->ReorderableItem(reordering,key=book.id){dragging->val lift by animateFloatAsState(if(dragging)1.025f else 1f,label="sidebar-lift");val elevation by animateDpAsState(if(dragging)10.dp else 0.dp,label="sidebar-shadow");NavigationDrawerItem(colors=solidNavigationColors(),label={Text(book.name,style=MaterialTheme.typography.bodyMedium,maxLines=1)},selected=s.view==book.id,onClick={vm.navigate(book.id);done()},icon={Icon(notebookIcon(book),null,Modifier.size(19.dp),tint=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else color(book.color))},badge={Text("${w.liveNotes.count{it.notebookId==book.id&&!it.archived}}",style=MaterialTheme.typography.labelSmall,color=if(s.view==book.id)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.padding(vertical=2.dp).graphicsLayer{scaleX=lift;scaleY=lift;shadowElevation=elevation.toPx();shape=RoundedCornerShape(12.dp)}.background(if(dragging)MaterialTheme.colorScheme.surface else Color.Transparent,RoundedCornerShape(12.dp)).testTag("sidebar-book-${book.id}").longPressDraggableHandle(onDragStarted={haptic.performHapticFeedback(HapticFeedbackType.LongPress)}))}}
-        }
+            item(key="management"){
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(colors=solidNavigationColors(),label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }
+            }
+        }
         HorizontalDivider(Modifier.padding(top=12.dp,bottom=8.dp),color=MaterialTheme.colorScheme.outlineVariant)
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
             TextButton(onClick={sync();done()},modifier=Modifier.weight(1f).height(44.dp).testTag("cloud-saves-entry"),contentPadding=PaddingValues(8.dp,6.dp)){Icon(MojiIcons.CloudDone,null,Modifier.size(20.dp));Spacer(Modifier.width(8.dp));Text("云存档",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurface)}

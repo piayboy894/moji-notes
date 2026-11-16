@@ -104,13 +104,3 @@ import java.util.Locale
         if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-@Composable fun GlobalSearch(s: AppState, vm: MojiViewModel, close: () -> Unit) {
-    var query by remember { mutableStateOf("") }; val w = s.workspace ?: return
-    val results = w.liveNotes.filter { n -> Records.matches(n, query, w.notebooks.first { it.id == n.notebookId }.mode) }.sortedByDescending { it.updatedAt }.take(50)
-    PanelDialog("搜索", close, width = 700) {
-        Field("搜索记录", query) { query = it }
-        Text(if (query.isBlank()) "最近记录" else "${results.size} 条结果", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
-        results.forEach { note -> Surface(onClick = { vm.navigate(note.notebookId); vm.select(note.id); close() }, color = androidx.compose.ui.graphics.Color.Transparent) { Row(Modifier.fillMaxWidth().padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) { Icon(modeIcon(w.notebooks.first { it.id == note.notebookId }.mode), null); Column(Modifier.weight(1f)) { Text(note.title, maxLines = 1); Text(w.notebooks.first { it.id == note.notebookId }.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(MojiIcons.NorthEast, null, Modifier.size(17.dp)) } } }
-        if (results.isEmpty()) Text("没有找到相关记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}

@@ -355,4 +355,18 @@ class AdaptiveUiTest {
         }finally{shell("wm size reset");shell("wm density reset")}
     }
 
+    @Test fun inlineGlobalSearchKeepsTypingInPlaceOpensOtherNotebooksAndWorksInThePhoneDrawer(){
+        val original=shell("settings get secure show_ime_with_hard_keyboard").trim()
+        try{
+            shell("settings put secure show_ime_with_hard_keyboard 1");resize(1440,700,160);ready(false)
+            val currentBook=Notebook(name="Inbox",mode=NoteMode.Text);val current=Note(notebookId=currentBook.id,title="Current",content="Current body");val textBook=Notebook(name="Research",mode=NoteMode.Text);val passwordBook=Notebook(name="Accounts",mode=NoteMode.Password);val text=Note(notebookId=textBook.id,title="Needle plan",content="Needle body");val password=Note(notebookId=passwordBook.id,title="Needle service",username="demo",password="must-not-appear-in-results")
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(currentBook,textBook,passwordBook),notes=listOf(current,text,password))))};compose.activityRule.scenario.onActivity{it.vm.navigate(currentBook.id);it.vm.select(current.id)};webReady();val native=webView()
+            val search=compose.onNode(hasTestTag("global-search") and hasAnyAncestor(hasTestTag("wide-navigation")));search.performClick();search.performTextInput("Needle")
+            compose.waitUntil(10000){compose.onAllNodesWithTag("global-result-${text.id}").fetchSemanticsNodes().size==1};compose.onAllNodes(isDialog()).assertCountEquals(0);compose.onAllNodes(hasText("must-not-appear-in-results") and hasAnyAncestor(hasTestTag("global-search-results"))).assertCountEquals(0);compose.onNodeWithTag("wide-navigation").assertIsDisplayed();assertEquals(current.id,compose.activity.vm.selectedNote()!!.id);screenshot("35-global-search-wide")
+            compose.onNodeWithTag("global-result-${text.id}").performClick();webReady();assertEquals(textBook.id,compose.activity.vm.state.value.view);assertEquals(text.id,compose.activity.vm.selectedNote()!!.id);assertEquals("Needle body",jsText());assertSame(native,webView())
+            search.performClick();search.performTextReplacement("no-such-search-result");compose.waitUntil(10000){compose.onAllNodesWithText("没有找到记录").fetchSemanticsNodes().isNotEmpty()};compose.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()};compose.waitForIdle();compose.onAllNodesWithTag("global-search-results").assertCountEquals(0);assertEquals(text.id,compose.activity.vm.selectedNote()!!.id)
+            hideKeyboard();resize(720,1600,320);compose.activityRule.scenario.onActivity{it.vm.navigate("home")};compose.onNodeWithContentDescription("全局搜索").performClick();compose.waitUntil(10000){compose.onAllNodesWithTag("global-search-results").fetchSemanticsNodes().isNotEmpty()};compose.onAllNodes(isDialog()).assertCountEquals(0);screenshot("36-global-search-phone")
+        }finally{shell(if(original=="null")"settings delete secure show_ime_with_hard_keyboard"else"settings put secure show_ime_with_hard_keyboard $original");shell("wm size reset");shell("wm density reset")}
+    }
+
 }

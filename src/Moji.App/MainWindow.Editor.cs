@@ -123,7 +123,7 @@ public partial class MainWindow
     }
     private void WarmEditor()
     {
-        if(cachedEditor==null){cachedEditor=new SharedEditorView(VM);cachedEditor.ActionRequested+=action=>{switch(action){case "retry":if(CurrentNote() is {} retry)RenderEditor(retry);break;case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":SearchDialog();break;case "save":if(CurrentNote() is {} current)VM.Checkpoint(current.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};recordBody?.Children.Clear();}
+        if(cachedEditor==null){cachedEditor=new SharedEditorView(VM);cachedEditor.ActionRequested+=action=>{switch(action){case "retry":if(CurrentNote() is {} retry)RenderEditor(retry);break;case "new":AddNote();break;case "cloud":ShowCloudSaves();break;case "search":FocusGlobalSearch();break;case "save":if(CurrentNote() is {} current)VM.Checkpoint(current.Id);_ = VM.SaveAsync();break;case "focus":ToggleFocus();break;case "image-error":Toast("图片无法插入，请换一张图片重试");break;}};recordBody?.Children.Clear();}
         ParkEditor();_ = cachedEditor.Preload();
     }
     private void ParkEditor(){if(cachedEditor==null||cachedEditor.Parent==EditorWarmHost)return;if(cachedEditor.Parent is Panel parent)parent.Children.Remove(cachedEditor);EditorWarmHost.Children.Add(cachedEditor);}

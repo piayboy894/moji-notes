@@ -37,7 +37,7 @@ public partial class MainWindow : Window
     private readonly UpdateService updater = new();
     public MainWindow(WorkspaceViewModel? viewModel = null, bool smoke = false)
     {
-        InitializeComponent(); SourceInitialized+=(_,_)=>DesktopNativeUi.ApplyCaption(this); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
+        InitializeComponent(); SourceInitialized+=(_,_)=>DesktopNativeUi.ApplyCaption(this); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;GlobalSearchInput.ContextMenu=DesktopNativeUi.TextMenu(GlobalSearchInput);
         VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = VM.SaveStatus; };
         TrashNav.ContextMenu=BuildTrashNavigationMenu();TrashNav.ContextMenuOpening+=(_,_)=>TrashNav.ContextMenu=BuildTrashNavigationMenu();
         Microsoft.Win32.SystemEvents.UserPreferenceChanged+=SystemThemeChanged;
@@ -45,7 +45,7 @@ public partial class MainWindow : Window
         toastTimer.Tick += (_, _) => { ToastPopup.IsOpen=false; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Closed += (_,_) => { Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false; sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        Closed += (_,_) => { Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
         VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
@@ -58,14 +58,14 @@ public partial class MainWindow : Window
     }
     private void DataChanged(string kind)
     {
-        if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
+        if(kind is "open" or "replace"){CloseGlobalSearch();cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { Ui.Theme(VM.State!.Preferences);var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
-    { if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    { CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();
@@ -131,9 +131,10 @@ public partial class MainWindow : Window
     private void KeyDownHandler(object sender, KeyEventArgs e)
     {
         if (!VM.IsUnlocked || e.IsRepeat) return;
+        if(e.Key==Key.Escape&&SearchDropdownOpen){e.Handled=true;CloseGlobalSearch();return;}
         var action = Shortcuts.Resolve(VM.State!.Preferences, KeyChord(e));
         switch (action) {
-            case "search": e.Handled = true; SearchDialog(); break;
+            case "search": e.Handled = true; FocusGlobalSearch(); break;
             case "new": if (CanCreateRecord) { e.Handled = true; AddNote(); } break;
             case "cloud": e.Handled = true; ShowCloudSaves(); break;
             case "save": e.Handled = true; if (CurrentNote() is { } n) { VM.Checkpoint(n.Id); _ = VM.SaveAsync(); Toast("当前版本已保存"); } break;
@@ -149,7 +150,6 @@ public partial class MainWindow : Window
     private void StarClick(object sender, RoutedEventArgs e) => Navigate("star");
     private void ArchiveClick(object sender, RoutedEventArgs e) => Navigate("archive");
     private void TrashClick(object sender, RoutedEventArgs e) => Navigate("trash");
-    private void SearchClick(object sender, RoutedEventArgs e) => SearchDialog();
     private void NewNotebookClick(object sender, RoutedEventArgs e) => NotebookDialog();
     private void NewNoteClick(object sender, RoutedEventArgs e) => AddNote();
     private void SettingsClick(object sender, RoutedEventArgs e) => SettingsDialog();
