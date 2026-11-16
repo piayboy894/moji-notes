@@ -11,6 +11,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.moji.android.data.*
 import app.moji.android.sync.GameSaves
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -404,13 +406,30 @@ class AdaptiveUiTest {
         return find(InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow)
     }
     private fun nativeRecordDrag(source:String,target:String){
+        // Selection inserts a toolbar and moves the cards. Do not inject a native
+        // down into the old accessibility bounds before Compose finishes layout.
+        compose.waitForIdle()
         val origin=recordBounds(source)?:error("Record drag source has no screen bounds")
+        val automation=InstrumentationRegistry.getInstrumentation().uiAutomation
+        val downTime=android.os.SystemClock.uptimeMillis()
+        val events=java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
+        lateinit var observer:kotlinx.coroutines.Job
+        compose.activityRule.scenario.onActivity{a->observer=a.lifecycleScope.launch{a.vm.recordDrags.collect{events.add(it)}}}
+        fun input(action:Int,x:Int,y:Int){
+            val event=android.view.MotionEvent.obtain(downTime,android.os.SystemClock.uptimeMillis(),action,x.toFloat(),y.toFloat(),0)
+            event.source=android.view.InputDevice.SOURCE_TOUCHSCREEN
+            try{check(automation.injectInputEvent(event,true)){"Native drag input rejected: $action"}}finally{event.recycle()}
+        }
         try{
-            shell("input touchscreen motionevent DOWN ${origin.centerX()} ${origin.centerY()}");Thread.sleep(850)
+            input(android.view.MotionEvent.ACTION_DOWN,origin.centerX(),origin.centerY());Thread.sleep(850)
+            compose.waitUntil(8000){true in events}
             compose.waitUntil(8000){recordBounds(target)!=null};val goal=recordBounds(target)!!
-            shell("input touchscreen motionevent MOVE ${goal.centerX()} ${goal.centerY()}");Thread.sleep(250);screenshot("38-record-drag-target")
-            shell("input touchscreen motionevent UP ${goal.centerX()} ${goal.centerY()}");compose.waitForIdle()
-        }finally{shell("input touchscreen motionevent UP 1 1")}
+            input(android.view.MotionEvent.ACTION_MOVE,goal.centerX(),goal.centerY());Thread.sleep(250);screenshot("38-record-drag-target")
+            input(android.view.MotionEvent.ACTION_UP,goal.centerX(),goal.centerY());compose.waitForIdle()
+        }catch(failure:Throwable){
+            println("Record drag failed: origin=$origin events=$events selected=${compose.activity.vm.recordsForCommand()} sourceNow=${recordBounds(source)} targetNow=${recordBounds(target)}")
+            runCatching{screenshot("failure-record-drag")};compose.onRoot().printToLog("MojiRecordDrag");throw failure
+        }finally{input(android.view.MotionEvent.ACTION_UP,1,1);observer.cancel()}
     }
     @Test fun selectedRecordsLongPressDragIntoSidebarAndRejectWrongMode(){
         try{
