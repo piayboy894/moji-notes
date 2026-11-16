@@ -176,8 +176,11 @@ import java.util.zip.ZipOutputStream
         }
         HorizontalDivider(Modifier.padding(vertical = 11.dp), color = MaterialTheme.colorScheme.outlineVariant)
         listOf(Triple("archive", "归档", MojiIcons.Archive), Triple("trash", "回收站", MojiIcons.DeleteOutline)).forEach { (id, title, icon) -> NavigationDrawerItem(colors=solidNavigationColors(),label = { Text(title, style = MaterialTheme.typography.labelLarge) }, selected = s.view == id, onClick = { vm.navigate(id); done() }, icon = { Icon(icon, null, Modifier.size(18.dp)) }) }
-        Surface(Modifier.fillMaxWidth().padding(vertical = 15.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) { Icon(MojiIcons.CloudDone, null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary); Text("本机自动保存", style = MaterialTheme.typography.labelSmall) }; TextButton(onClick = { sync(); done() }, contentPadding = PaddingValues(0.dp)) { Text("云存档", style = MaterialTheme.typography.labelSmall) } } }
-        Row(verticalAlignment = Alignment.CenterVertically) { Tool(MojiIcons.Settings, "偏好设置") { settings(); done() } }
+        HorizontalDivider(Modifier.padding(top=12.dp,bottom=8.dp),color=MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            TextButton(onClick={sync();done()},modifier=Modifier.weight(1f).height(44.dp).testTag("cloud-saves-entry"),contentPadding=PaddingValues(8.dp,6.dp)){Icon(MojiIcons.CloudDone,null,Modifier.size(20.dp));Spacer(Modifier.width(8.dp));Text("云存档",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurface)}
+            TextButton(onClick={settings();done()},modifier=Modifier.weight(1f).height(44.dp),contentPadding=PaddingValues(8.dp,6.dp)){Icon(MojiIcons.Settings,"偏好设置",Modifier.size(20.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.width(8.dp));Text("设置",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurface)}
+        }
     }
 }
 @Composable private fun CompactNavigation(s: AppState, vm: MojiViewModel, settings: () -> Unit, menu: () -> Unit) {

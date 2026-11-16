@@ -27,11 +27,13 @@
 
 ## 2.4.0 选中、拖动与字体细节
 
-记录卡片用独立正文底色、边缘与间距分隔；当前记录与当前导航使用低饱和的纯色填充、文字和图标反白，不使用侧竖线。选中摘要和时间也使用经核算的浅色，置顶的实心图钉在深色卡片上反转为浅色按钮；未选中时保留笔记本自定义图标色。三个浅色主题采用克制的灰蓝、铜棕与青绿，不使用高饱和紫色。文字选择使用独立 `Selection` 色，不再共用容器的 `AccentLight`，Windows 选择高亮不透明，文字对高亮至少 4.5:1。
+记录卡片用独立正文底色、边缘与间距分隔；当前记录与当前导航使用低饱和的纯色填充、文字和图标反白，不使用侧竖线。选中摘要和时间也使用经核算的浅色，置顶的实心图钉在深色卡片上反转为浅色按钮；未选中时保留笔记本自定义图标色。三个浅色主题采用克制的灰蓝、铜棕与青绿，不使用高饱和紫色。文字选择使用独立 `Selection` 色，不再共用容器的 `AccentLight`，Windows 选择高亮不透明，并显式使用 WPF 的正文下层选区渲染，避免默认 Adorner 在不透明时盖住字形；原生验证同时检查实际字形像素。文字对高亮至少 4.5:1。
 
 置顶后由空心变为实心图钉，并显示强调色底和“取消置顶”名称，鼠标经过时仍保留已置顶状态。删除记录列表标题旁的重复更多菜单，记录操作保留在卡片、右键及正文菜单。原无状态勾号改为“选择”：显示复选框、选中数量、全选、删除和取消，未选择时禁用删除；勾选不切换正文，取消回到原记录，普通状态不显示批量删除。
 
 Windows 拖动记事本提供随指针移动的抬起预览、相邻项让位和落位缓动，取消时复位；只在实际放下后写入顺序，遵循系统关闭动画的偏好。工作台和侧栏共用顺序与动画规则。Android 在现有可重排组件的放置动画上补齐缩放与阴影，长按触发，并保留原有触觉反馈。
+
+侧栏底部把“云存档”和“设置”作为同级操作并排放在同一行，按钮等高、图标与文字居中对齐；移除独立云存档卡片、嵌套文字按钮、重复本机保存说明及箭头，减少固定页脚占用的垂直空间。
 
 “显示字体”读取本机可用字体，提供搜索、原字形预览、应用和系统默认。Windows 使用 WPF 的系统字体列表；Android 读取系统字体配置及公开 SystemFonts API 可访问的字体（系统未向应用开放的字体无法枚举）。选择同时作用于原生界面和正文，代码块仍保持等宽字体；不重建编辑器，不写进正文或云端存档。字体未安装或不可读时回退系统默认。Android 通过只允许字体目录清单的本地资源处理器向编辑器提供字体，不开放任意文件路径，不附带整套字体增加包体。
 
@@ -45,3 +47,5 @@ Windows 拖动记事本提供随指针移动的抬起预览、相邻项让位和
 - [Atlassian — Color palette](https://atlassian.design/foundations/color/color-palette/) 与 [Elevation](https://atlassian.design/foundations/elevation/)：参考浅深模式采用不同色阶映射，以及深色用更亮浮层表达前后关系。
 - [Material — Color roles](https://m3.material.io/styles/color/the-color-system/)：将共享语义色映射至 Compose 各 Surface Container 与 on-color，避免默认组件残留另一套色调。
 - [W3C — Understanding Contrast Minimum](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html)：普通文字 4.5:1、较大文字 3:1 的阈值，作为可读性下限而不是审美结论。
+
+- [.NET WPF — 选择渲染默认值](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationFramework/System/AppContextDefaultValues.cs) 与 [TextBoxLine 字形与选区渲染](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationFramework/MS/Internal/documents/TextBoxLine.cs)：显式关闭默认 Adorner 覆盖层，让高亮先绘制、字形随后绘制，支持清楚的不透明选择背景。

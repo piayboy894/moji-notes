@@ -6,6 +6,8 @@ namespace Moji.App;
 public partial class App : Application
 {
     public static Version CurrentVersion { get { var v = typeof(App).Assembly.GetName().Version!; return new(v.Major, v.Minor, v.Build); } }
+    // Render selection underneath glyphs so an opaque highlight keeps text readable.
+    public App()=>AppContext.SetSwitch("Switch.System.Windows.Controls.Text.UseAdornerForTextboxSelectionRendering",false);
     private Mutex? instance;
     protected override async void OnStartup(StartupEventArgs e)
     {

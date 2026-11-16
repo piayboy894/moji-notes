@@ -102,7 +102,6 @@ public partial class MainWindow : Window
         SetNavContent(StarNav,"Star","我的收藏",VM.State.LiveNotes.Count(n=>n.Favorite&&!n.Archived));
         SetNavContent(TrashNav,"Trash","回收站",VM.State.Notes.Count(n=>n.DeletedAt!=null&&n.PurgedAt==null));
         var counts=VM.State.LiveNotes.Where(n=>!n.Archived).GroupBy(n=>n.NotebookId).ToDictionary(g=>g.Key,g=>g.Count());foreach(var (id,label)in notebookCounts){var count=counts.GetValueOrDefault(id).ToString();if(label.Text!=count)label.Text=count;}
-        SyncButton.Content = "云存档  ↗";
         SaveText.Text = VM.SaveStatus;
     }
     private bool CanCreateRecord => VM.State?.LiveBooks.Any(b => b.Id == VM.View) == true;

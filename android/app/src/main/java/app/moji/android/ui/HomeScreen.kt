@@ -73,6 +73,7 @@ import app.moji.android.data.*
 @Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit) {
     val w = s.workspace ?: return; val notes = vm.filtered()
     var selected by remember(s.view) { mutableStateOf(emptySet<String>()) }; var selecting by remember(s.view){mutableStateOf(false)}; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
+    val visibleIds=notes.map{it.id}.toSet();LaunchedEffect(visibleIds){selected=selected.intersect(visibleIds)}
     Column(modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

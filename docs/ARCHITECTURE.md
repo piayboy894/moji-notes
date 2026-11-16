@@ -58,3 +58,7 @@ Windows 应用内控件和弹层统一由 Themes/Controls.xaml 绘制，保留 W
 `assets/themes.json` 是原生与编辑器的唯一语义色表：.NET Core 内嵌读取，Android assets 初始化，编辑器由 Vite 编译同份 JSON。主题模式与浅深配色 ID 分开保存。WPF 共用带绑定的不可冻结画刷，Compose 显式映射所有层级色，WebView 接收配色 ID 并在启动脚本先设置原生提供的正文底色。颜色变化不写正文、不清空撤销、不重建浏览器。
 
 置顶属于单条记录的组织状态，改变 pinned / revision，不改变正文编辑时间或历史；卡片内按钮只重排列表且保留正文选择。副本和右键入口共用实现，保留正文、变量、自定义属性，重置记录身份、历史与置顶状态。
+
+显示字体保存在本机 `Preferences.FontFamily`，不进入 `SyncPayload`。Windows 枚举 `Fonts.SystemFontFamilies` 并通过动态 AppFont 资源更新现有窗口和浮层；Android 解析系统字体配置和公开 SystemFonts，原生 Typeface 与编辑器本地字体资源共用选择。未知字体回退系统默认，不修改正文。
+
+Windows 在 App 构造时关闭 `Switch.System.Windows.Controls.Text.UseAdornerForTextboxSelectionRendering`，选区改为在字形下方绘制；否则 SelectionOpacity=1 会覆盖选中文字。原生验证在实际焦点与全选后检查选区中的字形像素。侧栏页脚使用并排的云存档和设置，记录多选是明确的临时状态，不改变当前正文；安卓删除 / 恢复 / 清除其他记录只清理由操作涉及的当前记录选择。
