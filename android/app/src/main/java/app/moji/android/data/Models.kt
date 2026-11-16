@@ -38,7 +38,7 @@ val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls
     }
 }
 @Serializable data class Preferences(
-    val theme: String = "system", val fontSize: Double = 15.0, val lineNumbers: Boolean = false,
+    val theme: String = "system", val lightPalette:String="cloud", val darkPalette:String="obsidian", val fontSize: Double = 15.0, val lineNumbers: Boolean = false,
     val wordWrap: Boolean = true, val autoSync: Boolean = false,
     val editorView: String = "edit", val shortcuts: Map<String, String> = emptyMap()
 )

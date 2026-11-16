@@ -51,7 +51,7 @@ import kotlinx.coroutines.delay
             }
             Box{Tool(MojiIcons.MoreHoriz,"更多操作"){more=true};DropdownMenu(more,{more=false}){
                 if(note.deletedAt==null){
-                    DropdownMenuItem(text={Text(if(note.pinned)"取消置顶" else "置顶记录")},onClick={vm.edit(note.id){it.copy(pinned=!it.pinned)};more=false})
+                    DropdownMenuItem(text={Text(if(note.pinned)"取消置顶" else "置顶记录")},onClick={vm.togglePin(note.id);more=false})
                     DropdownMenuItem(text={Text("创建副本")},onClick={vm.duplicate(note);more=false})
                     DropdownMenuItem(text={Text(if(note.archived)"取消归档" else "归档记录")},onClick={vm.edit(note.id){it.copy(archived=!it.archived)};vm.clearSelection();more=false})
                     DropdownMenuItem(text={Text("移动到记事本")},onClick={move=true;more=false})

@@ -4,8 +4,8 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.2.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.2.0)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
-- [Android 2.2.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.2.0)：固定发行密钥签名的 APK。
+- [Windows 2.3.0](https://github.com/piayboy894/moji-notes/releases/tag/v2.3.0)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
+- [Android 2.3.0](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.3.0)：固定发行密钥签名的 APK。
 
 ## 编辑器
 
@@ -54,3 +54,5 @@ Windows 标准包内含 .NET，启用官方单文件压缩，不裁剪 WPF 或�
 2.2.0 增加密码记录自定义属性、统一的手动记事本顺序，以及独立的回收站卡片网格。电脑支持拖动框选，手机支持复选框多选。提示词填写区随段落自然换行，正文与标题对齐。新存档 schema 2 保护新增属性，继续读取 schema 1；交换新存档前请同时升级手机和电脑。
 
 Android 拖动排序采用 [Reorderable 2.5.1](https://github.com/Calvin-LL/Reorderable)（Apache 2.0），许可随源码和 APK 的 assets/reorderable-LICENSE.txt 提供。
+
+外观提供三套浅色和三套深色主题，编辑器与原生界面共用 `assets/themes.json`。记录卡片右下角依次为创建副本与置顶，右键菜单也能创建副本。[设计批评、色卡与参考资料](docs/design/THEMES.md)。

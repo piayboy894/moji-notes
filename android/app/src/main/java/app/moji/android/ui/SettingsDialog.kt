@@ -22,8 +22,7 @@ import kotlinx.coroutines.launch
         when (tab) {
             "general" -> {
                 SectionTitle("通用设置")
-                Text("外观", style = MaterialTheme.typography.labelLarge)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("light" to "浅色", "dark" to "深色", "system" to "跟随系统").forEach { (id, title) -> FilterChip(w.preferences.theme == id, { vm.preferences { it.copy(theme = id) } }, label = { Text(title) }) } }
+                ThemePicker(w.preferences,vm)
                 Text("编辑器字号 · ${w.preferences.fontSize.toInt()}", style = MaterialTheme.typography.labelLarge)
                 Slider(w.preferences.fontSize.toFloat(), { value -> vm.preferences { it.copy(fontSize = value.toInt().toDouble()) } }, valueRange = 11f..28f, steps = 16)
 

@@ -84,6 +84,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     fun background() { viewModelScope.launch { try { flush() } catch (_: Exception) { message("保存失败，请导出备份") } } }
     fun foreground() { }
     fun navigate(view: String) { mutable.update { it.copy(view = view, selectedId = null, editingCredentialId = null, search = "") }; touch() }
+    fun togglePin(id:String){mutate{w->w.copy(notes=w.notes.map{n->if(n.id==id&&n.deletedAt==null&&n.purgedAt==null)n.copy(pinned=!n.pinned,revision=uid())else n})}}
     fun select(id: String) { mutable.update { it.copy(selectedId = id, editingCredentialId = if (it.selectedId == id) it.editingCredentialId else null) }; touch() }
     fun clearSelection() { mutable.update { it.copy(selectedId = null, editingCredentialId = null) } }
     fun search(value: String) { mutable.update { it.copy(search = value) }; touch() }
@@ -107,7 +108,10 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     fun trash(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = now())) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) }; message("已移到回收站") }
     fun restore(ids: Set<String>) { mutate { w -> val books = w.notes.filter { it.id in ids }.map { it.notebookId }.toSet(); w.copy(notebooks = w.notebooks.map { b -> if (b.id in books && b.deletedAt != null) b.copy(deletedAt = null, updatedAt = now(), revision = uid()) else b }, notes = w.notes.map { n -> if (n.id in ids) n.edited(n.copy(deletedAt = null)) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) }; message("记录已恢复") }
     fun purge(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.copy(title = "", content = "", username = "", password = "", url = "", otp = "", tags = emptyList(), variables = emptyList(), fields=emptyList(), history = emptyList(), deletedAt = n.deletedAt ?: now(), purgedAt = now(), revision = uid(), updatedAt = now()) else n }) }; mutable.update { it.copy(selectedId = null, editingCredentialId = null) } }
-    fun duplicate(note: Note) { val copy = note.copy(id = uid(), title = "${note.title} · 副本", createdAt = now(), updatedAt = now(), revision = uid(), history = emptyList()); mutate { it.copy(notes = listOf(copy) + it.notes) }; mutable.update { it.copy(view = copy.notebookId, selectedId = copy.id) } }
+    fun duplicate(note:Note){
+        val w=mutable.value.workspace?:return;val current=w.liveNotes.firstOrNull{it.id==note.id}?:return;val names=w.liveNotes.filter{it.notebookId==current.notebookId}.map{it.title}.toSet();var title="${current.title} · 副本";var index=2;while(title in names){title="${current.title} · 副本 ${index++}"}
+        val copy=current.copy(id=uid(),title=title,pinned=false,favorite=false,archived=false,createdAt=now(),updatedAt=now(),revision=uid(),history=emptyList());mutate{it.copy(notes=listOf(copy)+it.notes)};mutable.update{it.copy(view=copy.notebookId,selectedId=copy.id,editingCredentialId=null)}
+    }
     fun checkpoint(id: String) { mutate { w -> w.copy(notes = w.notes.map { if (it.id == id) it.copy(history = (listOf(it.snapshot()) + it.history).take(40), revision = uid(), updatedAt = now()) else it }) }; message("当前版本已保存") }
     fun restoreVersion(id: String, h: NoteVersion) { edit(id, true) { it.copy(title = h.title, content = h.content, username = h.username, password = h.password, url = h.url, otp = h.otp, tags = h.tags, variables = h.variables,fields=h.fields) }; mutable.update{it.copy(editorGeneration=it.editorGeneration+1)}; message("历史版本已恢复") }
     fun preferences(change: (Preferences) -> Preferences) = mutate { it.copy(preferences = change(it.preferences)) }

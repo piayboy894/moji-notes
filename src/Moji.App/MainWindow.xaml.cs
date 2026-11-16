@@ -39,14 +39,17 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); SourceInitialized+=(_,_)=>DesktopNativeUi.ApplyCaption(this); VM = viewModel ?? new(); VM.DataChanged += DataChanged; VM.Notice += Toast;
         VM.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(VM.SaveStatus)) SaveText.Text = VM.SaveStatus; };
+        TrashNav.ContextMenu=BuildTrashNavigationMenu();TrashNav.ContextMenuOpening+=(_,_)=>TrashNav.ContextMenu=BuildTrashNavigationMenu();
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged+=SystemThemeChanged;
         ToastPopup.PlacementTarget=Root;ToastPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new CustomPopupPlacement(new Point((target.Width-popup.Width)/2,Math.Max(0,target.Height-popup.Height-24)),PopupPrimaryAxis.Vertical)];
         toastTimer.Tick += (_, _) => { ToastPopup.IsOpen=false; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Closed += (_,_) => { ClearSecretClipboard();ToastPopup.IsOpen=false; sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        Closed += (_,_) => { Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false; sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
         VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
+    private void SystemThemeChanged(object sender,Microsoft.Win32.UserPreferenceChangedEventArgs e){Dispatcher.BeginInvoke(()=>{if(!IsLoaded||VM.State?.Preferences.Theme!="system")return;Ui.Theme(VM.State.Preferences);if(cachedEditor!=null)_=cachedEditor.RefreshAppearance();if(VM.View=="home")RenderDashboard();});}
     private void SessionTick()
     {
         if (!VM.IsUnlocked) return;
@@ -57,7 +60,7 @@ public partial class MainWindow : Window
     {
         if(kind is "open" or "replace"){cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
-        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences.Theme); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
+        { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
         RefreshShell();
     }
@@ -65,7 +68,7 @@ public partial class MainWindow : Window
     { editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
-        if (VM.State == null) return; Ui.Theme(VM.State.Preferences.Theme); UpdateStats();
+        if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();
         BooksPanel.Children.Clear();notebookCounts.Clear(); foreach (var book in VM.State.LiveBooks)
         {
             var button = Ui.Button("", () => {if(!draggingNotebook)Navigate(book.Id);}); button.Style = (Style)FindResource("NavButton");
@@ -154,6 +157,8 @@ internal sealed class NoteRow(Note note) : INotifyPropertyChanged
 {
     public Note Note { get; private set; } = note;
     public string Title => Note.Title;
+    public bool IsPinned=>Note.Pinned;
+    public string PinLabel=>Note.Pinned?"取消置顶":"置顶记录";
     public string Snippet => (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordTools.Plain(PromptVariables.Display(Note))).Truncate(82);
     public string Meta => RecordTools.Relative(Note.UpdatedAt);
     public event PropertyChangedEventHandler? PropertyChanged;

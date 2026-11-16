@@ -31,7 +31,7 @@ class MainActivity : FragmentActivity() {
     private var copiedSecret: String? = null
     private val screenOff = object : BroadcastReceiver() { override fun onReceive(context: Context?, intent: Intent?) { if (intent?.action == Intent.ACTION_SCREEN_OFF) { clearSecretClipboard(); vm.background() } } }
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); enableEdgeToEdge()
+        super.onCreate(savedInstanceState); app.moji.android.data.ThemeCatalog.initialize(this); enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         lifecycleScope.launch { WindowInfoTracker.getOrCreate(this@MainActivity).windowLayoutInfo(this@MainActivity).collect { info -> val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull(); posture.value = fold?.let { WindowPosture(if (it.orientation == FoldingFeature.Orientation.VERTICAL) it.bounds.left else null, if (it.orientation == FoldingFeature.Orientation.HORIZONTAL) it.bounds.top else null, it.bounds.width(), it.bounds.height(), it.isSeparating) } ?: WindowPosture() } }
         receive(intent); setContent { MojiRoot(vm, this) }

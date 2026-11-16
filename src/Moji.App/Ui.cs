@@ -7,7 +7,7 @@ internal static class Ui
 {
     public static Brush Brush(string value) => (Brush)new BrushConverter().ConvertFromString(value)!;
     public static Brush Resource(string key) => (Brush)Application.Current.FindResource(key);
-    public static TextBlock Text(string text, double size = 13, string? color = null, bool bold = false) { var block=new TextBlock { Text=text, FontSize=size, FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal, TextWrapping=TextWrapping.Wrap, VerticalAlignment=VerticalAlignment.Center };if(color==null)block.SetResourceReference(TextBlock.ForegroundProperty,"Ink");else block.Foreground=Brush(color);return block; }
+    public static TextBlock Text(string text, double size = 13, string? color = null, bool bold = false) { var block=new TextBlock { Text=text, FontSize=size, FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal, TextWrapping=TextWrapping.Wrap, VerticalAlignment=VerticalAlignment.Center };if(color==null||!color.StartsWith("#"))block.SetResourceReference(TextBlock.ForegroundProperty,color??"Ink");else block.Foreground=Brush(color);return block; }
     public static Button Button(string text, Action action, bool primary = false, string? tip = null)
     { var button = new Button { Content = text, Style = (Style)Application.Current.FindResource(primary ? "PrimaryButton" : typeof(Button)), ToolTip = tip }; button.Click += (_, _) => action(); return button; }
     public static Button Small(string text, Action action, string? tip = null)
@@ -30,13 +30,25 @@ internal static class Ui
     public static Window Dialog(Window owner, string title, UIElement content, double width = 500, double height = 0)
     { var dialog = new Window { Title = title, Owner = owner, Width = width, MinWidth = width, MaxHeight = 850, SizeToContent = height == 0 ? SizeToContent.Height : SizeToContent.Manual, Height = height == 0 ? 450 : height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = height == 0 ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip, ShowInTaskbar = false, Content = content }; DesktopNativeUi.Decorate(dialog); return dialog; }
     public static bool IsDark(string? theme)=>theme == "dark" || (theme == "system" && Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int light && light == 0);
-    private static bool? appliedDark;
-    public static void InitializeTheme(){foreach(var key in new[]{"Bg","Panel","Side","Ink","Sub","Line","Soft","Accent","AccentLight","Hover","Danger","DangerSoft","ScrollThumb"})if(Application.Current.Resources[key] is SolidColorBrush brush)Application.Current.Resources[key]=brush.CloneCurrentValue();}
-    public static void Theme(string theme)
+    public static Moji.Core.AppPalette Palette(Moji.Core.Preferences preferences)=>Moji.Core.ThemeCatalog.Resolve(preferences,IsDark(preferences.Theme));
+    private static string appliedPalette="";
+    private static readonly PaletteState paletteState=new();
+    private sealed class PaletteState:System.ComponentModel.INotifyPropertyChanged
     {
-        var dark=IsDark(theme);if(appliedDark==dark)return;appliedDark=dark;
-        var values = dark ? new Dictionary<string,string> { ["Hover"]="#333F2F", ["Danger"]="#C76A5D", ["DangerSoft"]="#442D29", ["ScrollThumb"]="#526049", ["Bg"]="#1C231C", ["Panel"]="#252D22", ["Side"]="#20271E", ["Ink"]="#E1E7DA", ["Sub"]="#A2AF96", ["Line"]="#394532", ["Soft"]="#303B29", ["Accent"]="#829E70", ["AccentLight"]="#3B4C31" } : new Dictionary<string,string> { ["Hover"]="#F0F3EB", ["Danger"]="#AD493E", ["DangerSoft"]="#F9EDE9", ["ScrollThumb"]="#C2CABA", ["Bg"]="#F8F7F3", ["Panel"]="#FFFFFF", ["Side"]="#FDFCF9", ["Ink"]="#303C34", ["Sub"]="#7E8875", ["Line"]="#E8EBE1", ["Soft"]="#F0F3EB", ["Accent"]="#526B4D", ["AccentLight"]="#E7EDDF" };
-        foreach(var (key,value) in values){var color=(Color)ColorConverter.ConvertFromString(value);if(Application.Current.Resources[key] is SolidColorBrush brush&&!brush.IsFrozen)brush.Color=color;else Application.Current.Resources[key]=new SolidColorBrush(color);}
+        public Dictionary<string,string> Values {get;set;}=[];
+        public Color this[string key]=>Values.TryGetValue(key,out var value)?(Color)ColorConverter.ConvertFromString(value):Colors.Transparent;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        public void Update(Dictionary<string,string> values){Values=values;PropertyChanged?.Invoke(this,new("Item[]"));}
+    }
+    public static void InitializeTheme()
+    {
+        paletteState.Values=Moji.Core.ThemeCatalog.All.First().Colors;
+        foreach(var key in paletteState.Values.Keys){var brush=new SolidColorBrush();System.Windows.Data.BindingOperations.SetBinding(brush,SolidColorBrush.ColorProperty,new System.Windows.Data.Binding("["+key+"]"){Source=paletteState});Application.Current.Resources[key]=brush;}
+    }
+    public static void Theme(string theme)=>Theme(new Moji.Core.Preferences{Theme=theme});
+    public static void Theme(Moji.Core.Preferences preferences)
+    {
+        var palette=Palette(preferences);if(appliedPalette==palette.Id)return;appliedPalette=palette.Id;paletteState.Update(palette.Colors);
         foreach(Window window in Application.Current.Windows)DesktopNativeUi.ApplyCaption(window);
     }
 }

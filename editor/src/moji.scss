@@ -1,13 +1,16 @@
-:root{--moji-font-size:16px;--tt-bg-color:#fff;--tt-brand-color-500:#516b4d}
-.dark{--tt-bg-color:#202721}
-.tiptap.ProseMirror{font-size:var(--moji-font-size);overflow-wrap:anywhere;line-height:1.7}
-.moji-variable{display:inline;background:#e3ebdc;color:#3d5739;padding:.12em .18em;border-radius:4px;white-space:pre-wrap;overflow-wrap:anywhere;box-decoration-break:clone;-webkit-box-decoration-break:clone;line-height:inherit;cursor:text}
-.moji-variable-content{display:inline;white-space:pre-wrap;overflow-wrap:anywhere;outline:none;line-height:inherit}
-.moji-variable-content[data-empty="true"]::before{content:attr(data-placeholder);color:#82917e;pointer-events:none}
+:root{--moji-font-size:16px;--tt-bg-color:#fff}
 
-.dark .moji-variable{background:#364535;color:#dcebd5}
+.tiptap.ProseMirror{font-size:var(--moji-font-size);overflow-wrap:anywhere;line-height:1.7}
+.moji-variable{display:inline;background:var(--moji-accentlight,#E9EDFB);color:var(--moji-onselected,#263B83);padding:.12em .18em;border-radius:4px;white-space:pre-wrap;overflow-wrap:anywhere;box-decoration-break:clone;-webkit-box-decoration-break:clone;line-height:inherit;cursor:text}
+.moji-variable-content{display:inline;white-space:pre-wrap;overflow-wrap:anywhere;outline:none;line-height:inherit}
+.moji-variable-content[data-empty="true"]::before{content:attr(data-placeholder);color:var(--moji-sub,#626874);pointer-events:none}
+
+body{--tt-theme-text:var(--moji-ink,#24272F)}
+.dark body{--tt-theme-text:var(--moji-ink,#EDEEF0)}
+.tiptap.ProseMirror a{color:var(--moji-accent)}
 
 @media print{.tiptap-toolbar{display:none!important}.simple-editor-wrapper,.simple-editor-content{height:auto!important;overflow:visible!important}.simple-editor-content .tiptap.ProseMirror.simple-editor{padding:0!important}html,body,#app{height:auto!important;background:white!important}}
 /* Tiptap 3.34 makes the span an accessible, visually-hidden label.
    Keep that label intact and display the actual native checkbox. */
-.tiptap.ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]{position:static;opacity:1;width:1rem;height:1rem;display:block;appearance:auto;accent-color:#516b4d;cursor:pointer;margin:0}
+.tiptap.ProseMirror ul[data-type="taskList"] li label input[type="checkbox"]{position:static;opacity:1;width:1rem;height:1rem;display:block;appearance:auto;accent-color:var(--moji-accent,#4058B6);cursor:pointer;margin:0}
+@media print{html,html.dark,body,.dark body{--moji-ink:#24272F;--tt-theme-text:#24272F;color:#24272F!important;background:#fff!important}.moji-variable,.dark .moji-variable{color:#24272F;background:#E9EDFB}}

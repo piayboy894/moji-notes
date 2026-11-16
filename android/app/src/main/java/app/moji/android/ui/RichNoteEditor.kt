@@ -105,9 +105,10 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
             override fun onConsoleMessage(message:ConsoleMessage):Boolean {android.util.Log.d("MojiEditor",message.message());return true}
         }
         val initialDark=activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK==android.content.res.Configuration.UI_MODE_NIGHT_YES
-        setBackgroundColor(if(initialDark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
+        val initialPalette=ThemeCatalog.resolve(vm.state.value.workspace?.preferences?:Preferences(),initialDark)
+        setBackgroundColor(android.graphics.Color.parseColor(initialPalette.colors.getValue("Panel")))
         val hash=java.security.MessageDigest.getInstance("SHA-256").digest(activity.assets.open("editor/index.html").use{it.readBytes()}).joinToString(""){"%02x".format(it)}
-        loadUrl("https://appassets.androidplatform.net/assets/editor/index.html?v=$hash&theme=${if(initialDark)"dark"else"light"}")
+        loadUrl("https://appassets.androidplatform.net/assets/editor/index.html?v=$hash&theme=${if(initialDark)"dark"else"light"}&bg=${initialPalette.colors.getValue("Panel").removePrefix("#")}")
     }
     init{vm.editorFlushers.add(flusher)}
     @JavascriptInterface fun postMessage(message:String){if(message.length>30_000_000)return;main.post{
@@ -134,9 +135,10 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     fun attach(key:String):EditorWebView {owner=key;visible=true;(web.parent as? android.view.ViewGroup)?.removeView(web);return web}
     fun hide(key:String){if(owner!=key)return;visible=false;needsActivation=true;canConvert=false;chooseFile=null;web.cover(true);scope.launch{flush();if(owner!=key||visible)return@launch;web.evaluateJavascript("window.MojiEditor?.deactivate()",null);park()}}
     fun show(note:Note,dark:Boolean,obscured:Boolean){
-        visible=true;web.cover(obscured);web.setBackgroundColor(if(dark)android.graphics.Color.rgb(32,39,33)else android.graphics.Color.WHITE)
-        val prefs=vm.state.value.workspace!!.preferences
-        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
+        visible=true;web.cover(obscured)
+        val prefs=vm.state.value.workspace!!.preferences;val palette=ThemeCatalog.resolve(prefs,dark)
+        web.setBackgroundColor(android.graphics.Color.parseColor(palette.colors.getValue("Panel")))
+        val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
         if(lastAppearance!=configuration){lastAppearance=configuration;web.evaluateJavascript("window.MojiEditor?.configure($configuration)",null)}
         val key="${vm.workspaceEpoch}:${vm.state.value.editorGeneration}:${note.id}"
         if(key==requested){if(loaded.isCompleted&&needsActivation){needsActivation=false;web.evaluateJavascript("window.MojiEditor?.activate()",null)};return}
@@ -148,7 +150,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
                 fileResult?.onReceiveValue(null);fileResult=null
                 val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:return@launch
                 activeId=latest.id;epoch=vm.workspaceEpoch;generation=vm.state.value.editorGeneration;token=uid();loadingToken=token
-                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
+                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}
                 web.evaluateJavascript("window.MojiEditor.load($payload)",null)
             }finally{gate.unlock()}
         }
@@ -164,7 +166,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     val session=activity.editorSession;val dark=MaterialTheme.colorScheme.background.red<.5f;val obscured=LocalEditorObscured.current
     val owner=remember{uid()}
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(),session::imageResult)
-    Column(modifier.background(if(dark)Color(0xFF202721)else Color.White)){
+    Column(modifier.background(MaterialTheme.colorScheme.surface)){
         if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp)){TextButton(onClick={session.command("convertVariable")},enabled=session.canConvert){Text("转化为变量")}}
         if(session.failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
         AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,dark,obscured)},onReset=null,onRelease={session.hide(owner)})

@@ -62,6 +62,8 @@ public record Note : NoteVersion
 public record Preferences
 {
     public string Theme { get; init; } = "light";
+    public string LightPalette { get; init; } = "cloud";
+    public string DarkPalette { get; init; } = "obsidian";
     public double FontSize { get; init; } = 15;
     public bool LineNumbers { get; init; }
     public bool WordWrap { get; init; } = true;

@@ -34,13 +34,13 @@ internal sealed class SharedEditorView : Grid, IDisposable
         vm=model;Name="SharedDocumentEditor";Children.Add(Browser);ApplyBackground();
         Loaded+=async(_,_)=>await StartInitialize();
     }
-    private void ApplyBackground(){var dark=Ui.IsDark(vm.State?.Preferences.Theme);Browser.DefaultBackgroundColor=dark?System.Drawing.Color.FromArgb(32,39,33):System.Drawing.Color.White;Background=dark?Ui.Brush("#202721"):Ui.Brush("#FFFFFF");}
+    private void ApplyBackground(){var hex=Ui.Palette(vm.State?.Preferences??new()).Colors["Panel"];Browser.DefaultBackgroundColor=System.Drawing.ColorTranslator.FromHtml(hex);Background=Ui.Brush(hex);}
     private async Task StartInitialize()
     {
         if(initializing||disposed||Browser.CoreWebView2!=null)return;initializing=true;
         try{
             var folder=EditorFiles.Extract();var runtime=await EditorFiles.Runtime();if(disposed)return;
-            Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR",Ui.IsDark(vm.State?.Preferences.Theme)?"FF202721":"FFFFFFFF");
+            Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR","FF"+Ui.Palette(vm.State?.Preferences??new()).Colors["Panel"][1..]);
             var environment=await CoreWebView2Environment.CreateAsync(runtime,Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MojiNotes.WebView"));
             if(disposed)return;await Browser.EnsureCoreWebView2Async(environment);var core=Browser.CoreWebView2!;
             core.Settings.AreDevToolsEnabled=false;core.Settings.AreBrowserAcceleratorKeysEnabled=false;core.Settings.AreDefaultScriptDialogsEnabled=false;core.Settings.IsStatusBarEnabled=false;core.Settings.IsPasswordAutosaveEnabled=false;core.Settings.IsGeneralAutofillEnabled=false;
@@ -48,7 +48,7 @@ internal sealed class SharedEditorView : Grid, IDisposable
             core.NavigationStarting+=(_,e)=>{if(!e.Uri.StartsWith("https://moji.editor/",StringComparison.Ordinal))e.Cancel=true;};core.NewWindowRequested+=(_,e)=>e.Handled=true;
             core.ContextMenuRequested+=(_,e)=>{browserMenu=DesktopNativeUi.BrowserMenu(e,Browser,action=>_ = Command(action));if(browserMenu.Items.Count>0)browserMenu.IsOpen=true;};
             core.NavigationCompleted+=(_,e)=>{if(!e.IsSuccess&&!disposed&&e.WebErrorStatus!=CoreWebView2WebErrorStatus.OperationCanceled)LoadFailed(new IOException("编辑器页面未能加载"));};
-            core.WebMessageReceived+=(_,e)=>Receive(e);var hash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(folder,"index.html"))));core.Navigate("https://moji.editor/index.html?v="+hash+"&theme="+(Ui.IsDark(vm.State?.Preferences.Theme)?"dark":"light"));
+            core.WebMessageReceived+=(_,e)=>Receive(e);var hash=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(folder,"index.html"))));core.Navigate("https://moji.editor/index.html?v="+hash+"&theme="+(Ui.IsDark(vm.State?.Preferences.Theme)?"dark":"light")+"&bg="+Ui.Palette(vm.State?.Preferences??new()).Colors["Panel"][1..]);
         }catch(Exception error){if(disposed)return;LoadFailed(error);}
         finally{initializing=false;}
     }
@@ -81,13 +81,13 @@ internal sealed class SharedEditorView : Grid, IDisposable
     private string lastAppearance="";
     public Task RefreshAppearance()
     {
-        if(vm.State==null||disposed)return Task.CompletedTask;var p=vm.State.Preferences;var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+        if(vm.State==null||disposed)return Task.CompletedTask;var p=vm.State.Preferences;var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
         if(configuration==lastAppearance)return Task.CompletedTask;lastAppearance=configuration;ApplyBackground();return Browser.CoreWebView2!=null&&pageReady.Task.IsCompletedSuccessfully?Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor?.configure("+configuration+")"):Task.CompletedTask;
     }
     public async Task Show(Note note)
     {
         var p=vm.State!.Preferences;
-        var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+        var configuration=Json.Serialize(new{theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
         if(note.Id==noteId&&epoch==vm.WorkspaceEpoch&&note.Content==lastContent&&ready.Task.IsCompletedSuccessfully){active=true;ApplyBackground();await Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.configure("+configuration+");window.MojiEditor.activate()");return;}
         var version=++request;var external=note.Id==noteId&&note.Content!=lastContent;
         var completion=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);ready.TrySetCanceled();ready=completion;readySession="";active=true;CanConvert=false;SelectionChanged?.Invoke(false);ApplyBackground();
@@ -97,7 +97,7 @@ internal sealed class SharedEditorView : Grid, IDisposable
             if(external){session="";}else await FlushCurrent();
             if(disposed||version!=request)return;
             note=vm.State?.Notes.FirstOrDefault(n=>n.Id==note.Id)??note;noteId=note.Id;epoch=vm.WorkspaceEpoch;session=Guid.NewGuid().ToString("N");readySession=session;lastContent=note.Content;
-            var payload=Json.Serialize(new{id=note.Id,session,content=note.Content,variables=note.Variables,theme=Ui.IsDark(p.Theme)?"dark":"light",fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
+            var payload=Json.Serialize(new{id=note.Id,session,content=note.Content,variables=note.Variables,theme=Ui.IsDark(p.Theme)?"dark":"light",palette=Ui.Palette(p).Id,fontSize=p.FontSize,shortcuts=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>Shortcuts.Binding(p,a.Id)),defaults=Shortcuts.Actions.ToDictionary(a=>a.Id,a=>a.Default)});
             await Browser.CoreWebView2.ExecuteScriptAsync("window.MojiEditor.load("+payload+")");
         }finally{switching.Release();}
     }
@@ -115,7 +115,7 @@ internal static class EditorFiles
     public static int BootstrapperInvocations { get; private set; }
     public static bool HasBootstrapper=>typeof(EditorFiles).Assembly.GetManifestResourceNames().Contains("Moji.WebViewBootstrapper.exe");
     public static bool HasFixedRuntime=>typeof(EditorFiles).Assembly.GetManifestResourceNames().Contains("Moji.WebViewRuntime.cab");
-    private static string Base=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MojiNotes.Editor","2.2.0");
+    private static string Base=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MojiNotes.Editor","2.3.0");
     public static string Extract()
     {
         var folder=Path.Combine(Base,"assets");Directory.CreateDirectory(folder);var assembly=typeof(EditorFiles).Assembly;

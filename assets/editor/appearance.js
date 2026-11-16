@@ -1,1 +1,1 @@
-document.documentElement.classList.toggle('dark',new URLSearchParams(location.search).get('theme')==='dark');
+const params=new URLSearchParams(location.search);const dark=params.get('theme')==='dark';document.documentElement.classList.toggle('dark',dark);const bg=params.get('bg')||(dark?'1d1f23':'ffffff');if(/^[a-f0-9]{6}$/i.test(bg)){document.documentElement.style.setProperty('--tt-bg-color','#'+bg);document.documentElement.style.backgroundColor='#'+bg;}

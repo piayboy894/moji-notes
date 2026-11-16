@@ -310,4 +310,24 @@ class AdaptiveUiTest {
         }finally{shell("wm size reset");shell("wm density reset")}
     }
 
+    @Test fun sixThemesUpdateTheNativeSettingsAndExistingEditorAndPersistChoices(){
+        try{
+            resize(1440,1080,160);ready();val original=compose.activity.vm.state.value.workspace!!.preferences
+            compose.activityRule.scenario.onActivity{a->a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first{it.mode==NoteMode.Text}.id);a.vm.addNote()};webReady();js("window.MojiEditor.editor.commands.insertContent('Theme document remains unchanged')");val content=jsText();val native=webView()
+            compose.onNodeWithContentDescription("偏好设置").performClick()
+            for(palette in ThemeCatalog.all){compose.onNodeWithTag("theme-${palette.id}").performScrollTo().performClick();compose.waitUntil(5000){org.json.JSONTokener(js("document.documentElement.dataset.palette")).nextValue()==palette.id};assertEquals(content,jsText());assertSame(native,webView());screenshot("theme-${palette.id}")}
+            compose.onNodeWithContentDescription("关闭").performClick();webReady();runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);val prefs=compose.activity.vm.state.value.workspace!!.preferences;assertEquals("celadon",prefs.lightPalette);assertEquals("dune",prefs.darkPalette);compose.activityRule.scenario.onActivity{it.vm.preferences{original}}
+        }finally{shell("wm size reset");shell("wm density reset")}
+    }
+    @Test fun cardPinPreservesSelectionAndEditTimeAndDuplicateCopiesFullIndependentRecord(){
+        try{
+            resize(1440,1080,160);ready(false);val book=Notebook(name="Record actions",mode=NoteMode.Text);val old=Note(notebookId=book.id,title="Older",content="Original body",updatedAt=1,createdAt=1,fields=listOf(CredentialField(name="Custom",value="Value")));val active=Note(notebookId=book.id,title="Active",content="Active body")
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=listOf(old,active))))};compose.activityRule.scenario.onActivity{it.vm.navigate(book.id);it.vm.select(active.id)};webReady();val native=webView()
+            compose.onNodeWithTag("pin-record-${old.id}").performClick();compose.waitUntil(5000){compose.activity.vm.filtered().first().id==old.id};assertEquals(active.id,compose.activity.vm.selectedNote()!!.id);assertSame(native,webView());assertEquals("Active body",jsText());assertEquals(1L,compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.updatedAt)
+            for(sort in listOf("name","created","updated")){compose.activityRule.scenario.onActivity{it.vm.sort(sort)};assertEquals(old.id,compose.activity.vm.filtered().first().id)}
+            screenshot("31-card-pin-and-copy");compose.onNodeWithTag("duplicate-record-${old.id}").performClick();webReady();val copy=compose.activity.vm.selectedNote()!!;assertNotEquals(old.id,copy.id);assertEquals(book.id,copy.notebookId);assertFalse(copy.pinned);assertTrue(copy.history.isEmpty());assertEquals(old.fields,copy.fields);assertEquals("Original body",jsText());compose.activityRule.scenario.onActivity{it.vm.edit(copy.id){it.copy(fields=it.fields.map{f->f.copy(value="New")})}};assertEquals("Value",compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.fields.single().value)
+            runBlocking{compose.activity.vm.flush()};compose.activityRule.scenario.onActivity{it.vm.openLocal()};ready(false);assertTrue(compose.activity.vm.state.value.workspace!!.notes.first{it.id==old.id}.pinned)
+        }finally{shell("wm size reset");shell("wm density reset")}
+    }
+
 }

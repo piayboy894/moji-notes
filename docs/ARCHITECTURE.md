@@ -52,3 +52,9 @@ Android 继续沿用固定发行证书，后续 APK 可覆盖升级。系统 Web
 密码自定义字段是 Note / NoteVersion 内的有序 id/name/value 列表，参与历史、存档、搜索、清除；新存档 schema 2，读取旧 schema 1。记事本顺序是 notebooks 数组的顺序，移动只重排活跃槽位，不改变已删除记事本位置或记录归属。Android 采用 Reorderable 2.5.1 的 LazyGrid / LazyList，提供长按拖动和自动滚动；Windows 使用独立的数据格式和插入指示线。回收站有自己的多选卡片网格，Windows 的矩形选择映射实际项边界、保留 Ctrl / Shift 选择并支持边缘滚动，不挂载正文编辑器。
 
 Windows 应用内控件和弹层统一由 Themes/Controls.xaml 绘制，保留 WPF 原有键盘和无障碍行为。WebView2 右键命令经 ContextMenuRequested 映射到同一菜单样式；复制、粘贴等仍由原生引擎执行，撤销/重做调用共享编辑器。文件选择、保存和打印保留系统标准窗口。通知使用不抢焦点的原生 Popup，定位到当前活动窗口，避免被 WebView 的 HWND 或模态窗口遮挡。Windows 声明 PerMonitorV2 DPI，并使用支持时的 DWM 标题栏色彩。
+
+## 2.3 外观与记录卡片
+
+`assets/themes.json` 是原生与编辑器的唯一语义色表：.NET Core 内嵌读取，Android assets 初始化，编辑器由 Vite 编译同份 JSON。主题模式与浅深配色 ID 分开保存。WPF 共用带绑定的不可冻结画刷，Compose 显式映射所有层级色，WebView 接收配色 ID 并在启动脚本先设置原生提供的正文底色。颜色变化不写正文、不清空撤销、不重建浏览器。
+
+置顶属于单条记录的组织状态，改变 pinned / revision，不改变正文编辑时间或历史；卡片内按钮只重排列表且保留正文选择。副本和右键入口共用实现，保留正文、变量、自定义属性，重置记录身份、历史与置顶状态。

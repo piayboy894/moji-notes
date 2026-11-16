@@ -108,7 +108,7 @@ test('all toolbar controls exist before body focus and stay in place across acti
 test('startup page uses requested background before a document is opened and reports painted readiness',async({page})=>{
  await page.goto('/?theme=dark');
  await page.waitForFunction(()=>(window as any).nativeMessages?.some((m:any)=>m.type==='ready'));
- expect(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor)).toBe('rgb(32, 39, 33)');
+ expect(await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor)).toBe('rgb(29, 31, 35)');
  expect(await js(page,'window.MojiEditor.recordId')).toBeUndefined();
  await expect(page.getByRole('toolbar').locator('button')).toHaveCount(20);
  await expect(page.getByRole('button',{name:'加粗',exact:true})).toBeDisabled();
