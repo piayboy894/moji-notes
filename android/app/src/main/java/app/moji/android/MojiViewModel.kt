@@ -43,6 +43,8 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     val recordFocusRequests=MutableSharedFlow<Unit>(extraBufferCapacity=8)
     fun focusRecords(){recordKeyboardScope=true;recordFocusRequests.tryEmit(Unit)}
     val recordDrags=MutableSharedFlow<Boolean>(extraBufferCapacity=8)
+    var recordSelectionMode=false
+    fun recordsForCommand():Set<String> = if(recordSelectionMode)recordSelection else selectedNote()?.id?.let{setOf(it)}?:emptySet()
     var recordSelection:Set<String> = emptySet()
     var recordKeyboardScope:Boolean = false
     private var recordClipboard:RecordBundle? = null
@@ -115,7 +117,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     }
     private fun open(workspace: Workspace) {
         epoch++; serial = 0; savedSerial = 0
-        recordClipboard=null;recordSelection=emptySet();recordKeyboardScope=false;recordDrag=null
+        recordClipboard=null;recordSelection=emptySet();recordSelectionMode=false;recordKeyboardScope=false;recordDrag=null
         mutable.value = AppState(workspace = workspace, loading = false, exists = true)
         pendingImport?.let { pendingImport = null; importText(it.name,it.text,markdown=it.markdown) }
         if (now() - lastUpdateCheck > 6 * 3_600_000) { lastUpdateCheck = now(); checkUpdate(false) }
@@ -137,10 +139,10 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun background() { viewModelScope.launch { try { flush() } catch (_: Exception) { message("保存失败，请导出备份") } } }
     fun foreground() { }
-    fun navigate(view: String) { mutable.update { it.copy(view = view, selectedId = null, editingCredentialId = null, search = "") }; touch() }
+    fun navigate(view: String) { recordSelectionMode=false;recordSelection=emptySet();recordKeyboardScope=false;mutable.update { it.copy(view = view, selectedId = null, editingCredentialId = null, search = "") }; touch() }
     fun togglePin(id:String){mutate{w->w.copy(notes=w.notes.map{n->if(n.id==id&&n.deletedAt==null&&n.purgedAt==null)n.copy(pinned=!n.pinned,revision=uid())else n})}}
-    fun select(id: String) { mutable.update { it.copy(selectedId = id, editingCredentialId = if (it.selectedId == id) it.editingCredentialId else null) }; touch() }
-    fun clearSelection() { mutable.update { it.copy(selectedId = null, editingCredentialId = null) } }
+    fun select(id: String) { recordSelectionMode=false;mutable.update { it.copy(selectedId = id, editingCredentialId = if (it.selectedId == id) it.editingCredentialId else null) }; touch() }
+    fun clearSelection() { recordSelectionMode=false;recordSelection=emptySet();mutable.update { it.copy(selectedId = null, editingCredentialId = null) } }
     fun search(value: String) { mutable.update { it.copy(search = value) }; touch() }
     fun sort(value: String) { mutable.update { it.copy(sort = value) } }
     fun editCredential(enabled: Boolean) { mutable.update { it.copy(editingCredentialId = if (enabled) it.selectedId else null) } }
@@ -165,6 +167,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
     fun purge(ids: Set<String>) { mutate { it.copy(notes = it.notes.map { n -> if (n.id in ids) n.copy(title = "", content = "", username = "", password = "", url = "", otp = "", tags = emptyList(), variables = emptyList(), fields=emptyList(), history = emptyList(), deletedAt = n.deletedAt ?: now(), purgedAt = now(), revision = uid(), updatedAt = now()) else n }) }; clearAffectedSelection(ids) }
     private fun clearAffectedSelection(ids:Set<String>){mutable.update{if(it.selectedId in ids)it.copy(selectedId=null,editingCredentialId=null)else it}}
     fun duplicate(note:Note){
+        recordSelectionMode=false
         val w=mutable.value.workspace?:return;val current=w.liveNotes.firstOrNull{it.id==note.id}?:return;val names=w.liveNotes.filter{it.notebookId==current.notebookId}.map{it.title}.toSet();var title="${current.title} · 副本";var index=2;while(title in names){title="${current.title} · 副本 ${index++}"}
         val copy=current.copy(id=uid(),title=title,pinned=false,favorite=false,archived=false,createdAt=now(),updatedAt=now(),revision=uid(),history=emptyList());mutate{it.copy(notes=listOf(copy)+it.notes)};mutable.update{it.copy(view=copy.notebookId,selectedId=copy.id,editingCredentialId=null)}
     }
@@ -192,7 +195,7 @@ class MojiViewModel(application: Application) : AndroidViewModel(application) {
                 val state = mutable.value
                 require(epoch == expectedEpoch) { "空间已变化，请重新读取存档" }
                 val candidate = GameSaves.apply(state.workspace ?: error("本机数据尚未打开"), payload)
-                store.save(candidate); epoch++; serial++; savedSerial = serial;recordClipboard=null;recordSelection=emptySet();recordKeyboardScope=false;recordDrag=null
+                store.save(candidate); epoch++; serial++; savedSerial = serial;recordClipboard=null;recordSelection=emptySet();recordSelectionMode=false;recordKeyboardScope=false;recordDrag=null
                 mutable.value = state.copy(workspace = candidate, saving = false, saveError = false, view = "home", selectedId = null, editingCredentialId = null, search = "")
             }
         } finally { loadingSave = false }

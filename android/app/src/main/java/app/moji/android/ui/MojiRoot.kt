@@ -108,8 +108,8 @@ import java.util.zip.ZipOutputStream
             BoxWithConstraints(Modifier.fillMaxSize().recordDragRoot(vm).focusRequester(keyboardFocus).semantics { testTagsAsResourceId = true }.safeDrawingPadding().imePadding().onPreviewKeyEvent { event ->
                 if (s.workspace == null || event.type != KeyEventType.KeyDown || settings != null || cloudSaves || newBook || bookDialog != null || globalSearch || searchOwner!=null || backup != null) false
                 else when (Shortcuts.resolve(s.workspace!!.preferences, keyChord(event))) {
-                    "recordCopy" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordSelection,false);true}else false
-                    "recordCut" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordSelection,true);true}else false
+                    "recordCopy" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordsForCommand(),false);true}else false
+                    "recordCut" -> if(vm.recordKeyboardScope){vm.copyRecords(vm.recordsForCommand(),true);true}else false
                     "recordPaste" -> if(vm.recordKeyboardScope){vm.pasteRecords();true}else false
                     "search" -> { globalSearch = true; true }
                     "new" -> { if (canCreateRecord) { addRecord(); true } else false }

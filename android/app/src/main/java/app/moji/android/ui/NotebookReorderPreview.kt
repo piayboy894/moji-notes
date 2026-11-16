@@ -39,3 +39,13 @@ import androidx.compose.runtime.*
     DisposableEffect(preview) { onDispose { preview.cancel() } }
     return preview to interactions
 }
+
+@Stable internal class RecordCommandState<T>(initial:T,private val changed:(T)->Unit):MutableState<T>{
+    private var stored by mutableStateOf(initial)
+    init{changed(initial)}
+    override var value:T
+        get()=stored
+        set(value){stored=value;changed(value)}
+    override fun component1():T=value
+    override fun component2():(T)->Unit={value=it}
+}
