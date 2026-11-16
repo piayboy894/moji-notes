@@ -134,9 +134,9 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     }}
     fun attach(key:String):EditorWebView {owner=key;visible=true;(web.parent as? android.view.ViewGroup)?.removeView(web);return web}
     fun hide(key:String){if(owner!=key)return;visible=false;needsActivation=true;canConvert=false;chooseFile=null;web.cover(true);scope.launch{flush();if(owner!=key||visible)return@launch;web.evaluateJavascript("window.MojiEditor?.deactivate()",null);park()}}
-    fun show(note:Note,dark:Boolean,obscured:Boolean){
+    fun show(note:Note,dark:Boolean,obscured:Boolean,prefs:Preferences){
         visible=true;web.cover(obscured)
-        val prefs=vm.state.value.workspace!!.preferences;val palette=ThemeCatalog.resolve(prefs,dark)
+        val palette=ThemeCatalog.resolve(prefs,dark)
         web.setBackgroundColor(android.graphics.Color.parseColor(palette.colors.getValue("Panel")))
         val configuration=buildJsonObject{put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.forEach{put(it.first,it.third)}})}.toString()
         if(lastAppearance!=configuration){lastAppearance=configuration;web.evaluateJavascript("window.MojiEditor?.configure($configuration)",null)}
@@ -163,12 +163,12 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
 }
 @Composable fun RichNoteEditor(note:Note,mode:NoteMode,vm:MojiViewModel,modifier:Modifier=Modifier) {
     val activity=androidx.compose.ui.platform.LocalContext.current as MainActivity
-    val session=activity.editorSession;val dark=MaterialTheme.colorScheme.background.red<.5f;val obscured=LocalEditorObscured.current
+    val session=activity.editorSession;val prefs=vm.state.collectAsState().value.workspace?.preferences?:Preferences();val dark=MaterialTheme.colorScheme.background.red<.5f;val obscured=LocalEditorObscured.current
     val owner=remember{uid()}
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(),session::imageResult)
     Column(modifier.background(MaterialTheme.colorScheme.surface)){
         if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp)){TextButton(onClick={session.command("convertVariable")},enabled=session.canConvert){Text("转化为变量")}}
         if(session.failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
-        AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,dark,obscured)},onReset=null,onRelease={session.hide(owner)})
+        AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,dark,obscured,prefs)},onReset=null,onRelease={session.hide(owner)})
     }
 }
