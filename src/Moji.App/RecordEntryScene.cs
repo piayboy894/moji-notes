@@ -64,7 +64,13 @@ internal sealed class RecordEntryScene(BitmapSource overview, Rect overviewBound
             // A single opaque card, with no old/new text overlay. Its final
             // typography is swapped only after its geometry has settled.
             dc.DrawRectangle(background, null, card);
-            dc.DrawImage(Progress < .76 ? sourceCard : targetCard, card);
+            dc.PushClip(new RectangleGeometry(card));
+            // Preserve glyph proportions while the card gets shorter. Crop the
+            // old footer rather than vertically crushing all its text.
+            var pixels = Progress < .76 ? sourceCard : targetCard;
+            var height = Progress < .76 ? card.Width * pixels.PixelHeight / pixels.PixelWidth : card.Height;
+            dc.DrawImage(pixels, new Rect(card.X, card.Y, card.Width, height));
+            dc.Pop();
         }
         dc.Pop();
         var pane = new Rect(seam, editorBounds.Top, editorBounds.Width, editorBounds.Height);
