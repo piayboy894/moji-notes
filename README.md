@@ -4,8 +4,8 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.6.2](https://github.com/piayboy894/moji-notes/releases/tag/v2.6.2)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
-- [Android 2.6.2](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.6.2)：固定发行密钥签名的 APK。
+- [Windows 2.6.3](https://github.com/piayboy894/moji-notes/releases/tag/v2.6.3)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
+- [Android 2.6.3](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.6.3)：固定发行密钥签名的 APK。
 
 ## 编辑器
 
@@ -19,7 +19,7 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 - 本地自动保存、版本历史、收藏、置顶、归档、回收站、搜索和批量管理；回收站可一次清空全部已删除记录。
 - 标题中按 Enter 或 Tab 进入内容；两端复用同一编辑器实例，切换记录不再重新启动编辑器。
-- 记事本先显示卡片网格；打开记录时卡片收拢至左侧，正文从右侧进入，左侧自动显示当前记录。左上角返回网格并保留浏览位置。
+- 记事本先显示卡片网格；打开记录时选中卡片平滑移入左栏，整块编辑区域连同背景从右侧进入，左侧自动显示当前记录。左上角返回网格并保留浏览位置。
 - 自定义记事本名称、图标、纯色和渐变封面；封面不叠加深色遮罩。浅色、深色、字号与自定义快捷键。
 - 密码本默认可选择、复制文字，点击“编辑密码”后修改。无密码显示开关、TOTP 或密码健康检查。
 - TXT / Markdown 文件按文字导入，普通文本 / HTML 导出，全库存档和文本 ZIP；Windows 支持系统打印 / PDF。
