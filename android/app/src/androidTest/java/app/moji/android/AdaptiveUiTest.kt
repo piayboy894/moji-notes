@@ -22,6 +22,18 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AdaptiveUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @Test fun launcherUsesAdaptiveWhiteTileAndContainsNoBlackExterior(){
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val drawable=context.packageManager.getApplicationIcon(context.applicationInfo)
+        assertTrue("Launcher must resolve the adaptive icon",drawable is android.graphics.drawable.AdaptiveIconDrawable)
+        if(android.os.Build.VERSION.SDK_INT>=33)assertNotNull((drawable as android.graphics.drawable.AdaptiveIconDrawable).monochrome)
+        val bitmap=android.graphics.Bitmap.createBitmap(256,256,android.graphics.Bitmap.Config.ARGB_8888)
+        drawable.setBounds(0,0,256,256);drawable.draw(android.graphics.Canvas(bitmap))
+        var blue=0;var black=0
+        for(y in 0 until 256)for(x in 0 until 256){val c=bitmap.getPixel(x,y);if(android.graphics.Color.alpha(c)>200){val r=android.graphics.Color.red(c);val g=android.graphics.Color.green(c);val b=android.graphics.Color.blue(c);if(b>r+35)blue++;if(r<35&&g<35&&b<35)black++}}
+        assertTrue("Blue-purple brush mark must remain visible",blue>1000)
+        assertEquals("Black surroundings must not be baked into the launcher",0,black)
+    }
     @Test fun notebookOverviewOpensARecordAndReturnsWithoutLosingSearchOrEditor(){
         try{
             resize(1440,1080,160);ready(false);val book=Notebook(name="Overview");val note=Note(notebookId=book.id,title="Find this record",content="Overview body")

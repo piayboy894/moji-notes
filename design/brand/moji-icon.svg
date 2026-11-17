@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">
+  <title>墨记：白底蓝紫笔触</title>
+  <defs><clipPath id="tile"><rect x="17" y="15" width="474" height="474" rx="123"/></clipPath></defs>
+  <rect x="17" y="15" width="474" height="474" rx="123" fill="#FAFAFD"/>
+  <image xlink:href="moji-master.png" width="512" height="512" clip-path="url(#tile)"/>
+</svg>

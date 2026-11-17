@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
     <uses-feature android:name="android.hardware.fingerprint" android:required="false"/>
-    <application android:theme="@style/Theme.Moji" android:label="墨记" android:icon="@drawable/moji_icon" android:roundIcon="@drawable/moji_icon" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true">
+    <application android:theme="@style/Theme.Moji" android:label="墨记" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true">
         <meta-data android:name="com.samsung.android.multiwindow.enable" android:value="true"/>
         <meta-data android:name="com.samsung.android.dex.launchwidth" android:value="1100"/>
         <meta-data android:name="com.samsung.android.dex.launchheight" android:value="800"/>
