@@ -65,7 +65,7 @@ import { useWindowSize } from "@/hooks/use-window-size"
 import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Components ---
-import { MojiVariable, bindEditor, reportImageError } from "@/native"
+import { MojiVariable, bindEditor, editorMounted, reportImageError } from "@/native"
 import { LegacyAndroidInput } from "@/legacy-android-input"
 
 // --- Lib ---
@@ -280,7 +280,7 @@ export function SimpleEditor() {
           )}
         </Toolbar>
 
-        {editor && <ImageBackgroundMenu editor={editor} />}
+        {editor && <ImageBackgroundMenu editor={editor} onReady={()=>editorMounted(editor)} />}
         <EditorContent
           editor={editor}
           role="presentation"

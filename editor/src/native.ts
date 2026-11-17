@@ -59,7 +59,11 @@ function action(name:string,value?:any){
   default:return false
  }
 }
-export function bindEditor(instance:Editor){editor=instance;editor.on('update',()=>{dirty=true;emit();selection()});editor.on('selectionUpdate',selection);editor.on('focus',selection);if(current)load(current);else if((window as any).__mojiLoad)load((window as any).__mojiLoad);queueMicrotask(()=>native({type:'ready'}))}
+const bound=new WeakSet<Editor>(),mounted=new WeakSet<Editor>()
+export function bindEditor(instance:Editor){editor=instance;if(bound.has(instance))return;bound.add(instance);editor.on('update',()=>{dirty=true;emit();selection()});editor.on('selectionUpdate',selection);editor.on('focus',selection);if(current)load(current);else if((window as any).__mojiLoad)load((window as any).__mojiLoad)}
+// The parent effect runs after child menus and their plugins are mounted. A core
+// onCreate callback alone is too early for a native host that loads immediately.
+export function editorMounted(instance:Editor){bindEditor(instance);if(mounted.has(instance))return;mounted.add(instance);queueMicrotask(()=>{if(editor===instance&&!instance.isDestroyed)native({type:'ready'})})}
 ;(window as any).MojiEditor={load,theme,configure,activate,deactivate,action,flush:(token?:string)=>{emit();native({type:'flushed',id:current?.id,session:current?.session,token})},snapshot,get recordId(){return current?.id},get editor(){return editor}}
 document.addEventListener('keydown',event=>{if(!current||event.isComposing)return;const chord=(event.ctrlKey?'Ctrl+':'')+(event.altKey?'Alt+':'')+(event.shiftKey?'Shift+':'')+event.key.toUpperCase();const item=Object.entries(current.shortcuts||{}).find(([,binding])=>binding&&binding===chord)
  if(item){event.preventDefault();event.stopImmediatePropagation();if(!action(item[0]))native({type:'action',id:current.id,action:item[0]})}

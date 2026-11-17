@@ -21,3 +21,13 @@ test('superseded loads never announce the previous document as ready',async({pag
  await page.evaluate(([a,b])=>{const w=window as any;w.nativeMessages=[];w.MojiEditor.load(a);w.MojiEditor.load(b)},[payload('old'),payload('latest')])
  await expect.poll(()=>page.evaluate(()=>(window as any).nativeMessages.filter((m:any)=>m.type==='loaded').map((m:any)=>m.id))).toEqual(['latest'])
 })
+test('an immediate native load after ready can already use mounted image controls',async({page})=>{
+ await page.addInitScript(()=>{
+  const w=window as any;w.requestAnimationFrame=()=>1;w.chrome??={};
+  w.chrome.webview={addEventListener:(_:string,handler:any)=>w.deliver=handler,postMessage:(m:any)=>{
+   if(m.type==='ready')w.deliver({data:{protocol:'moji',request:'initial',command:'load',value:{id:'early',session:'early',content:'<!--moji:tiptap:2--><p>图片</p><img width="160" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZuoAAAAASUVORK5CYII="><p></p>',variables:[],theme:'light',fontSize:16,shortcuts:{},defaults:{}}}})
+   if(m.type==='reply'&&m.request==='initial'&&m.ok){const editor=w.MojiEditor.editor;let at=0;editor.state.doc.descendants((n:any,p:number)=>{if(n.type.name==='image')at=p});editor.commands.setNodeSelection(at);editor.view.focus();const useTool=()=>{const button=document.querySelector<HTMLButtonElement>('button[aria-label=透明网格]');if(!button)return false;button.click();w.fastResult={mounted:true,background:editor.getAttributes('image').mojiBackground};return true};if(!useTool()){const observer=new MutationObserver(()=>{if(document.querySelector('button[aria-label=透明网格]')){observer.disconnect();useTool()}});observer.observe(document.body,{childList:true,subtree:true})}}
+  }}
+ })
+ await page.goto('/');await expect.poll(()=>page.evaluate(()=>(window as any).fastResult)).toEqual({mounted:true,background:'checker'})
+})
