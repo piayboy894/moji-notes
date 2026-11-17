@@ -17,3 +17,14 @@
 构建使用 `[build-native]` 提交标记，两个平台只生成和测试产物。检查通过并审阅截图后，`.github/verified-delivery.json` 明确记录平台、构建 ID 和来源提交；工作流再调用独立的校验发布器，发布已经验证的原始包。客户端读取的公开版本清单仍由正式发布自动维护。
 
 验证截图：[电脑端拿起原本子](screenshots/windows-notebook-drag.png)、[手机多选拖入记事本](screenshots/android-record-drag.png)、[不兼容时整组保留](screenshots/android-incompatible-record-drop.png)。截图使用测试数据。
+
+
+## 2.6.0 先浏览，再编辑
+
+点击记事本先进入完整卡片网格。点击卡片才打开左侧记录列表和右侧正文，编辑区左上角的箭头与本子名称返回网格，保留搜索和滚动位置。Windows 可从空白处拉出矩形选择，也可使用复选框、Ctrl / Shift 进行多选；选择动作不打开正文。手机通过长按或“选择”进入多选。复制、剪切、删除和拖入左侧同类型记事本沿用原有记录操作。
+
+Windows 只为视口附近生成卡片容器，Android 使用 LazyVerticalGrid；过渡只对列表执行一次 170 毫秒位移与淡入，避免逐帧重排宽度或创建第二份编辑器。返回和再次打开复用同一个正文浏览器。
+
+后台恢复时先让原生标题可输入，编辑页面在有上限的异步等待中恢复。已收到的正文独立写盘；后台冻结或编辑进程退出时，重新建立编辑组件并恢复宿主已收到的当前文档。故障测试覆盖模拟冻结与进程退出，不等同于数小时实机挂机复现。
+
+网格截图：[Windows](screenshots/windows-notebook-overview.png)、[Android 宽屏](screenshots/android-notebook-overview.png)。均使用原生测试数据。
