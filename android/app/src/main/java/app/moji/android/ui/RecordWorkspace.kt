@@ -21,8 +21,8 @@ import app.moji.android.data.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Stable class RecordSharedMotion(val shared: SharedTransitionScope, val visibility: AnimatedVisibilityScope)
 
-/** Only the opened card participates. sharedElement draws one instance,
- * so the old grid footer cannot show through the shorter detail card. */
+/** Grid cards register their bounds before the click; only the opened card has
+ * a matching detail element. sharedElement draws that one moving instance. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable fun Modifier.recordSharedCard(key: String, motion: RecordSharedMotion?, enabled: Boolean = true, z: Float = 1f): Modifier {
     if (motion == null || !enabled) return this

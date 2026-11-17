@@ -53,7 +53,8 @@ class AdaptiveUiTest {
             resize(1440,1080,160);ready(false);val book=Notebook(name="Continuity");val notes=(0 until 120).map{Note(notebookId=book.id,title="Record %03d".format(it),content="Body $it")}
             runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=notes)))}
             compose.activityRule.scenario.onActivity{it.vm.navigate(book.id);it.vm.sort("name")};val browser=webView()
-            compose.onNodeWithTag("note-list").performScrollToIndex(100);val target=notes[100]
+            // Pick the third column of a late row, not an already aligned card.
+            compose.onNodeWithTag("note-list").performScrollToIndex(100);val target=notes[102]
             compose.mainClock.autoAdvance=false
             compose.onNodeWithTag("record-card-${target.id}").performClick()
             compose.mainClock.advanceTimeBy(80);compose.waitForIdle()
@@ -74,14 +75,25 @@ class AdaptiveUiTest {
             val y=finish.height-100;val sampleX=finish.width-16;val panel=finish.getPixel(sampleX,y)
             fun edge(bitmap:android.graphics.Bitmap):Int {var x=sampleX;while(x>=0){val c=bitmap.getPixel(x,y);if(kotlin.math.abs(android.graphics.Color.red(c)-android.graphics.Color.red(panel))>3||kotlin.math.abs(android.graphics.Color.green(c)-android.graphics.Color.green(panel))>3||kotlin.math.abs(android.graphics.Color.blue(c)-android.graphics.Color.blue(panel))>3)break;x--};return x+1}
             val startEdge=edge(start);val middleEdge=edge(middle);val finalEdge=edge(finish)
+            val settled=compose.onNodeWithTag("record-card-${target.id}").fetchSemanticsNode().boundsInRoot
+            val selectedColor=finish.getPixel(settled.center.x.toInt(),(settled.bottom-8).toInt())
+            fun cardLeft(bitmap:android.graphics.Bitmap):Int {
+                var left=bitmap.width
+                for(y in settled.top.toInt() until (settled.bottom+120).toInt().coerceAtMost(bitmap.height))
+                    for(x in (settled.left-4).toInt().coerceAtLeast(0) until left)
+                        if(bitmap.getPixel(x,y)==selectedColor){left=x;break}
+                return left
+            }
+            val startCard=cardLeft(start);val finalCard=cardLeft(finish);val frameWidth=finish.width
             start.recycle();middle.recycle();finish.recycle()
             assertTrue("Whole opaque pane must move: $startEdge > $middleEdge > $finalEdge",startEdge>middleEdge&&middleEdge>finalEdge)
+            assertTrue("Right-column card must travel to the list: $startCard > $finalCard",startCard>finalCard+12&&startCard<frameWidth)
             compose.mainClock.autoAdvance=true;webReady()
             fun assertVisible(id:String){val card=compose.onNodeWithTag("record-card-$id").assertIsDisplayed().fetchSemanticsNode().boundsInRoot;val list=compose.onNodeWithTag("note-list").fetchSemanticsNode().boundsInRoot;assertTrue("Opened record must be fully visible",card.top>=list.top-.5f&&card.bottom<=list.bottom+.5f)}
             assertVisible(target.id);assertSame(browser,webView());screenshot("43-late-record-visible")
             compose.onNodeWithTag("back-to-overview").performClick();compose.onNodeWithTag("record-card-${target.id}").assertIsDisplayed().performClick();webReady();assertVisible(target.id)
-            val before=compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot;val next=notes[101];compose.onNodeWithTag("record-card-${next.id}").performClick();webReady()
-            assertSame(browser,webView());assertEquals(before,compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot);assertEquals("Body 101",jsText())
+            val before=compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot;val next=notes[103];compose.onNodeWithTag("record-card-${next.id}").performClick();webReady()
+            assertSame(browser,webView());assertEquals(before,compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot);assertEquals("Body 103",jsText())
         }finally{compose.mainClock.autoAdvance=true;shell("settings put global animator_duration_scale $previousDuration");shell("wm size reset");shell("wm density reset")}
     }
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
