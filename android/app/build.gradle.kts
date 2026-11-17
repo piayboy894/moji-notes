@@ -13,8 +13,8 @@ android {
         applicationId = "app.moji.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20602
-        versionName = "2.6.2"
+        versionCode = 20603
+        versionName = "2.6.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }

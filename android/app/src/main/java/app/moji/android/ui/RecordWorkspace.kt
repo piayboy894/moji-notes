@@ -30,7 +30,8 @@ import app.moji.android.data.*
     return with(motion.shared) {
         this@recordSharedBounds.sharedBounds(
             rememberSharedContentState(key), animatedVisibilityScope = motion.visibility,
-            boundsTransform = { _, _ -> tween(280, easing = FastOutSlowInEasing) },
+            boundsTransform = { _, _ -> tween(275, easing = FastOutSlowInEasing) },
+            enter = EnterTransition.None, exit = ExitTransition.None,
             resizeMode = SharedTransitionScope.ResizeMode.ScaleToBounds(if(crop)ContentScale.Crop else ContentScale.FillWidth, androidx.compose.ui.Alignment.TopStart), zIndexInOverlay = z
         )
     }
@@ -60,15 +61,23 @@ import app.moji.android.data.*
                     val motion = if (twoPane && (active != null || !editing)) RecordSharedMotion(this@SharedTransitionLayout, this@AnimatedContent) else null
                     if (!editing) {
                         overviewStates.SaveableStateProvider("overview-${s.view}") {
-                            val gridMotion = if(active!=null)Modifier.animateEnterExit(enter=EnterTransition.None,exit=slideOutHorizontally(tween(200)) { -it / 4 } + fadeOut(tween(160)))else Modifier
+                            val gridMotion = if(active!=null)Modifier.animateEnterExit(enter=EnterTransition.None,exit=slideOutHorizontally(tween(100)) { -48 } + fadeOut(tween(100)))else Modifier
                             NoteList(vm, s, gridMotion.testTag("notebook-overview"), editBook, overview = true, sharedMotion = motion)
                         }
                     } else if (twoPane) {
                         Row(Modifier.fillMaxSize()) {
-                            NoteList(vm, s, Modifier.width(listWidth).animateEnterExit(enter=fadeIn(tween(180, delayMillis=60)),exit=ExitTransition.None), editBook, sharedMotion = motion)
-                            Spacer(Modifier.width(gap).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-                            if (active != null) EditorScreen(vm, s, active, activity, export,
-                                Modifier.weight(1f).animateEnterExit(enter=slideInHorizontally(tween(220, delayMillis=140, easing=FastOutSlowInEasing)) { it } + fadeIn(tween(150, delayMillis=140)),exit=ExitTransition.None))
+                            NoteList(vm, s, Modifier.width(listWidth).animateEnterExit(enter=fadeIn(tween(85, delayMillis=275)),exit=ExitTransition.None), editBook, sharedMotion = motion)
+                            if (active != null) {
+                                // One opaque moving pane, including its separator and
+                                // background. It occludes the card transition overlay.
+                                Row(Modifier.weight(1f).fillMaxHeight()
+                                    .renderInSharedTransitionScopeOverlay(zIndexInOverlay=10f)
+                                    .animateEnterExit(enter=slideInHorizontally(tween(315, delayMillis=45, easing=FastOutSlowInEasing)) { it },exit=ExitTransition.None)
+                                    .background(MaterialTheme.colorScheme.surface).testTag("entering-editor-pane")) {
+                                    Spacer(Modifier.width(gap).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+                                    EditorScreen(vm, s, active, activity, export, Modifier.weight(1f))
+                                }
+                            }
                         }
                     } else if (active != null) {
                         EditorScreen(vm, s, active, activity, export,

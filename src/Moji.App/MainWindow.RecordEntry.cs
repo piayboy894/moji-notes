@@ -39,11 +39,7 @@ public partial class MainWindow
         { inOverview = false; VM.SelectedId = id; RenderWorkspace(); recordEntryCompletion = RevealSelectedRecord(center: true); return; }
 
         LastRecordEntrySnapshotCount = 0;
-        var source = CardPieces(overviewGrid, id).ToList();
-        AddPiece(source, "heading", overviewHeading, trimWidth: true);
-        AddPiece(source, "search", overviewSearch);
-        if (overviewRoot?.Children[0] is Panel header && header.Children.Count > 1 && header.Children[1] is Panel filters)
-            AddPiece(source, "sort", filters.Children.OfType<ComboBox>().FirstOrDefault());
+        var source = CardPieces(overviewGrid, id).FirstOrDefault(p => p.Key == id);
         var layer = new Canvas { Name = "RecordEntryLayer", Background = Ui.Resource("Bg"), ClipToBounds = true, IsHitTestVisible = false };
         Grid.SetRow(layer, Grid.GetRow(Body)); Panel.SetZIndex(layer, 20); owner.Children.Add(layer);
         var overviewPixels = CaptureEntryPixels(overviewRoot!);
@@ -55,7 +51,9 @@ public partial class MainWindow
         recordEntryCompletion = RunOverviewEntry(entry, source, overviewPixels, overviewBounds);
     }
 
-    private async Task RunOverviewEntry(OverviewEntry entry, List<EntryPiece> source, BitmapSource? overviewPixels, Rect overviewBounds)
+    internal Action<RecordEntryScene>? RecordEntryPrepared { get; set; }
+
+    private async Task RunOverviewEntry(OverviewEntry entry, EntryPiece? source, BitmapSource? overviewPixels, Rect overviewBounds)
     {
         var token = entry.Cancellation.Token;
         try
@@ -63,56 +61,22 @@ public partial class MainWindow
             await RevealSelectedRecord(center: true);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render, token);
             if (!CurrentEntry(entry)) return;
-            var target = CardPieces(noteList!, entry.Id).ToList();
-            AddPiece(target, "heading", listHeading, trimWidth: true); AddPiece(target, "search", recordSearch); AddPiece(target, "sort", recordSort);
-            entry.Layer.Children.Clear();
-            var leftWidth = workspaceRoot!.ColumnDefinitions[0].ActualWidth;
-            var side = new Border { Width = Math.Max(1, Body.ActualWidth), Height = Body.ActualHeight, Background = Ui.Resource("Side"), RenderTransform = new ScaleTransform(1, 1) };
-            entry.Layer.Children.Add(side);
-            Animate((ScaleTransform)side.RenderTransform, ScaleTransform.ScaleXProperty, 1, leftWidth / side.Width, 240);
-            if(overviewPixels!=null)
-            {
-                var image=new Image{Source=overviewPixels,Width=overviewBounds.Width,Height=overviewBounds.Height,Stretch=Stretch.Fill,RenderTransform=new TranslateTransform()};
-                var clip=new GeometryGroup{FillRule=FillRule.EvenOdd};clip.Children.Add(new RectangleGeometry(new Rect(0,0,overviewBounds.Width,overviewBounds.Height)));
-                foreach(var piece in source){var hole=piece.Bounds;hole.Offset(-overviewBounds.X,-overviewBounds.Y);clip.Children.Add(new RectangleGeometry(hole));}clip.Freeze();image.Clip=clip;
-                Canvas.SetLeft(image,overviewBounds.X);Canvas.SetTop(image,overviewBounds.Y);entry.Layer.Children.Add(image);
-                Animate((TranslateTransform)image.RenderTransform,TranslateTransform.XProperty,0,-70,160);image.BeginAnimation(OpacityProperty,new DoubleAnimation(1,0,TimeSpan.FromMilliseconds(160)));
-            }
-            var targetByKey = target.ToDictionary(p => p.Key);
-            foreach (var piece in source)
-            {
-                if (targetByKey.Remove(piece.Key, out var end)) PlacePiece(entry.Layer, piece, end, 240, 0, piece.Key == entry.Id);
-                else PlacePiece(entry.Layer, piece, piece with { Bounds = new Rect(piece.Bounds.X - Math.Min(380, Body.ActualWidth * .4), piece.Bounds.Y, piece.Bounds.Width, piece.Bounds.Height) }, 160, 0, disappear: true);
-            }
-            foreach (var piece in targetByKey.Values)
-                PlacePiece(entry.Layer, piece with { Bounds = new Rect(piece.Bounds.X + 38, piece.Bounds.Y, piece.Bounds.Width, piece.Bounds.Height) }, piece, 190, 50, appear: true);
-
-            var leftPieces = entry.Layer.Children.Cast<UIElement>().ToArray();
-            var started = System.Diagnostics.Stopwatch.StartNew();
-            var right = new Border { Width = editorHost!.ActualWidth, Height = editorHost.ActualHeight, Background = Ui.Resource("Panel") };
-            var rightBounds = BoundsInBody(editorHost); Canvas.SetLeft(right, rightBounds.X); Canvas.SetTop(right, rightBounds.Y); entry.Layer.Children.Add(right);
-            RecordEntryStage?.Invoke("cards");
-            var openFrame = EditorEntryFrame(entry);
-            // Let the real list become interactive as soon as its cards settle,
-            // even when a recovering renderer needs longer to prepare its frame.
-            var settle = SettleLeft();
-            async Task SettleLeft()
-            {
-                try { await Task.Delay(250, token); } catch(OperationCanceledException) { return; }
-                if (!CurrentEntry(entry)) return;
-                workspaceRoot!.Children[0].IsHitTestVisible = true;
-                entry.Layer.Background = null;
-                foreach (var child in leftPieces) entry.Layer.Children.Remove(child);
-            }
-            var editorFrame = await openFrame;
-            await Task.Delay(Math.Max(0, 140-(int)started.ElapsedMilliseconds),token);
-            if (!CurrentEntry(entry)) return;
-            if(editorFrame==null)return;
-            var moving = new Grid { Width = rightBounds.Width, Height = rightBounds.Height, Background = Ui.Resource("Panel"), RenderTransform = new TranslateTransform(rightBounds.Width, 0) };
-            moving.Children.Add(editorFrame); Canvas.SetLeft(moving, rightBounds.X); Canvas.SetTop(moving, rightBounds.Y); entry.Layer.Children.Add(moving);
-            Animate((TranslateTransform)moving.RenderTransform, TranslateTransform.XProperty, rightBounds.Width, 0, 210);
-            RecordEntryStage?.Invoke("editor");
-            await Task.WhenAll(settle,Task.Delay(220, token));
+            var target = CardPieces(noteList!, entry.Id).FirstOrDefault(p => p.Key == entry.Id);
+            var left = (FrameworkElement)workspaceRoot!.Children[0];
+            var leftPixels = CaptureEntryPixels(left);
+            // Keep the complete overview visible while preparing the single ready
+            // editor frame. No final editor background is exposed in advance.
+            var editorFrame = await EditorEntryFrame(entry);
+            if (!CurrentEntry(entry) || editorFrame == null || overviewPixels == null || leftPixels == null) return;
+            var scene = new RecordEntryScene(overviewPixels, overviewBounds, leftPixels, BoundsInBody(left),
+                editorFrame, BoundsInBody(editorHost!), source?.Pixels, source?.Bounds, target?.Pixels, target?.Bounds,
+                Ui.Resource("Side"), Ui.Resource("Line")) { Width = Body.ActualWidth, Height = Body.ActualHeight };
+            entry.Layer.Children.Clear(); entry.Layer.Children.Add(scene);
+            scene.Measure(new Size(scene.Width, scene.Height)); scene.Arrange(new Rect(0, 0, scene.Width, scene.Height));
+            RecordEntryPrepared?.Invoke(scene);
+            scene.BeginAnimation(RecordEntryScene.ProgressProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(360)));
+            RecordEntryStage?.Invoke("cards"); RecordEntryStage?.Invoke("editor");
+            await Task.Delay(380, token);
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { AppDiagnostics.Write("record-entry", error.GetType().Name); }
@@ -133,7 +97,7 @@ public partial class MainWindow
         }
     }
 
-    private async Task<FrameworkElement?> EditorEntryFrame(OverviewEntry entry)
+    private async Task<BitmapSource?> EditorEntryFrame(OverviewEntry entry)
     {
         var token = entry.Cancellation.Token;
         await editorTransition.WaitAsync(token);
@@ -167,7 +131,9 @@ public partial class MainWindow
             var image = new Image { Source = body, Width = recordBody.ActualWidth, Height = recordBody.ActualHeight, Stretch = Stretch.Fill };
             Canvas.SetLeft(image, at.X); Canvas.SetTop(image, at.Y); canvas.Children.Add(image);
         }
-        return canvas;
+        canvas.Measure(new Size(canvas.Width, canvas.Height));
+        canvas.Arrange(new Rect(0, 0, canvas.Width, canvas.Height)); canvas.UpdateLayout();
+        return CaptureEntryPixels(canvas);
     }
 
     private async Task RevealSelectedRecord(bool center = false)
@@ -219,13 +185,6 @@ public partial class MainWindow
             if (CaptureEntryPixels(item, crop) is { } pixels) yield return new(row.Note.Id, visible, pixels);
         }
     }
-    private void AddPiece(List<EntryPiece> pieces, string key, FrameworkElement? element, bool trimWidth = false)
-    {
-        if (element == null || !element.IsVisible) return;
-        var bounds = BoundsInBody(element);
-        if (trimWidth) bounds.Width = Math.Min(bounds.Width, element.DesiredSize.Width);
-        if (CaptureEntryPixels(element, new Rect(0, 0, bounds.Width, bounds.Height)) is { } pixels) pieces.Add(new(key, bounds, pixels));
-    }
     private BitmapSource? CaptureEntryPixels(FrameworkElement element, Rect? crop = null)
     {
         var area = crop ?? new Rect(element.RenderSize); if (area.Width < 1 || area.Height < 1) return null;
@@ -234,24 +193,5 @@ public partial class MainWindow
         using (var dc = visual.RenderOpen()) dc.DrawRectangle(new VisualBrush(element) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = area, Stretch = Stretch.Fill }, null, new Rect(0, 0, area.Width * scale, area.Height * scale));
         var pixels = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(area.Width * scale)), Math.Max(1, (int)Math.Ceiling(area.Height * scale)), 96, 96, PixelFormats.Pbgra32);
         pixels.Render(visual); pixels.Freeze(); LastRecordEntrySnapshotCount++; return pixels;
-    }
-    private static void Animate(Animatable target, DependencyProperty property, double from, double to, int milliseconds, int delay = 0)
-    {
-        target.BeginAnimation(property, new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(milliseconds)) { BeginTime = TimeSpan.FromMilliseconds(delay), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-    }
-    private static void PlacePiece(Canvas canvas, EntryPiece from, EntryPiece to, int duration, int delay, bool selected = false, bool disappear = false, bool appear = false)
-    {
-        var layer = new Grid { Width = to.Bounds.Width, Height = to.Bounds.Height, IsHitTestVisible = false };
-        Canvas.SetLeft(layer, to.Bounds.X); Canvas.SetTop(layer, to.Bounds.Y); Panel.SetZIndex(layer, selected ? 5 : 1);
-        var scale = new ScaleTransform(from.Bounds.Width / to.Bounds.Width, from.Bounds.Height / to.Bounds.Height); var move = new TranslateTransform(from.Bounds.X - to.Bounds.X, from.Bounds.Y - to.Bounds.Y);
-        var transforms = new TransformGroup(); transforms.Children.Add(scale); transforms.Children.Add(move); layer.RenderTransform = transforms;
-        var old = new Image { Source = from.Pixels, Stretch = Stretch.Fill }; var next = new Image { Source = to.Pixels, Stretch = Stretch.Fill, Opacity = appear ? 1 : 0 };
-        layer.Children.Add(old); if (!ReferenceEquals(from.Pixels, to.Pixels)) layer.Children.Add(next); canvas.Children.Add(layer);
-        if (duration == 0) return;
-        Animate(scale, ScaleTransform.ScaleXProperty, scale.ScaleX, 1, duration, delay); Animate(scale, ScaleTransform.ScaleYProperty, scale.ScaleY, 1, duration, delay);
-        Animate(move, TranslateTransform.XProperty, move.X, 0, duration, delay); Animate(move, TranslateTransform.YProperty, move.Y, 0, duration, delay);
-        if (disappear) layer.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(duration)));
-        else if (appear) layer.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration)) { BeginTime = TimeSpan.FromMilliseconds(delay) });
-        else if (!ReferenceEquals(from.Pixels, to.Pixels)) { old.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(duration))); next.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duration))); }
     }
 }

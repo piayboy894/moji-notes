@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Moji.Core;
 
 namespace Moji.App;
@@ -35,15 +36,34 @@ internal static partial class NativeSmoke
         RectangleSelection.ApplyRegion(grid,new Rect(0,0,grid.ActualWidth,Math.Min(220,grid.ActualHeight)));if(grid.SelectedItems.Count<2||FindNamed<TextBox>(window,"RecordTitle")!=null)throw new Exception("Overview rectangle selection opened the editor");
         Capture(window,Path.Combine(output,"notebook-overview.png"));grid.UnselectAll();
         var motion=window.RecordMotionOverride;window.RecordMotionOverride=true;var stages=new HashSet<string>();
-        window.RecordEntryStage=stage=>{stages.Add(stage);var frame=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(70)};frame.Tick+=(_,_)=>{frame.Stop();Capture(window,Path.Combine(output,"record-entry-"+stage+".png"));};frame.Start();};
+        window.RecordEntryStage=stage=>stages.Add(stage);
+        var frames=0;Exception? frameFailure=null;
+        window.RecordEntryPrepared=scene=>{
+            try{
+                var previous=scene.ActualWidth;
+                foreach(var progress in new[]{0d,.2,.45,.7,.9,1d}){
+                    var bitmap=scene.Frame(progress);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(Path.Combine(output,$"record-entry-frame-{(int)(progress*100):D3}.png")))encoder.Save(stream);
+                    if(scene.EditorLeft>previous+.1||scene.OldOpacity>0&&scene.ListOpacity>0)throw new Exception("Entry plane or text handoff is discontinuous");previous=scene.EditorLeft;
+                    // The bottom of the pane has no text. Its background must
+                    // travel with its left edge, with no prepainted editor below.
+                    var pixels=new byte[bitmap.PixelWidth*bitmap.PixelHeight*4];bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);
+                    void Pixel(int x,Color expected){var at=((bitmap.PixelHeight-16)*bitmap.PixelWidth+x)*4;if(Math.Abs(pixels[at]-expected.B)>4||Math.Abs(pixels[at+1]-expected.G)>4||Math.Abs(pixels[at+2]-expected.R)>4||pixels[at+3]!=255)throw new Exception($"Entry background is not opaque at {progress}: {x}");}
+                    if(progress>=.45&&progress<.9)Pixel((int)scene.EditorLeft-8,((SolidColorBrush)window.FindResource("Side")).Color);
+                    if(progress>=.2)Pixel(Math.Min(bitmap.PixelWidth-1,(int)scene.EditorLeft+8),((SolidColorBrush)window.FindResource("Panel")).Color);
+                    frames++;
+                }
+                scene.Progress=0;
+            }catch(Exception error){frameFailure=error;}
+        };
         var late=(NoteRow)grid.Items[900];grid.ScrollIntoView(late);await Render();var stableBrowser=editor.Browser;
         window.OpenOverviewRecord(late.Note.Id);await window.RecordEntryCompletion.WaitAsync(TimeSpan.FromSeconds(10));editor=await window.ReadyEditor();await Render();
+        if(frameFailure!=null)throw frameFailure;if(frames!=6)throw new Exception("Entry intermediate frames were not verified");
         var detail=FindNamed<ListBox>(window,"RecordList")!;var activeRow=(NoteRow)detail.SelectedItem;var activeCard=detail.ItemContainerGenerator.ContainerFromItem(activeRow)as ListBoxItem;
         var viewport=FindAll<ScrollViewer>(detail).First();var activeBounds=activeCard?.TransformToAncestor(viewport).TransformBounds(new Rect(activeCard.RenderSize));
         var detailContainers=FindAll<ListBoxItem>(detail).Count();
         if(activeRow.Note.Id!=late.Note.Id||activeBounds==null||activeBounds.Value.Top<-.5||activeBounds.Value.Bottom>viewport.ViewportHeight+.5||detailContainers>60||!ReferenceEquals(stableBrowser,editor.Browser)||window.RecordEntryActive||!stages.SetEquals(new[]{"cards","editor"})||window.LastRecordEntrySnapshotCount>70)throw new Exception($"Late record entry lost its card, browser or motion lifecycle: visible={activeBounds}, viewport={viewport.ViewportHeight}, containers={detailContainers}, stages={string.Join(",",stages)}, snapshots={window.LastRecordEntrySnapshotCount}");
-        Capture(window,Path.Combine(output,"late-record-visible.png"));checks.Add("overview cards move into the left list before the ready editor frame enters from the right; a late record is fully visible and the same browser is retained with bounded temporary snapshots");
-        window.RecordEntryStage=null;window.ReturnToOverview();await Render();window.RecordMotionOverride=false;var snapshots=window.LastRecordEntrySnapshotCount;window.OpenOverviewRecord(late.Note.Id);await window.RecordEntryCompletion;await window.ReadyEditor();
+        Capture(window,Path.Combine(output,"late-record-visible.png"));checks.Add("six intermediate frames verify an opaque editor pane and separator moving together without a stationary panel or overlapping old/new list text; a late record is fully visible and the same browser is retained with bounded temporary snapshots");
+        window.RecordEntryStage=null;window.RecordEntryPrepared=null;window.ReturnToOverview();await Render();window.RecordMotionOverride=false;var snapshots=window.LastRecordEntrySnapshotCount;window.OpenOverviewRecord(late.Note.Id);await window.RecordEntryCompletion;await window.ReadyEditor();
         if(window.RecordEntryActive||window.LastRecordEntrySnapshotCount!=snapshots)throw new Exception("Reduced motion must reveal the record without capturing animation frames");
         window.ReturnToOverview();await Render();window.RecordMotionOverride=true;window.OpenOverviewRecord(late.Note.Id);window.ReturnToOverview();await window.RecordEntryCompletion;
         if(window.RecordEntryActive||FindNamed<ListBox>(window,"OverviewGrid")==null)throw new Exception("Returning during entry left an overlay or wrong scene");
