@@ -23,8 +23,10 @@
 
 点击记事本先进入完整卡片网格。点击卡片才打开左侧记录列表和右侧正文，编辑区左上角的箭头与本子名称返回网格，保留搜索和滚动位置。Windows 可从空白处拉出矩形选择，也可使用复选框、Ctrl / Shift 进行多选；选择动作不打开正文。手机通过长按或“选择”进入多选。复制、剪切、删除和拖入左侧同类型记事本沿用原有记录操作。
 
-Windows 只为视口附近生成卡片容器，Android 使用 LazyVerticalGrid；过渡只对列表执行一次 170 毫秒位移与淡入，避免逐帧重排宽度或创建第二份编辑器。返回和再次打开复用同一个正文浏览器。
+Windows 只为视口附近生成卡片容器，Android 使用 LazyVerticalGrid。2.6.2 中，点击后可见卡片和筛选区连续收拢到左侧，编辑区随后从右侧进入；不逐帧重排整份列表，返回和再次打开复用同一个正文浏览器。进入前定位已选记录，Windows 将它居中，Android 从它所在索引显示，因此靠后的记录也会立即出现在左侧。关闭系统动画时直接进入最终界面；返回、切换记事本或调整窗口会结束旧过渡。
 
 后台恢复时先让原生标题可输入，编辑页面在有上限的异步等待中恢复。已收到的正文独立写盘；后台冻结或编辑进程退出时，重新建立编辑组件并恢复宿主已收到的当前文档。故障测试覆盖模拟冻结与进程退出，不等同于数小时实机挂机复现。
 
 网格截图：[Windows](screenshots/windows-notebook-overview.png)、[Android 宽屏](screenshots/android-notebook-overview.png)。均使用原生测试数据。
+
+2.6.2 靠后记录定位截图：[Windows](screenshots/windows-late-record-visible.png)、[Android 宽屏](screenshots/android-late-record-visible.png)。均使用测试数据；Windows 的 1,000 条记录检查同时验证网格和详情列表的容器数量上限。
