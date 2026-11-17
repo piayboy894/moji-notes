@@ -51,7 +51,8 @@ jobs:
           MOJI_FORCE_WEBVIEW_BOOTSTRAP: 1
         shell: pwsh
         run: |
-          $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/smoke" -Wait -PassThru
+          New-Item -ItemType Directory -Force artifacts/smoke | Out-Null
+          $p = Start-Process publish/win-x64/Moji.Notes.exe -ArgumentList '--smoke-test', '--output', "$pwd/artifacts/smoke" -RedirectStandardError "$pwd/artifacts/smoke/fatal-error.txt" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Native smoke test failed: $($p.ExitCode)" }
           Get-Content artifacts/smoke/report.json
       - name: Verify ordinary launch without installing components

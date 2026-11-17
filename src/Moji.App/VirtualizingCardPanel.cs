@@ -35,6 +35,7 @@ public sealed class VirtualizingCardPanel : VirtualizingPanel, IScrollInfo
         offset = Math.Clamp(offset, 0, Math.Max(0, extent.Height - viewport.Height)); ScrollOwner?.InvalidateScrollInfo();
         var first = Math.Max(0, ((int)(offset / CellHeight) - 1) * columns);
         var last = Math.Min(owner.Items.Count - 1, ((int)((offset + viewport.Height) / CellHeight) + 2) * columns - 1);
+        var children = InternalChildren; // Initialize the panel generator before asking it for containers.
         var generator = ItemContainerGenerator; var position = generator.GeneratorPositionFromIndex(first);
         var childIndex = position.Offset == 0 ? position.Index : position.Index + 1;
         using (generator.StartAt(position, GeneratorDirection.Forward, true))

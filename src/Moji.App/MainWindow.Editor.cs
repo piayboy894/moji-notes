@@ -52,7 +52,7 @@ public partial class MainWindow
         """;
         noteList.ItemTemplate=(DataTemplate)XamlReader.Parse(template);
         noteList.AddHandler(Button.ClickEvent,new RoutedEventHandler((_,e)=>{if(e.OriginalSource is Button{Tag:NoteRow row}button){if(button.Name=="RecordPin"){e.Handled=true;ToggleRecordPin(row.Note.Id);}}}));
-        noteList.SelectionChanged+=(_,_)=>{if(refreshingNotes)return;if(selectingRecords){UpdateRecordSelectionUi();return;}if(noteList.SelectedItem is NoteRow row){if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}};
+        noteList.SelectionChanged+=(_,_)=>{if(refreshingNotes||inOverview)return;if(selectingRecords){UpdateRecordSelectionUi();return;}if(noteList.SelectedItem is NoteRow row){if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}};
         noteList.PreviewMouseRightButtonDown+=(_,e)=>{var source=e.OriginalSource as DependencyObject;while(source!=null&&source is not ListBoxItem)source=VisualTreeHelper.GetParent(source);if(source is ListBoxItem item&&!item.IsSelected){noteList.SelectedItem=item.DataContext;item.Focus();}};
         AttachRecordDrag(noteList);
         noteList.ContextMenu=new ContextMenu();noteList.ContextMenuOpening+=(_,_)=>noteList.ContextMenu=BuildListMenu();left.Children.Add(noteList);
