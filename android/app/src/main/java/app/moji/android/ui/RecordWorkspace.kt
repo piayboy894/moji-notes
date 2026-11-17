@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
@@ -22,17 +21,16 @@ import app.moji.android.data.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Stable class RecordSharedMotion(val shared: SharedTransitionScope, val visibility: AnimatedVisibilityScope)
 
-/** Only viewport cards join the transition. ScaleToBounds keeps text measured
- * once at its final constraints instead of reflowing it on every frame. */
+/** Only the opened card participates. sharedElement draws one instance,
+ * so the old grid footer cannot show through the shorter detail card. */
 @OptIn(ExperimentalSharedTransitionApi::class)
-@Composable fun Modifier.recordSharedBounds(key: String, motion: RecordSharedMotion?, enabled: Boolean = true, z: Float = 1f, crop: Boolean = false): Modifier {
+@Composable fun Modifier.recordSharedCard(key: String, motion: RecordSharedMotion?, enabled: Boolean = true, z: Float = 1f): Modifier {
     if (motion == null || !enabled) return this
     return with(motion.shared) {
-        this@recordSharedBounds.sharedBounds(
+        this@recordSharedCard.sharedElement(
             rememberSharedContentState(key), animatedVisibilityScope = motion.visibility,
             boundsTransform = { _, _ -> tween(275, easing = FastOutSlowInEasing) },
-            enter = EnterTransition.None, exit = ExitTransition.None,
-            resizeMode = SharedTransitionScope.ResizeMode.ScaleToBounds(if(crop)ContentScale.Crop else ContentScale.FillWidth, androidx.compose.ui.Alignment.TopStart), zIndexInOverlay = z
+            zIndexInOverlay = z
         )
     }
 }

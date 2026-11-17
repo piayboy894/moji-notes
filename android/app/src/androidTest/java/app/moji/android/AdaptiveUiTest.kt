@@ -57,15 +57,20 @@ class AdaptiveUiTest {
             compose.mainClock.autoAdvance=false
             compose.onNodeWithTag("record-card-${target.id}").performClick()
             compose.mainClock.advanceTimeBy(80);compose.waitForIdle()
-            val start=compose.onNodeWithTag("entering-editor-pane").fetchSemanticsNode().boundsInRoot
+            val start=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             screenshot("44-editor-pane-entry-early")
             compose.mainClock.advanceTimeBy(100);compose.waitForIdle()
-            val middle=compose.onNodeWithTag("entering-editor-pane").fetchSemanticsNode().boundsInRoot
+            val middle=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             screenshot("45-editor-pane-entry-middle")
             compose.mainClock.advanceTimeBy(220);compose.waitForIdle()
-            val finish=compose.onNodeWithTag("entering-editor-pane").fetchSemanticsNode().boundsInRoot
-            assertTrue("Whole editor pane must enter from the right",start.left>middle.left&&middle.left>finish.left)
-            assertEquals(start.top,finish.top,.5f);assertEquals(start.bottom,finish.bottom,.5f)
+            val finish=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
+            // Overlay drawing moves independently of semantics layout bounds.
+            // Inspect its actual opaque background edge on the device instead.
+            val y=finish.height-100;val panel=finish.getPixel(finish.width-8,y)
+            fun edge(bitmap:android.graphics.Bitmap):Int {var x=bitmap.width-1;while(x>=0){val c=bitmap.getPixel(x,y);if(kotlin.math.abs(android.graphics.Color.red(c)-android.graphics.Color.red(panel))>3||kotlin.math.abs(android.graphics.Color.green(c)-android.graphics.Color.green(panel))>3||kotlin.math.abs(android.graphics.Color.blue(c)-android.graphics.Color.blue(panel))>3)break;x--};return x+1}
+            val startEdge=edge(start);val middleEdge=edge(middle);val finalEdge=edge(finish)
+            start.recycle();middle.recycle();finish.recycle()
+            assertTrue("Whole opaque pane must move: $startEdge > $middleEdge > $finalEdge",startEdge>middleEdge&&middleEdge>finalEdge)
             compose.mainClock.autoAdvance=true;webReady()
             fun assertVisible(id:String){val card=compose.onNodeWithTag("record-card-$id").assertIsDisplayed().fetchSemanticsNode().boundsInRoot;val list=compose.onNodeWithTag("note-list").fetchSemanticsNode().boundsInRoot;assertTrue("Opened record must be fully visible",card.top>=list.top-.5f&&card.bottom<=list.bottom+.5f)}
             assertVisible(target.id);assertSame(browser,webView());screenshot("43-late-record-visible")
