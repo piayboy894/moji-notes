@@ -37,12 +37,15 @@ internal static partial class NativeSmoke
         Capture(window,Path.Combine(output,"notebook-overview.png"));grid.UnselectAll();
         var motion=window.RecordMotionOverride;window.RecordMotionOverride=true;var stages=new HashSet<string>();
         window.RecordEntryStage=stage=>stages.Add(stage);
-        var frames=0;Exception? frameFailure=null;
+        var frames=0;Exception? frameFailure=null;BitmapSource? initialPixels=null,finalPixels=null;
+        BitmapSource NativeBody(){var root=(FrameworkElement)window.Content;var body=FindNamed<ContentControl>(window,"Body")!;var rect=body.TransformToAncestor(root).TransformBounds(new Rect(body.RenderSize));var image=new RenderTargetBitmap((int)root.ActualWidth,(int)root.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(root);return new CroppedBitmap(image,new Int32Rect((int)rect.X,(int)rect.Y,(int)rect.Width,(int)rect.Height));}
+        void Match(BitmapSource actual,BitmapSource expected,int width,int height,string stage){var stride=actual.PixelWidth*4;var a=new byte[stride*actual.PixelHeight];var b=new byte[expected.PixelWidth*4*expected.PixelHeight];actual.CopyPixels(a,stride,0);expected.CopyPixels(b,expected.PixelWidth*4,0);var different=0;for(var y=0;y<height;y++)for(var x=0;x<width;x++){var aa=y*stride+x*4;var bb=(y*expected.PixelWidth+x)*4;if(Enumerable.Range(0,3).Any(c=>Math.Abs(a[aa+c]-b[bb+c])>16))different++;}if(different>width*height*.025)throw new Exception($"Entry {stage} differs from the real scene: {different}/{width*height}");}
+
         window.RecordEntryPrepared=scene=>{
             try{
                 var previous=scene.ActualWidth;
                 foreach(var progress in new[]{0d,.2,.45,.7,.9,1d}){
-                    var bitmap=scene.Frame(progress);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(Path.Combine(output,$"record-entry-frame-{(int)(progress*100):D3}.png")))encoder.Save(stream);
+                    var bitmap=scene.Frame(progress);if(progress==0)Match(bitmap,initialPixels!,bitmap.PixelWidth,bitmap.PixelHeight,"first frame");if(progress==1)finalPixels=bitmap;var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var stream=File.Create(Path.Combine(output,$"record-entry-frame-{(int)(progress*100):D3}.png")))encoder.Save(stream);
                     if(scene.EditorLeft>previous+.1||scene.OldOpacity>0&&scene.ListOpacity>0)throw new Exception("Entry plane or text handoff is discontinuous");previous=scene.EditorLeft;
                     // The bottom of the pane has no text. Its background must
                     // travel with its left edge, with no prepainted editor below.
@@ -55,12 +58,14 @@ internal static partial class NativeSmoke
                 scene.Progress=0;
             }catch(Exception error){frameFailure=error;}
         };
-        var late=(NoteRow)grid.Items[900];grid.ScrollIntoView(late);await Render();var stableBrowser=editor.Browser;
+        var late=(NoteRow)grid.Items[900];grid.ScrollIntoView(late);await Render();var stableBrowser=editor.Browser;initialPixels=NativeBody();
         window.OpenOverviewRecord(late.Note.Id);await window.RecordEntryCompletion.WaitAsync(TimeSpan.FromSeconds(10));editor=await window.ReadyEditor();await Render();
         if(frameFailure!=null)throw frameFailure;if(frames!=6)throw new Exception("Entry intermediate frames were not verified");
         var detail=FindNamed<ListBox>(window,"RecordList")!;var activeRow=(NoteRow)detail.SelectedItem;var activeCard=detail.ItemContainerGenerator.ContainerFromItem(activeRow)as ListBoxItem;
         var viewport=FindAll<ScrollViewer>(detail).First();var activeBounds=activeCard?.TransformToAncestor(viewport).TransformBounds(new Rect(activeCard.RenderSize));
         var detailContainers=FindAll<ListBoxItem>(detail).Count();
+        var finalNative=NativeBody();Match(finalPixels!,finalNative,270,finalNative.PixelHeight,"settled left list");
+        Match(finalPixels!,finalNative,finalNative.PixelWidth,155,"settled native header");
         if(activeRow.Note.Id!=late.Note.Id||activeBounds==null||activeBounds.Value.Top<-.5||activeBounds.Value.Bottom>viewport.ViewportHeight+.5||detailContainers>60||!ReferenceEquals(stableBrowser,editor.Browser)||window.RecordEntryActive||!stages.SetEquals(new[]{"cards","editor"})||window.LastRecordEntrySnapshotCount>70)throw new Exception($"Late record entry lost its card, browser or motion lifecycle: visible={activeBounds}, viewport={viewport.ViewportHeight}, containers={detailContainers}, stages={string.Join(",",stages)}, snapshots={window.LastRecordEntrySnapshotCount}");
         Capture(window,Path.Combine(output,"late-record-visible.png"));checks.Add("six intermediate frames verify an opaque editor pane and separator moving together without a stationary panel or overlapping old/new list text; a late record is fully visible and the same browser is retained with bounded temporary snapshots");
         window.RecordEntryStage=null;window.RecordEntryPrepared=null;window.ReturnToOverview();await Render();window.RecordMotionOverride=false;var snapshots=window.LastRecordEntrySnapshotCount;window.OpenOverviewRecord(late.Note.Id);await window.RecordEntryCompletion;await window.ReadyEditor();

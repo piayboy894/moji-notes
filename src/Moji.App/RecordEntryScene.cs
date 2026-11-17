@@ -9,7 +9,7 @@ namespace Moji.App;
 internal sealed class RecordEntryScene(BitmapSource overview, Rect overviewBounds,
     BitmapSource list, Rect listBounds, BitmapSource editor, Rect editorBounds,
     BitmapSource? sourceCard, Rect? sourceBounds, BitmapSource? targetCard, Rect? targetBounds,
-    Brush background, Brush divider) : FrameworkElement
+    Brush background, Brush overviewBackground, Brush divider) : FrameworkElement
 {
     internal static readonly DependencyProperty ProgressProperty = DependencyProperty.Register(
         nameof(Progress), typeof(double), typeof(RecordEntryScene), new FrameworkPropertyMetadata(0d, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -63,7 +63,7 @@ internal sealed class RecordEntryScene(BitmapSource overview, Rect overviewBound
         {
             // A single opaque card, with no old/new text overlay. Its final
             // typography is swapped only after its geometry has settled.
-            dc.DrawRectangle(background, null, card);
+            dc.DrawRectangle(Progress < .76 ? overviewBackground : background, null, card);
             dc.PushClip(new RectangleGeometry(card));
             // Preserve glyph proportions while the card gets shorter. Crop the
             // old footer rather than vertically crushing all its text.

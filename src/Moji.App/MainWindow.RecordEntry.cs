@@ -42,8 +42,8 @@ public partial class MainWindow
         var source = CardPieces(overviewGrid, id).FirstOrDefault(p => p.Key == id);
         var layer = new Canvas { Name = "RecordEntryLayer", Background = Ui.Resource("Bg"), ClipToBounds = true, IsHitTestVisible = false };
         Grid.SetRow(layer, Grid.GetRow(Body)); Panel.SetZIndex(layer, 20); owner.Children.Add(layer);
-        var overviewPixels = CaptureEntryPixels(overviewRoot!);
-        var overviewBounds = BoundsInBody(overviewRoot!);
+        var overviewPixels = CaptureEntryPixels(Body);
+        var overviewBounds = new Rect(Body.RenderSize);
         if(overviewPixels!=null){var image=new Image{Source=overviewPixels,Width=overviewBounds.Width,Height=overviewBounds.Height,Stretch=Stretch.Fill};Canvas.SetLeft(image,overviewBounds.X);Canvas.SetTop(image,overviewBounds.Y);layer.Children.Add(image);}
         var entry = new OverviewEntry(id, VM.WorkspaceEpoch, owner, layer); overviewEntry = entry;
         inOverview = false; VM.SelectedId = id;
@@ -70,7 +70,7 @@ public partial class MainWindow
             if (!CurrentEntry(entry) || editorFrame == null || overviewPixels == null || leftPixels == null) return;
             var scene = new RecordEntryScene(overviewPixels, overviewBounds, leftPixels, BoundsInBody(left),
                 editorFrame, BoundsInBody(editorHost!), source?.Pixels, source?.Bounds, target?.Pixels, target?.Bounds,
-                Ui.Resource("Side"), Ui.Resource("Line")) { Width = Body.ActualWidth, Height = Body.ActualHeight };
+                Ui.Resource("Side"), Ui.Resource("Bg"), Ui.Resource("Line")) { Width = Body.ActualWidth, Height = Body.ActualHeight };
             entry.Layer.Children.Clear(); entry.Layer.Children.Add(scene);
             scene.Measure(new Size(scene.Width, scene.Height)); scene.Arrange(new Rect(0, 0, scene.Width, scene.Height));
             RecordEntryPrepared?.Invoke(scene);
