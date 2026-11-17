@@ -1,5 +1,6 @@
 package app.moji.android.ui
 
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -70,6 +71,7 @@ import java.util.zip.ZipOutputStream
     fun addRecord() { if (canCreateRecord) vm.addNote(s.view) }
     val keyboardFocus=remember{FocusRequester()}
     LaunchedEffect(s.workspace!=null,s.view,s.selectedId,settings,cloudSaves){if(s.workspace!=null&&s.selectedId==null&&settings==null&&!cloudSaves&&!globalSearch)runCatching{keyboardFocus.requestFocus()}}
+    val overviewStates=rememberSaveableStateHolder()
     val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }; val drawer = rememberDrawerState(DrawerValue.Closed)
     val layers = remember { FeedbackLayers(snackbar) }
     val density = LocalDensity.current
@@ -127,7 +129,7 @@ import java.util.zip.ZipOutputStream
                 val active = s.workspace?.notes?.firstOrNull { it.id == s.selectedId && it.purgedAt == null }
                 BackHandler(enabled = active != null || s.view != "home") { if (active != null) vm.clearSelection() else vm.navigate("home") }
                 ModalNavigationDrawer(drawerState = drawer, gesturesEnabled = !wide && !rail, drawerContent = { ModalDrawerSheet(Modifier.width(280.dp), drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s,vm,done={scope.launch{drawer.close()}},settings={settings="general"},newBook={newBook=true},sync={cloudSaves=true},searchRequest=if(searchTarget=="drawer")searchRequest else 0,searchActive=drawerVisible&&!wide,searchVisible={if(it)searchOwner="drawer"else if(searchOwner=="drawer")searchOwner=null}) } }) {
-                    Row(Modifier.fillMaxSize().semantics { stateDescription = if (wide && twoPane && s.view != "home") "三栏布局" else if (twoPane && s.view != "home") "双栏布局" else "单栏布局" }.testTag("adaptive-layout")) {
+                    Row(Modifier.fillMaxSize().semantics { stateDescription = if(active==null&&s.view !in listOf("home","trash"))"卡片网格"else if (wide && twoPane && s.view != "home") "三栏布局" else if (twoPane && s.view != "home") "双栏布局" else "单栏布局" }.testTag("adaptive-layout")) {
                         if (wide) { Surface(Modifier.width(224.dp).fillMaxHeight().testTag("wide-navigation"), color = MaterialTheme.colorScheme.surfaceContainerLow) { SideNavigation(s,vm,done={},settings={settings="general"},newBook={newBook=true},sync={cloudSaves=true},searchRequest=if(searchTarget=="wide")searchRequest else 0,searchActive=true,searchVisible={if(it)searchOwner="wide"else if(searchOwner=="wide")searchOwner=null}) }; VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         else if (rail) { CompactNavigation(s, vm, { settings = "general" }, { scope.launch { drawer.open() } }); VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant) }
                         Scaffold(Modifier.weight(1f).fillMaxHeight(), containerColor = MaterialTheme.colorScheme.background,
@@ -137,6 +139,7 @@ import java.util.zip.ZipOutputStream
                             Box(Modifier.padding(padding).fillMaxSize()) {
                                 if (s.view == "home") HomeScreen(vm, s, { newBook = true }, { bookDialog = it })
                                 else if(s.view=="trash")TrashScreen(vm,s)
+                                else if(active==null){overviewStates.SaveableStateProvider("overview-${s.view}"){NoteList(vm,s,Modifier.testTag("notebook-overview"),editBook={bookDialog=it},overview=true)}}
                                 else if (twoPane) {
                                     var contentX by remember { mutableFloatStateOf(0f) }; val density = LocalDensity.current
                                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { contentX = it.positionInWindow().x }) {

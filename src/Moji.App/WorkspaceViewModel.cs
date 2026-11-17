@@ -25,7 +25,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     public long WorkspaceEpoch=>epoch;
     internal Func<Task>? FlushEditor {get;set;}
     public WorkspaceViewModel(string? directory = null)
-    { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(); } catch (Exception) { Notice?.Invoke("暂时无法保存，可重试或导出存档。"); } }; }
+    { Store = new(directory ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes")); saveTimer.Tick += async (_, _) => { saveTimer.Stop(); try { await SaveAsync(flushEditor:false); } catch (Exception) { Notice?.Invoke("暂时无法保存，可重试或导出存档。"); } }; }
     public async Task<bool> OpenAsync()
     {
         var state = await Store.ReadAsync();
@@ -45,9 +45,17 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     public void Change(Func<Workspace, Workspace> edit, string kind = "structure")
     { if (State == null) return; State = edit(State); dirty = true; SaveStatus = "保存中"; PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); saveTimer.Stop(); saveTimer.Start(); DataChanged?.Invoke(kind); }
     public void EditNote(string id, Func<Note, Note> edit, bool checkpoint = false) => Change(v => v.ChangeNote(id, edit, checkpoint), "edit");
-    public async Task SaveAsync()
+    public async Task SaveAsync(bool flushEditor = true)
     {
-        if(FlushEditor!=null)await FlushEditor();
+        Exception? flushFailure = null;
+        try { if(flushEditor && FlushEditor!=null)await FlushEditor(); }
+        catch(Exception error) { flushFailure=error;AppDiagnostics.Write("save-editor-flush",error.GetType().Name); }
+        // Persist every acknowledged edit even if the renderer has stopped answering.
+        await SaveReceivedAsync();
+        if(flushFailure!=null)System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(flushFailure).Throw();
+    }
+    private async Task SaveReceivedAsync()
+    {
         saveTimer.Stop(); if (State == null || !dirty) return;
         await saveGate.WaitAsync();
         try { if (State == null) return; var state = State; await Task.Run(() => Store.SaveAsync(state)); if (ReferenceEquals(State, state)) dirty = false; SaveStatus = dirty ? "保存中" : "已保存"; PropertyChanged?.Invoke(this, new(nameof(SaveStatus))); if (dirty) saveTimer.Start(); }

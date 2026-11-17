@@ -23,7 +23,7 @@ public partial class MainWindow
     private readonly Dictionary<Button, RecordDropOutline> recordDropOutlines = [];
     private bool InRecordKeyboardContext => Keyboard.FocusedElement is not TextBoxBase and not PasswordBox
         && cachedEditor?.Browser.IsKeyboardFocusWithin != true
-        && (noteList?.IsKeyboardFocusWithin == true || BooksPanel.IsKeyboardFocusWithin || recordSelectionTools?.IsKeyboardFocusWithin == true);
+        && (ActiveRecordList?.IsKeyboardFocusWithin == true || BooksPanel.IsKeyboardFocusWithin || recordSelectionTools?.IsKeyboardFocusWithin == true);
     private static string? RecordMarker(object? value)=>value switch{string text=>text,System.IO.MemoryStream stream=>System.Text.Encoding.UTF8.GetString(stream.ToArray()).TrimEnd('\0'),byte[] bytes=>System.Text.Encoding.UTF8.GetString(bytes).TrimEnd('\0'),_=>null};
     private static DataObject RecordDragData(string token){var data=new DataObject();data.SetData(RecordDragFormat,new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(token)),false);return data;}
     private bool HasRecordClipboard()
@@ -79,13 +79,13 @@ public partial class MainWindow
         menu.Items.Add(new Separator());
     }
     private static ListBoxItem? RecordContainer(DependencyObject? source)
-    { for (var p = source; p != null; p = VisualTreeHelper.GetParent(p)) if (p is ListBoxItem item) return item; return null; }
+    { for (var p = source; p != null; p = Ui.Parent(p)) if (p is ListBoxItem item) return item; return null; }
     private void AttachRecordDrag(ListBox list)
     {
         Point origin = default; NoteRow? pressed = null; bool postponeToggle = false;
         list.PreviewMouseLeftButtonDown += (_, e) => {
             origin = e.GetPosition(list); pressed = RecordContainer(e.OriginalSource as DependencyObject)?.DataContext as NoteRow; postponeToggle = false;
-            if (pressed != null && selectingRecords && list.SelectedItems.Contains(pressed) && !FromButton(e.OriginalSource as DependencyObject)) { postponeToggle = true; list.Focus(); list.CaptureMouse(); e.Handled = true; }
+            if (pressed != null && (selectingRecords || (inOverview && list.SelectedItems.Count>1)) && list.SelectedItems.Contains(pressed) && !FromButton(e.OriginalSource as DependencyObject)) { postponeToggle = true; list.Focus(); list.CaptureMouse(); e.Handled = true; }
         };
         list.PreviewMouseLeftButtonUp += (_, e) => {
             if (postponeToggle && !draggingRecords && pressed != null) { list.SelectedItems.Remove(pressed); e.Handled = true; }

@@ -9,14 +9,14 @@ using System.Windows.Threading;
 namespace Moji.App;
 internal static class RectangleSelection
 {
-    public static void Attach(ListBox list)
+    public static void Attach(ListBox list, bool fromEmptySpaceOnly = false)
     {
         Point start=default,current=default;bool pending=false,dragging=false;var baseline=new HashSet<object>();SelectionFrame? frame=null;AdornerLayer? layer=null;ScrollViewer? scroll=null;var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(40)};
         void Stop(){timer.Stop();pending=false;dragging=false;if(frame!=null){layer?.Remove(frame);frame=null;}if(list.IsMouseCaptured)list.ReleaseMouseCapture();}
         void Select(){if(!dragging)return;var offset=scroll?.VerticalOffset??0;var target=new Rect(start,new Point(current.X,current.Y+offset));if(frame!=null){frame.Bounds=new Rect(target.X,target.Y-offset,target.Width,target.Height);frame.InvalidateVisual();}ApplyRegion(list,target,baseline,offset);}
 
         timer.Tick+=(_,_)=>{if(!dragging||scroll==null)return;var before=scroll.VerticalOffset;if(current.Y<30)scroll.LineUp();else if(current.Y>list.ActualHeight-30)scroll.LineDown();if(before!=scroll.VerticalOffset)Select();};
-        list.PreviewMouseLeftButtonDown+=(_,e)=>{var source=e.OriginalSource as DependencyObject;var element=source;var item=false;while(element!=null&&element!=list){if(element is ButtonBase or TextBoxBase or ScrollBar)return;if(element is ListBoxItem)item=true;element=VisualTreeHelper.GetParent(element);}current=e.GetPosition(list);scroll=FindScroll(list);start=new Point(current.X,current.Y+(scroll?.VerticalOffset??0));baseline=(Keyboard.Modifiers&(ModifierKeys.Control|ModifierKeys.Shift))!=0?list.SelectedItems.Cast<object>().ToHashSet():[];if(!item&&baseline.Count==0)list.UnselectAll();pending=true;};
+        list.PreviewMouseLeftButtonDown+=(_,e)=>{var source=e.OriginalSource as DependencyObject;var element=source;var item=false;while(element!=null&&element!=list){if(element is ButtonBase or TextBoxBase or ScrollBar)return;if(element is ListBoxItem)item=true;element=Ui.Parent(element);}if(item&&fromEmptySpaceOnly)return;current=e.GetPosition(list);scroll=FindScroll(list);start=new Point(current.X,current.Y+(scroll?.VerticalOffset??0));baseline=(Keyboard.Modifiers&(ModifierKeys.Control|ModifierKeys.Shift))!=0?list.SelectedItems.Cast<object>().ToHashSet():[];if(!item&&baseline.Count==0)list.UnselectAll();pending=true;};
         list.PreviewMouseMove+=(_,e)=>{if(!pending||e.LeftButton!=MouseButtonState.Pressed)return;current=e.GetPosition(list);if(!dragging){var delta=new Point(start.X,start.Y-(scroll?.VerticalOffset??0));if(Math.Abs(current.X-delta.X)<SystemParameters.MinimumHorizontalDragDistance&&Math.Abs(current.Y-delta.Y)<SystemParameters.MinimumVerticalDragDistance)return;dragging=true;list.CaptureMouse();layer=AdornerLayer.GetAdornerLayer(list);if(layer!=null){frame=new SelectionFrame(list);layer.Add(frame);}timer.Start();}Select();e.Handled=true;};
         list.PreviewMouseLeftButtonUp+=(_,e)=>{if(dragging)e.Handled=true;Stop();};list.LostMouseCapture+=(_,_)=>Stop();list.Unloaded+=(_,_)=>Stop();
     }

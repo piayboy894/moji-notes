@@ -5,6 +5,7 @@ using System.Windows.Media;
 namespace Moji.App;
 internal static class Ui
 {
+    internal static DependencyObject? Parent(DependencyObject child)=>child is FrameworkContentElement content?content.Parent:VisualTreeHelper.GetParent(child);
     public static Brush Brush(string value) => (Brush)new BrushConverter().ConvertFromString(value)!;
     public static Brush Resource(string key) => (Brush)Application.Current.FindResource(key);
     public static TextBlock Text(string text, double size = 13, string? color = null, bool bold = false) { var block=new TextBlock { Text=text, FontSize=size, FontWeight=bold?FontWeights.SemiBold:FontWeights.Normal, TextWrapping=TextWrapping.Wrap, VerticalAlignment=VerticalAlignment.Center };if(color==null||!color.StartsWith("#"))block.SetResourceReference(TextBlock.ForegroundProperty,color??"Ink");else block.Foreground=Brush(color);return block; }

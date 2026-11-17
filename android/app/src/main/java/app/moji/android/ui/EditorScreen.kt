@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -37,15 +38,16 @@ import app.moji.android.security.Crypto
 import kotlinx.coroutines.delay
 
 @Composable fun EditorScreen(vm: MojiViewModel, s: AppState, note: Note, activity: MainActivity, export: (Note) -> Unit, modifier: Modifier = Modifier, showBack: Boolean = false, back: () -> Unit = {}) {
+    val entry=remember{androidx.compose.animation.core.Animatable(0f)};LaunchedEffect(Unit){entry.animateTo(1f,androidx.compose.animation.core.tween(170))}
     val workspace=s.workspace?:return;val book=workspace.notebooks.first{it.id==note.notebookId};val editing=s.editingCredentialId==note.id
     var more by remember(note.id){mutableStateOf(false)};var history by remember(note.id){mutableStateOf(false)};var move by remember(note.id){mutableStateOf(false)};var purge by remember(note.id){mutableStateOf(false)}
     val credentialFocus=remember { androidx.compose.ui.focus.FocusRequester() }
     val titleEpoch=vm.workspaceEpoch
     fun focusContent(){if(vm.workspaceEpoch!=titleEpoch||vm.state.value.selectedId!=note.id)return;if(book.mode==NoteMode.Password)credentialFocus.requestFocus() else activity.editorSession.command("focus")}
-    Column(modifier.fillMaxSize().onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.focusGroup().background(MaterialTheme.colorScheme.surface)){
+    Column(modifier.graphicsLayer{alpha=.4f+.6f*entry.value;translationY=(1f-entry.value)*8.dp.toPx()}.fillMaxSize().onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.focusGroup().background(MaterialTheme.colorScheme.surface)){
         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
             if(showBack)Tool(MojiIcons.ArrowBack,"返回记录",action=back)
-            Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))
+            if(!showBack)TextButton(onClick=vm::clearSelection,modifier=Modifier.weight(1f).testTag("back-to-overview")){Icon(MojiIcons.ArrowBack,"返回卡片网格",Modifier.size(18.dp));Spacer(Modifier.width(6.dp));Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))}else Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))
             if(note.deletedAt==null){
                 if(book.mode==NoteMode.Password)Button(onClick={vm.editCredential(!editing)},modifier=Modifier.testTag("edit-credential"),contentPadding=PaddingValues(14.dp,8.dp)){Text(if(editing)"完成" else "编辑密码")}
                 Tool(if(note.favorite)MojiIcons.Star else MojiIcons.StarOutline,"收藏记录"){vm.edit(note.id){it.copy(favorite=!it.favorite)}}

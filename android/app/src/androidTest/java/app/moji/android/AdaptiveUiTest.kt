@@ -22,6 +22,16 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AdaptiveUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @Test fun notebookOverviewOpensARecordAndReturnsWithoutLosingSearchOrEditor(){
+        try{
+            resize(1440,1080,160);ready(false);val book=Notebook(name="Overview");val note=Note(notebookId=book.id,title="Find this record",content="Overview body")
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=listOf(note))))};compose.activityRule.scenario.onActivity{it.vm.navigate(book.id)}
+            compose.onNodeWithTag("notebook-overview").assertExists();assertNull(compose.activity.vm.state.value.selectedId)
+            compose.onNodeWithTag("list-search").performTextInput("Find this");hideKeyboard();compose.onNodeWithTag("record-card-${note.id}").performClick();webReady();val native=webView()
+            compose.onNodeWithTag("back-to-overview").performClick();compose.onNodeWithTag("notebook-overview").assertExists();assertEquals("Find this",compose.activity.vm.state.value.search);assertNull(compose.activity.vm.state.value.selectedId)
+            screenshot("41-notebook-overview");compose.onNodeWithTag("record-card-${note.id}").performClick();webReady();assertSame(native,webView());assertEquals("Overview body",jsText())
+        }finally{shell("wm size reset");shell("wm density reset")}
+    }
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(w: Int,h: Int,d: Int) { shell("wm size ${w}x$h"); shell("wm density $d"); Thread.sleep(1200); compose.waitForIdle() }
     private fun ready(books: Boolean = true) {

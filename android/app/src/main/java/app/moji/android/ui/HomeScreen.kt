@@ -1,5 +1,6 @@
 package app.moji.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.focusable
@@ -75,10 +76,11 @@ import app.moji.android.data.*
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit) {
+@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, overview:Boolean=false) {
     val w = s.workspace ?: return; val notes = vm.filtered()
     val recordListFocus=remember{FocusRequester()}
     var selected by remember(s.view,s.selectedId) { RecordCommandState(emptySet<String>()){vm.recordSelection=it} }; var selecting by remember(s.view,s.selectedId){RecordCommandState(false){vm.recordSelectionMode=it}}; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
+    BackHandler(selecting){selected=emptySet();selecting=false}
     val visibleIds=notes.map{it.id}.toSet();LaunchedEffect(visibleIds){selected=selected.intersect(visibleIds)}
     Column(modifier.fillMaxHeight().focusRequester(recordListFocus).focusable().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -107,12 +109,13 @@ import app.moji.android.data.*
             }
         }}
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        LazyColumn(Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(7.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        LazyVerticalGrid(columns=if(overview)GridCells.Adaptive(240.dp)else GridCells.Fixed(1),state=rememberLazyGridState(),modifier=Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(if(overview)18.dp else 7.dp,8.dp), horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(notes, key = { it.id }) { note -> var contextMenu by remember(note.id){mutableStateOf(false)}
                 val clickCard:()->Unit={recordListFocus.requestFocus();vm.recordKeyboardScope=true;if(!selecting)vm.select(note.id)else selected=if(note.id in selected)selected-note.id else selected+note.id}
                 val gestures=if(selecting&&note.id in selected)Modifier.recordDragSource(vm,selected,clickCard){note.id in selected}else Modifier.combinedClickable(onClick=clickCard,onLongClick={recordListFocus.requestFocus();vm.recordKeyboardScope=true;selecting=true;selected=selected+note.id})
                 val mode = w.notebooks.first { it.id == note.notebookId }.mode;val chosen=if(selecting)note.id in selected else s.selectedId==note.id
-                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
+                val preview=remember(note.content,note.variables,note.username,mode){if(mode==NoteMode.Password)note.username else Records.plain(PromptVariables.display(note)).take(100)}
+                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().then(if(overview)Modifier.height(190.dp)else Modifier).testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
                     DropdownMenu(contextMenu,{contextMenu=false}){
                         val ids=if(selecting&&note.id in selected)selected else setOf(note.id)
                         DropdownMenuItem(text={Text("复制记录")},onClick={vm.copyRecords(ids,false);contextMenu=false})
@@ -122,10 +125,10 @@ import app.moji.android.data.*
                     }
                     Row(Modifier.padding(15.dp, 17.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (selecting) Checkbox(note.id in selected, { vm.recordKeyboardScope=true;selected = if (note.id in selected) selected - note.id else selected + note.id }, Modifier.padding(end = 6.dp).testTag("select-record-${note.id}"),colors=CheckboxDefaults.colors(checkedColor=color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk")),checkmarkColor=color(LocalMojiPalette.current.colors.getValue("RecordSelected"))))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Column(Modifier.weight(1f).then(if(overview)Modifier.fillMaxHeight()else Modifier), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) { Text(note.title.ifBlank { "未命名记录" }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); if (note.favorite) Icon(MojiIcons.Star, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.secondary) }
-                            Text(if (mode == NoteMode.Password) note.username else Records.plain(PromptVariables.display(note)).take(100), style = MaterialTheme.typography.bodyMedium, color = if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(Records.relative(note.updatedAt),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant);if(!selecting){IconToggleButton(checked=note.pinned,onCheckedChange={vm.togglePin(note.id)},modifier=Modifier.size(34.dp).testTag("pin-record-${note.id}"),colors=IconButtonDefaults.iconToggleButtonColors(contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurfaceVariant,checkedContentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.onPrimary,checkedContainerColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.primary)){Icon(if(note.pinned)MojiIcons.PushPinFilled else MojiIcons.PushPin,if(note.pinned)"取消置顶"else"置顶记录",Modifier.size(17.dp))}}}
+                            Text(preview, style = MaterialTheme.typography.bodyMedium, color = if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if(overview)Spacer(Modifier.weight(1f));Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text(Records.relative(note.updatedAt),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedSub"))else MaterialTheme.colorScheme.onSurfaceVariant);if(!selecting){IconToggleButton(checked=note.pinned,onCheckedChange={vm.togglePin(note.id)},modifier=Modifier.size(34.dp).testTag("pin-record-${note.id}"),colors=IconButtonDefaults.iconToggleButtonColors(contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurfaceVariant,checkedContentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.onPrimary,checkedContainerColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.primary)){Icon(if(note.pinned)MojiIcons.PushPinFilled else MojiIcons.PushPin,if(note.pinned)"取消置顶"else"置顶记录",Modifier.size(17.dp))}}}
                         }
                     }
                 }

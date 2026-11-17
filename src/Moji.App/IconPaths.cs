@@ -4,6 +4,7 @@ internal static class IconPaths
 {
     internal static readonly Dictionary<string,string> Data = new()
     {
+        ["ChevronLeft"] = "M0 0 M15 18l-6-6 6-6",
         ["Document"] = "M0 0 M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z M0 0 M14 2v4a2 2 0 0 0 2 2h4 M0 0 M10 9H8 M0 0 M16 13H8 M0 0 M16 17H8",
         ["Book"] = "M0 0 M2 6h4 M0 0 M2 10h4 M0 0 M2 14h4 M0 0 M2 18h4 M0 0 M6 2H18Q20 2 20 4V20Q20 22 18 22H6Q4 22 4 20V4Q4 2 6 2Z M0 0 M16 2v20",
         ["Prompt"] = "M0 0 M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z M0 0 M20 3v4 M0 0 M22 5h-4 M0 0 M4 17v2 M0 0 M5 18H3",

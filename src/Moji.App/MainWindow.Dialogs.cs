@@ -25,9 +25,9 @@ public partial class MainWindow
     {
         if (!CanCreateRecord) return;
         var note = NoteCreation.InNotebook(VM.State!, VM.View);
-        VM.Change(w => w with { Notes = [note, ..w.Notes] }); Navigate(note.NotebookId, note.Id, true);_ = FocusNewRecord(note.Id);
+        VM.Change(w => w with { Notes = [note, ..w.Notes] },"new-note"); Navigate(note.NotebookId, note.Id, true);_ = FocusNewRecord(note.Id);
     }
-    private async Task FocusNewRecord(string id){await editorTransition;if(VM.SelectedId==id){titleBox?.Focus();titleBox?.SelectAll();}}
+    private async Task FocusNewRecord(string id){await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Input);if(VM.SelectedId==id){titleBox?.Focus();titleBox?.SelectAll();}}
     private void NotebookDialog(Notebook? book=null)
     {
         var name=Ui.Input(book?.Name??""); name.Name="NotebookName";

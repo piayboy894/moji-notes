@@ -41,7 +41,7 @@ function theme(payload:Partial<Payload>){
  root.style.backgroundColor=c.Panel
 }
 
-function load(payload:Payload){current=payload;theme(payload);if(!editor)return;dirty=false;editor.commands.setContent(/^<!--moji:tiptap:[12]-->/.test(payload.content)?payload.content.slice(PREFIX.length):literal(payload.content,payload.variables||[]),{emitUpdate:false,parseOptions:{preserveWhitespace:'full'}});editor.view.updateState(EditorState.create({schema:editor.schema,doc:editor.state.doc,plugins:editor.state.plugins}));editor.setEditable(!payload.readOnly,false);editor.view.dispatch(editor.state.tr);dirty=false;if((payload.variables||[]).length&&payload.content!==snapshot().content){dirty=true;emit()};document.querySelector('.simple-editor-wrapper')?.scrollTo(0,0);window.dispatchEvent(new Event('moji-document'));requestAnimationFrame(()=>requestAnimationFrame(()=>{native({type:'loaded',id:payload.id,session:payload.session});selection()}))}
+function load(payload:Payload){current=payload;theme(payload);if(!editor)return;dirty=false;editor.commands.setContent(/^<!--moji:tiptap:[12]-->/.test(payload.content)?payload.content.slice(PREFIX.length):literal(payload.content,payload.variables||[]),{emitUpdate:false,parseOptions:{preserveWhitespace:'full'}});editor.view.updateState(EditorState.create({schema:editor.schema,doc:editor.state.doc,plugins:editor.state.plugins}));editor.setEditable(!payload.readOnly,false);editor.view.dispatch(editor.state.tr);dirty=false;if((payload.variables||[]).length&&payload.content!==snapshot().content){dirty=true;emit()};document.querySelector('.simple-editor-wrapper')?.scrollTo(0,0);window.dispatchEvent(new Event('moji-document'));queueMicrotask(()=>{if(current?.session===payload.session&&current?.id===payload.id){native({type:'loaded',id:payload.id,session:payload.session});selection()}})}
 document.addEventListener('focusin',()=>selection());
 function selection(){if(editor&&current){const name=selectedVariableName(editor);native({type:'selection',id:current.id,session:current.session,canConvert:!!name,selection:name?{...selectedRange(editor),name}:null})}}
 function activate(){if(editor){editor.setEditable(true,false);editor.view.dispatch(editor.state.tr)}}
@@ -59,9 +59,29 @@ function action(name:string,value?:any){
   default:return false
  }
 }
-export function bindEditor(instance:Editor){editor=instance;editor.on('update',()=>{dirty=true;emit();selection()});editor.on('selectionUpdate',selection);editor.on('focus',selection);if(current)load(current);else if((window as any).__mojiLoad)load((window as any).__mojiLoad);requestAnimationFrame(()=>requestAnimationFrame(()=>native({type:'ready'})))}
+export function bindEditor(instance:Editor){editor=instance;editor.on('update',()=>{dirty=true;emit();selection()});editor.on('selectionUpdate',selection);editor.on('focus',selection);if(current)load(current);else if((window as any).__mojiLoad)load((window as any).__mojiLoad);queueMicrotask(()=>native({type:'ready'}))}
 ;(window as any).MojiEditor={load,theme,configure,activate,deactivate,action,flush:(token?:string)=>{emit();native({type:'flushed',id:current?.id,session:current?.session,token})},snapshot,get recordId(){return current?.id},get editor(){return editor}}
 document.addEventListener('keydown',event=>{if(!current||event.isComposing)return;const chord=(event.ctrlKey?'Ctrl+':'')+(event.altKey?'Alt+':'')+(event.shiftKey?'Shift+':'')+event.key.toUpperCase();const item=Object.entries(current.shortcuts||{}).find(([,binding])=>binding&&binding===chord)
  if(item){event.preventDefault();event.stopImmediatePropagation();if(!action(item[0]))native({type:'action',id:current.id,action:item[0]})}
  else if(Object.entries(current.defaults||{}).some(([id,binding])=>binding===chord&&current!.shortcuts[id]!==binding)){event.preventDefault();event.stopImmediatePropagation()}
 },true)
+
+// Desktop commands use asynchronous messages, with an acknowledgement owned by
+// the native host. Readiness never depends on background animation frames.
+const desktop=(window as any).chrome?.webview
+desktop?.addEventListener('message',(event:{data:any})=>{
+ const m=event.data;if(m?.protocol!=='moji'||typeof m.request!=='string')return
+ try{
+  switch(m.command){
+   case 'ping':break
+   case 'load':load(m.value);break
+   case 'flush':emit();break
+   case 'configure':configure(m.value);break
+   case 'activate':activate();break
+   case 'deactivate':deactivate();break
+   case 'action':action(m.value.name,m.value.argument);break
+   default:throw new Error('Unknown host command')
+  }
+  native({type:'reply',request:m.request,ok:true})
+ }catch{native({type:'reply',request:m.request,ok:false})}
+})

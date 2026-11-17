@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private SharedEditorView? sharedEditor;
     private SharedEditorView? cachedEditor;
     private Task editorRelease=Task.CompletedTask;
+    private long backgroundAt;
+    private bool editorWasMinimized;
     private int editorRequest;
     private TextBox? titleBox;
     private string renderedId = "";
@@ -46,9 +48,15 @@ public partial class MainWindow : Window
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
         Root.SizeChanged += (_,_) => AbortNotebookDrag();
-        Deactivated += (_,_) => AbortNotebookDrag();
+        Deactivated += (_,_) => { AbortNotebookDrag();backgroundAt=System.Diagnostics.Stopwatch.GetTimestamp(); };
+        StateChanged += (_,_) => { if(WindowState==WindowState.Minimized)editorWasMinimized=true; };
+        Activated += async (_,_) => {
+            if(cachedEditor==null||VM.State==null||(!editorWasMinimized&&(backgroundAt==0||System.Diagnostics.Stopwatch.GetElapsedTime(backgroundAt)<TimeSpan.FromSeconds(30))))return;
+            editorWasMinimized=false;backgroundAt=0;
+            try{await cachedEditor.ResumeAsync();}catch(Exception error){AppDiagnostics.Write("foreground-editor",error.GetType().Name);}
+        };
         Closed += (_,_) => { AbortNotebookDrag(); Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
-        VM.FlushEditor=async()=>{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();};
+        VM.FlushEditor=async()=>{if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
     private void SystemThemeChanged(object sender,Microsoft.Win32.UserPreferenceChangedEventArgs e){Dispatcher.BeginInvoke(()=>{if(!IsLoaded||VM.State?.Preferences.Theme!="system")return;AbortNotebookDrag();Ui.Theme(VM.State.Preferences);if(cachedEditor!=null)_=cachedEditor.RefreshAppearance();if(VM.View=="home")RenderDashboard();});}
@@ -65,10 +73,11 @@ public partial class MainWindow : Window
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { Ui.Theme(VM.State!.Preferences);var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
         if(kind == "notebook-order") { ReorderNotebookPanels(); return; }
+        if(kind == "new-note") { UpdateStats(); return; }
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
-    { AbortNotebookDrag();CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    { AbortNotebookDrag();CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);inOverview=selected==null && view is not ("home" or "trash");editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();
@@ -82,7 +91,7 @@ public partial class MainWindow : Window
         }
         SetNavigationSelection(HomeNav,VM.View=="home");SetNavigationSelection(AllNav,VM.View=="all");SetNavigationSelection(StarNav,VM.View=="star");SetNavigationSelection(TrashNav,VM.View=="trash");SetNavigationSelection(ArchiveNav,VM.View=="archive");
         NewRecordButton.Visibility = CanCreateRecord ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else if(VM.View=="trash")RenderTrash();else RenderWorkspace();
+        PageTitle.Text = ViewTitle(); if (VM.View == "home") RenderDashboard(); else if(VM.View=="trash")RenderTrash();else if(inOverview)RenderOverview();else RenderWorkspace();
     }
     private void SetNavigationSelection(Button button,bool selected)
     {
@@ -119,7 +128,7 @@ public partial class MainWindow : Window
         if(closing)return;e.Cancel=true;if(closePending)return;closePending=true;IsEnabled=false;
         // Even a completed SaveAsync must resume after WPF has left its Closing callback.
         Dispatcher.BeginInvoke(new Action(async()=>{
-            try{await editorRelease;if(cachedEditor!=null)await cachedEditor.Flush();await VM.SaveAsync();closing=true;closePending=false;Close();}
+            try{await VM.SaveAsync();closing=true;closePending=false;Close();}
             catch(Exception){closing=false;closePending=false;IsEnabled=true;ShowSaveFailure();}
         }),DispatcherPriority.Background);
     }
@@ -167,6 +176,7 @@ public partial class MainWindow : Window
 }
 internal sealed class NoteRow(Note note) : INotifyPropertyChanged
 {
+    private string? snippet;
     public Note Note { get; private set; } = note;
     public string Title => Note.Title;
     public bool IsSelecting {get;private set;}
@@ -174,9 +184,9 @@ internal sealed class NoteRow(Note note) : INotifyPropertyChanged
     public bool IsPinned=>Note.Pinned;
     public string PinIcon=>Note.Pinned?"PinFilled":"Pin";
     public string PinLabel=>Note.Pinned?"取消置顶":"置顶记录";
-    public string Snippet => (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordTools.Plain(PromptVariables.Display(Note))).Truncate(82);
+    public string Snippet => snippet ??= (Note.Password.Length > 0 || Note.Username.Length > 0 ? Note.Username : RecordPreview.Text(Note)).Truncate(82);
     public string Meta => RecordTools.Relative(Note.UpdatedAt);
     public event PropertyChangedEventHandler? PropertyChanged;
-    public void Replace(Note value) { Note = value; PropertyChanged?.Invoke(this, new(null)); }
+    public void Replace(Note value) { if(Note.Content!=value.Content||Note.Username!=value.Username||Note.Password!=value.Password||!Note.Variables.SequenceEqual(value.Variables))snippet=null;Note = value; PropertyChanged?.Invoke(this, new(null)); }
 }
 internal static class Strings { public static string Truncate(this string value, int length) => value.Length <= length ? value : value[..length] + "…"; }
