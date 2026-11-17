@@ -189,8 +189,11 @@ public partial class MainWindow
     {
         var area = crop ?? new Rect(element.RenderSize); if (area.Width < 1 || area.Height < 1) return null;
         var scale = Math.Min(1, Math.Min(1600 / area.Width, 1200 / area.Height));
+        // A VisualBrush includes the visual's own layout offset. The crop is
+        // element-local, so translate it exactly once into brush coordinates.
+        var sourceArea = area; var offset = VisualTreeHelper.GetOffset(element); sourceArea.Offset(offset.X, offset.Y);
         var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen()) dc.DrawRectangle(new VisualBrush(element) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = area, Stretch = Stretch.Fill }, null, new Rect(0, 0, area.Width * scale, area.Height * scale));
+        using (var dc = visual.RenderOpen()) dc.DrawRectangle(new VisualBrush(element) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = sourceArea, Stretch = Stretch.Fill }, null, new Rect(0, 0, area.Width * scale, area.Height * scale));
         var pixels = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(area.Width * scale)), Math.Max(1, (int)Math.Ceiling(area.Height * scale)), 96, 96, PixelFormats.Pbgra32);
         pixels.Render(visual); pixels.Freeze(); LastRecordEntrySnapshotCount++; return pixels;
     }
