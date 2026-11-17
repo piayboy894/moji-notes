@@ -118,12 +118,22 @@ all_sums.update({asset["name"]:asset["sha256"] for asset in preserved if Path(as
 (folder / "SHA256SUMS.txt").write_text("".join(f"{value}  {name}\n" for name,value in sorted(all_sums.items())))
 if platform == "windows":
     (folder / "SHA256SUMS.json").write_text(json.dumps(all_sums,indent=2)+"\n")
-(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform, "preserved_assets":preserved, **reused}, indent=2) + "\n")
+# A GITHUB_TOKEN cannot create an old tag across intervening workflow changes.
+# Android may use a later release tag only after verifying that every APK input
+# and native test is byte-identical. The binary/source archive keep the tested SHA.
+release_target = sha
+if platform == "android" and not replace_existing:
+    release_target = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    subprocess.run(["git", "diff", "--exit-code", sha, release_target, "--",
+        "android/app", "android/build.gradle.kts", "android/settings.gradle.kts",
+        "android/gradle.properties", "android/gradle", "android/gradlew", "android/gradlew.bat",
+        "editor", "assets", ".github/workflows/android.yml"], check=True)
+(folder / "BUILD-PROVENANCE.json").write_text(json.dumps({"commit": sha, "tag_commit": release_target, "workflow_run": f"https://github.com/{repository}/actions/runs/{run_id}", "platform": platform, "preserved_assets":preserved, **reused}, indent=2) + "\n")
 notes_file = Path(os.environ["RUNNER_TEMP"]) / "moji-release-notes.txt"
 notes_file.write_text(notes)
 files=[file for file in sorted(folder.iterdir()) if file.is_file()]
 if not replace_existing:
-    subprocess.run(["gh", "release", "create", tag, *map(str,files), "--target", sha, "--title", title, "--notes-file", str(notes_file)], check=True)
+    subprocess.run(["gh", "release", "create", tag, *map(str,files), "--target", release_target, "--title", title, "--notes-file", str(notes_file)], check=True)
 else:
     # Upload and verify everything before touching any current download. Keep
     # the original tag and the independently tested complete/previous packages.

@@ -1,8 +1,4 @@
 {
-  "windows": {
-    "run_id": 44046342031,
-    "commit": "25359d2d2958413ae28bf915440f33f724e4d22c"
-  },
   "android": {
     "run_id": 44042571611,
     "commit": "3387fa277a23315379b9cef3d0206dfc1f2ede25"
