@@ -139,17 +139,7 @@ import java.util.zip.ZipOutputStream
                             Box(Modifier.padding(padding).fillMaxSize()) {
                                 if (s.view == "home") HomeScreen(vm, s, { newBook = true }, { bookDialog = it })
                                 else if(s.view=="trash")TrashScreen(vm,s)
-                                else if(active==null){overviewStates.SaveableStateProvider("overview-${s.view}"){NoteList(vm,s,Modifier.testTag("notebook-overview"),editBook={bookDialog=it},overview=true)}}
-                                else if (twoPane) {
-                                    var contentX by remember { mutableFloatStateOf(0f) }; val density = LocalDensity.current
-                                    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { contentX = it.positionInWindow().x }) {
-                                        val seam = posture.hingeLeft?.let { with(density) { (it - contentX).toDp() } }
-                                        val listWidth = if (posture.separating && seam != null && seam > 180.dp && seam < maxWidth - 260.dp) seam else if (maxWidth > 1200.dp) 320.dp else 276.dp
-                                        val gap = if (posture.separating && seam == listWidth) with(density) { posture.hingeWidth.toDp().coerceAtLeast(8.dp) } else 1.dp
-                                        Row(Modifier.fillMaxSize()) { NoteList(vm, s, Modifier.width(listWidth), { bookDialog = it }); Spacer(Modifier.width(gap).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant)); if (active != null) EditorScreen(vm, s, active, activity, ::exportNote, Modifier.weight(1f)) else EmptyEditor(Modifier.weight(1f)) }
-                                    }
-                                } else if (active != null) EditorScreen(vm, s, active, activity, ::exportNote, showBack = true, back = vm::clearSelection)
-                                else NoteList(vm, s, editBook = { bookDialog = it })
+                                else RecordWorkspace(vm,s,active,activity,twoPane,posture,overviewStates,editBook={bookDialog=it},export=::exportNote)
                                 if (s.busy) Surface(Modifier.fillMaxSize().clickable(enabled = true, onClick = {}), color = MaterialTheme.colorScheme.surface.copy(alpha = .7f)) { Box(contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                             }
                         }

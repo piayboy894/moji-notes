@@ -76,20 +76,28 @@ import app.moji.android.data.*
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, overview:Boolean=false) {
+@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, overview:Boolean=false, sharedMotion:RecordSharedMotion?=null) {
     val w = s.workspace ?: return; val notes = vm.filtered()
     val recordListFocus=remember{FocusRequester()}
     var selected by remember(s.view,s.selectedId) { RecordCommandState(emptySet<String>()){vm.recordSelection=it} }; var selecting by remember(s.view,s.selectedId){RecordCommandState(false){vm.recordSelectionMode=it}}; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
+    val selectedIndex=notes.indexOfFirst{it.id==s.selectedId}.coerceAtLeast(0)
+    // Overview scroll is saved per notebook. Detail starts at the opened record,
+    // never at a previous record's saved offset or at the top of a long list.
+    val recordGridState=if(overview)rememberLazyGridState()else remember(s.view){LazyGridState(firstVisibleItemIndex=selectedIndex)}
+    val viewportKeys by remember(recordGridState){derivedStateOf{recordGridState.layoutInfo.visibleItemsInfo.map{it.key}.toSet()}}
+    LaunchedEffect(s.selectedId,overview){if(!overview&&s.selectedId!=null){val at=notes.indexOfFirst{it.id==s.selectedId};if(at>=0&&recordGridState.layoutInfo.visibleItemsInfo.none{it.key==s.selectedId})recordGridState.scrollToItem(at)}}
     BackHandler(selecting){selected=emptySet();selecting=false}
     val visibleIds=notes.map{it.id}.toSet();LaunchedEffect(visibleIds){selected=selected.intersect(visibleIds)}
-    Column(modifier.fillMaxHeight().focusRequester(recordListFocus).focusable().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+    Box(modifier.fillMaxHeight().focusRequester(recordListFocus).focusable()) {
+    Box(Modifier.matchParentSize().recordSharedBounds("records-surface",sharedMotion,z=-1f).background(MaterialTheme.colorScheme.surfaceContainerLow))
+    Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Box(Modifier.weight(1f)){Text(viewTitle(s), style = MaterialTheme.typography.titleMedium, maxLines=1,overflow=TextOverflow.Ellipsis,modifier = Modifier.recordSharedBounds("records-heading",sharedMotion,z=2f))}
                 if(s.recordClipboardReady&&vm.hasRecordClipboard()&&w.liveBooks.any{it.id==s.view})TextButton(onClick={vm.pasteRecords()},modifier=Modifier.testTag("paste-records")){Text("粘贴")}
 
             }
-            OutlinedTextField(s.search, vm::search, Modifier.fillMaxWidth().onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.testTag("list-search"), placeholder = { Text("搜索记录…", style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(MojiIcons.Search, null, Modifier.size(18.dp)) }, trailingIcon = if (s.search.isNotBlank()) ({ Tool(MojiIcons.Close, "清除搜索") { vm.search("") } }) else null, singleLine = true, shape = RoundedCornerShape(12.dp))
+            OutlinedTextField(s.search, vm::search, Modifier.fillMaxWidth().recordSharedBounds("records-search",sharedMotion,z=2f,crop=true).onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.testTag("list-search"), placeholder = { Text("搜索记录…", style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(MojiIcons.Search, null, Modifier.size(18.dp)) }, trailingIcon = if (s.search.isNotBlank()) ({ Tool(MojiIcons.Close, "清除搜索") { vm.search("") } }) else null, singleLine = true, shape = RoundedCornerShape(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box { TextButton(onClick = { sortMenu = true }, contentPadding = PaddingValues(0.dp)) { Text(when (s.sort) { "name" -> "名称顺序"; "created" -> "创建时间"; else -> "最近编辑" }, style = MaterialTheme.typography.labelSmall); Icon(MojiIcons.ExpandMore, null, Modifier.size(16.dp)) }; DropdownMenu(sortMenu, { sortMenu = false }) { listOf("updated" to "最近编辑", "created" to "创建时间", "name" to "名称顺序").forEach { (id, title) -> DropdownMenuItem(text = { Text(title) }, onClick = { vm.sort(id); sortMenu = false }) } } }
                 Spacer(Modifier.weight(1f));if(!selecting)TextButton(onClick={recordListFocus.requestFocus();vm.recordKeyboardScope=true;selecting=true;selected=emptySet()},modifier=Modifier.testTag("select-records")){Text("选择")}
@@ -109,13 +117,13 @@ import app.moji.android.data.*
             }
         }}
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        LazyVerticalGrid(columns=if(overview)GridCells.Adaptive(240.dp)else GridCells.Fixed(1),state=rememberLazyGridState(),modifier=Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(if(overview)18.dp else 7.dp,8.dp), horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            items(notes, key = { it.id }) { note -> var contextMenu by remember(note.id){mutableStateOf(false)}
+        LazyVerticalGrid(columns=if(overview)GridCells.Adaptive(240.dp)else GridCells.Fixed(1),state=recordGridState,modifier=Modifier.weight(1f).testTag("note-list"), contentPadding = PaddingValues(if(overview)18.dp else 7.dp,8.dp), horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            items(notes, key = { it.id },contentType={"record"}) { note -> var contextMenu by remember(note.id){mutableStateOf(false)}
                 val clickCard:()->Unit={recordListFocus.requestFocus();vm.recordKeyboardScope=true;if(!selecting)vm.select(note.id)else selected=if(note.id in selected)selected-note.id else selected+note.id}
                 val gestures=if(selecting&&note.id in selected)Modifier.recordDragSource(vm,selected,clickCard){note.id in selected}else Modifier.combinedClickable(onClick=clickCard,onLongClick={recordListFocus.requestFocus();vm.recordKeyboardScope=true;selecting=true;selected=selected+note.id})
                 val mode = w.notebooks.first { it.id == note.notebookId }.mode;val chosen=if(selecting)note.id in selected else s.selectedId==note.id
                 val preview=remember(note.content,note.variables,note.username,mode){if(mode==NoteMode.Password)note.username else Records.plain(PromptVariables.display(note)).take(100)}
-                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().then(if(overview)Modifier.height(190.dp)else Modifier).testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
+                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().recordSharedBounds("card-${note.id}",sharedMotion,enabled=note.id==s.selectedId||note.id in viewportKeys,z=if(note.id==s.selectedId)3f else 1f).then(if(overview)Modifier.height(190.dp)else Modifier).testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
                     DropdownMenu(contextMenu,{contextMenu=false}){
                         val ids=if(selecting&&note.id in selected)selected else setOf(note.id)
                         DropdownMenuItem(text={Text("复制记录")},onClick={vm.copyRecords(ids,false);contextMenu=false})
@@ -135,6 +143,7 @@ import app.moji.android.data.*
             }
             if (notes.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(25.dp, 60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { Icon(MojiIcons.Article, null, Modifier.size(37.dp), tint = MaterialTheme.colorScheme.outline); Text(if (s.search.isNotBlank()) "没有找到相关记录" else if (s.view == "trash") "回收站是空的" else "暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         }
+    }
     }
     if (purge) Confirm("永久删除 ${selected.size} 条记录？", "正文、密码和历史版本会被清除，无法从回收站恢复。", { purge = false }) { vm.purge(selected); selected = emptySet();selecting=false }
 }

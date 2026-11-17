@@ -18,6 +18,7 @@ public partial class MainWindow
     private StackPanel? trashActions, variableActions;
     private Button? clearTrashButton, recordFavorite, convertVariable;
     private TextBox? recordTitle,recordSearch;
+    private ComboBox? recordSort;
     private bool refreshingNotes, refreshingTitle,selectingRecords;
     private Grid? recordTools;
     private StackPanel? recordSelectionTools;
@@ -28,17 +29,18 @@ public partial class MainWindow
     private Task editorTransition=Task.CompletedTask;
     private void RenderWorkspace()
     {
-        if(workspaceRoot!=null){if(recordSearch!.Text!=VM.Search){refreshingNotes=true;recordSearch.Text=VM.Search;refreshingNotes=false;}workspaceRoot.ColumnDefinitions[0].Width=new GridLength(focusMode?0:285);Body.Content=workspaceRoot;listHeading!.Text=ViewTitle();UpdateTrashActions();RefreshNoteList();return;}
+        if(workspaceRoot!=null){refreshingNotes=true;try{if(recordSearch!.Text!=VM.Search)recordSearch.Text=VM.Search;recordSort!.SelectedIndex=VM.Sort=="created"?1:VM.Sort=="name"?2:0;}finally{refreshingNotes=false;}workspaceRoot.ColumnDefinitions[0].Width=new GridLength(focusMode?0:285);Body.Content=workspaceRoot;listHeading!.Text=ViewTitle();UpdateTrashActions();RefreshNoteList();return;}
         var root=new Grid();workspaceRoot=root;root.ColumnDefinitions.Add(new(){Width=new GridLength(focusMode?0:285)});root.ColumnDefinitions.Add(new(){Width=new GridLength(5)});root.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         var left=new DockPanel{Background=Ui.Resource("Side")};left.SetResourceReference(Panel.BackgroundProperty,"Side");root.Children.Add(left);
         var header=new StackPanel{Margin=new Thickness(18,22,18,12)};var title=new DockPanel();listHeading=Ui.Text(ViewTitle(),18,null,true);title.Children.Add(listHeading);header.Children.Add(title);
         var search=Ui.Input(VM.Search,"搜索记录");recordSearch=search;search.Name="RecordSearch";search.Padding=new Thickness(34,10,12,10);search.FontSize=13;search.TextChanged+=(_,_)=>{if(refreshingNotes)return;VM.Search=search.Text;RefreshNoteList();};var searchRow=new Grid{Margin=new Thickness(0,16,0,10)};searchRow.Children.Add(search);searchRow.Children.Add(new NativeIcon{Kind="Search",Width=17,Height=17,Foreground=Ui.Resource("Sub"),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12,0,0,0),IsHitTestVisible=false});header.Children.Add(searchRow);
-        var sort=new ComboBox{Name="RecordSort",ItemsSource=new[]{"最近编辑","创建时间","名称顺序"},SelectedIndex=VM.Sort=="created"?1:VM.Sort=="name"?2:0,FontSize=12,MinWidth=120};sort.SelectionChanged+=(_,_)=>{VM.Sort=sort.SelectedIndex==1?"created":sort.SelectedIndex==2?"name":"updated";RefreshNoteList();};
+        var sort=new ComboBox{Name="RecordSort",ItemsSource=new[]{"最近编辑","创建时间","名称顺序"},SelectedIndex=VM.Sort=="created"?1:VM.Sort=="name"?2:0,FontSize=12,MinWidth=120};recordSort=sort;sort.SelectionChanged+=(_,_)=>{if(refreshingNotes)return;VM.Sort=sort.SelectedIndex==1?"created":sort.SelectedIndex==2?"name":"updated";RefreshNoteList();};
         var tools=new Grid();recordTools=tools;tools.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});tools.ColumnDefinitions.Add(new(){Width=GridLength.Auto});tools.Children.Add(sort);
         var select=Ui.Small("选择",()=>SetRecordSelection(true));select.Name="SelectRecords";select.Margin=new Thickness(8,0,0,0);Grid.SetColumn(select,1);tools.Children.Add(select);header.Children.Add(tools);
         recordSelectionCount=Ui.Text("已选 0",11);recordSelectAll=Ui.Small("全选",()=>{if(noteList==null)return;if(noteList.SelectedItems.Count==noteRows.Count)noteList.UnselectAll();else noteList.SelectAll();});recordSelectAll.Name="SelectAllRecords";recordSelectionDelete=Ui.Small("删除",DeleteSelection);recordSelectionDelete.Name="DeleteSelectedRecords";recordSelectionDelete.SetResourceReference(Control.ForegroundProperty,"Danger");var cancel=Ui.Small("取消",()=>SetRecordSelection(false));cancel.Name="CancelRecordSelection";var bar=new DockPanel();var batchActions=Ui.Row(recordSelectAll,recordSelectionDelete,cancel);DockPanel.SetDock(batchActions,Dock.Right);bar.Children.Add(batchActions);bar.Children.Add(recordSelectionCount);recordSelectionTools=Ui.Stack(bar);recordSelectionTools.Visibility=Visibility.Collapsed;header.Children.Add(recordSelectionTools);
         trashCount=Ui.Text("",12);trashCount.Foreground=Ui.Resource("Sub");clearTrashButton=Ui.Button("清空回收站",EmptyTrash);clearTrashButton.Name="EmptyTrash";clearTrashButton.Style=(Style)FindResource("QuietDangerButton");clearTrashButton.FontSize=12;clearTrashButton.Padding=new Thickness(8,6,8,6);clearTrashButton.MinHeight=32;var trashRow=new DockPanel();DockPanel.SetDock(clearTrashButton,Dock.Right);trashRow.Children.Add(clearTrashButton);trashRow.Children.Add(trashCount);trashActions=Ui.Stack(trashRow);trashActions.Margin=new Thickness(0,12,0,0);header.Children.Add(trashActions);UpdateTrashActions();DockPanel.SetDock(header,Dock.Top);left.Children.Add(header);
         noteList=new ListBox{Name="RecordList",SelectionMode=SelectionMode.Extended,ItemsSource=noteRows,Margin=new Thickness(3,0,3,9)};
+        VirtualizingPanel.SetScrollUnit(noteList,ScrollUnit.Pixel);
         var template="""
         <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:local="clr-namespace:Moji.App;assembly=Moji.Notes" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -74,11 +76,12 @@ public partial class MainWindow
         if(inOverview){RefreshOverview();return;}if(noteList==null||refreshingNotes)return;var selected=VM.SelectedId;var batch=selectingRecords?SelectedIds().ToHashSet():[];NoteRow? row;
         refreshingNotes=true;try{var existing=noteRows.ToDictionary(r=>r.Note.Id);noteRows.Clear();foreach(var n in VM.Filtered()){var added=existing.TryGetValue(n.Id,out var old)?old:new NoteRow(n);if(!ReferenceEquals(added.Note,n))added.Replace(n);added.SetSelecting(selectingRecords);noteRows.Add(added);}row=noteRows.FirstOrDefault(n=>n.Note.Id==selected)??noteRows.FirstOrDefault();if(selectingRecords){foreach(var item in noteRows.Where(r=>batch.Contains(r.Note.Id)))noteList.SelectedItems.Add(item);}else noteList.SelectedItem=row;}finally{refreshingNotes=false;}
         UpdateRecordSelectionUi();if(selectingRecords)return;
-        if(row!=null){if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);}else{VM.SelectedId="";renderedId="";recordContext="";titleBox=null;sharedEditor?.Deactivate();sharedEditor=null;ParkEditor();editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("暂无记录",20)),new Thickness(40,70,40,30))};}
+        if(row!=null){var reveal=renderedId!=row.Note.Id;if(VM.SelectedId!=row.Note.Id)editingCredentialId="";VM.SelectedId=row.Note.Id;RenderEditor(row.Note);if(reveal)_ = RevealSelectedRecord();}else{VM.SelectedId="";renderedId="";recordContext="";titleBox=null;sharedEditor?.Deactivate();sharedEditor=null;ParkEditor();editorHost!.Content=new Border{Background=Ui.Resource("Panel"),Child=Ui.Spaced(Ui.Stack(Ui.Text("暂无记录",20)),new Thickness(40,70,40,30))};}
     }
     public void RenderEditor(Note note)=>editorTransition=RenderEditorCore(note);
     private async Task RenderEditorCore(Note note)
     {
+        if(overviewEntry is {} entry && entry.Id!=note.Id)CancelOverviewEntry();
         if(editorHost==null)return;
         var request=++editorRequest;var previous=sharedEditor;
         var targetBook=VM.State!.Notebooks.First(b=>b.Id==note.NotebookId);
@@ -101,7 +104,7 @@ public partial class MainWindow
         var attached=ReferenceEquals(editor.Parent,recordBody);
         if(!attached){await Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.Render);EditorWarmHost.Width=Math.Max(100,recordBody!.ActualWidth);EditorWarmHost.Height=Math.Max(100,recordBody.ActualHeight);}
         try{await editor.Show(note);await editor.Ready;if(request!=editorRequest)return;
-            if(!ReferenceEquals(editor.Parent,recordBody)){if(editor.Parent is Panel parent)parent.Children.Remove(editor);recordBody!.Children.Add(editor);}
+            if(overviewEntry==null&&!ReferenceEquals(editor.Parent,recordBody)){if(editor.Parent is Panel parent)parent.Children.Remove(editor);recordBody!.Children.Add(editor);}
         }catch(OperationCanceledException){}catch(Exception){if(request==editorRequest){if(editor.Parent is Panel parent)parent.Children.Remove(editor);recordBody!.Children.Clear();recordBody.Children.Add(editor);Toast("编辑器未能加载，请重试");}}
     }
     private void EnsureRecordSurface()

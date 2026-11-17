@@ -44,6 +44,19 @@ class AdaptiveUiTest {
             screenshot("41-notebook-overview");compose.onNodeWithTag("record-card-${note.id}").performClick();webReady();assertSame(native,webView());assertEquals("Overview body",jsText())
         }finally{shell("wm size reset");shell("wm density reset")}
     }
+    @Test fun lateOverviewCardIsVisibleInTheDetailListAndItsEditorDoesNotMoveOnRecordChanges(){
+        try{
+            resize(1440,1080,160);ready(false);val book=Notebook(name="Continuity");val notes=(0 until 120).map{Note(notebookId=book.id,title="Record %03d".format(it),content="Body $it")}
+            runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=notes)))}
+            compose.activityRule.scenario.onActivity{it.vm.navigate(book.id);it.vm.sort("name")};val browser=webView()
+            compose.onNodeWithTag("note-list").performScrollToIndex(100);val target=notes[100];compose.onNodeWithTag("record-card-${target.id}").performClick();webReady()
+            fun assertVisible(id:String){val card=compose.onNodeWithTag("record-card-$id").assertIsDisplayed().fetchSemanticsNode().boundsInRoot;val list=compose.onNodeWithTag("note-list").fetchSemanticsNode().boundsInRoot;assertTrue("Opened record must be fully visible",card.top>=list.top-.5f&&card.bottom<=list.bottom+.5f)}
+            assertVisible(target.id);assertSame(browser,webView());screenshot("43-late-record-visible")
+            compose.onNodeWithTag("back-to-overview").performClick();compose.onNodeWithTag("record-card-${target.id}").assertIsDisplayed().performClick();webReady();assertVisible(target.id)
+            val before=compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot;val next=notes[101];compose.onNodeWithTag("record-card-${next.id}").performClick();webReady()
+            assertSame(browser,webView());assertEquals(before,compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot);assertEquals("Body 101",jsText())
+        }finally{shell("wm size reset");shell("wm density reset")}
+    }
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(w: Int,h: Int,d: Int) { shell("wm size ${w}x$h"); shell("wm density $d"); Thread.sleep(1200); compose.waitForIdle() }
     private fun ready(books: Boolean = true) {

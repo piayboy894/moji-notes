@@ -47,7 +47,8 @@ public partial class MainWindow : Window
         toastTimer.Tick += (_, _) => { ToastPopup.IsOpen=false; toastTimer.Stop(); };
         sessionTimer.Tick += (_, _) => SessionTick(); sessionTimer.Start();
         PreviewKeyDown += KeyDownHandler; Closing += ClosingHandler;
-        Root.SizeChanged += (_,_) => AbortNotebookDrag();
+        Root.SizeChanged += (_,_) => { AbortNotebookDrag();CancelOverviewEntry(); };
+        Body.SizeChanged += (_,_) => CancelOverviewEntry(revealEditor:true);
         Deactivated += (_,_) => { AbortNotebookDrag();backgroundAt=System.Diagnostics.Stopwatch.GetTimestamp(); };
         StateChanged += (_,_) => { if(WindowState==WindowState.Minimized)editorWasMinimized=true; };
         Activated += async (_,_) => {
@@ -55,7 +56,7 @@ public partial class MainWindow : Window
             editorWasMinimized=false;backgroundAt=0;
             try{await cachedEditor.ResumeAsync();}catch(Exception error){AppDiagnostics.Write("foreground-editor",error.GetType().Name);}
         };
-        Closed += (_,_) => { AbortNotebookDrag(); Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
+        Closed += (_,_) => { CancelOverviewEntry();AbortNotebookDrag(); Microsoft.Win32.SystemEvents.UserPreferenceChanged-=SystemThemeChanged;ClearSecretClipboard();ToastPopup.IsOpen=false;CloseGlobalSearch(); sessionTimer.Stop(); toastTimer.Stop(); cachedEditor?.Dispose();VM.Dispose(); };
         VM.FlushEditor=async()=>{if(cachedEditor!=null)await cachedEditor.Flush();};
         Loaded += async (_, _) => { if (smoke) return; await OpenWorkspaceAsync(); };
     }
@@ -68,7 +69,7 @@ public partial class MainWindow : Window
     }
     private void DataChanged(string kind)
     {
-        if(kind is "open" or "replace"){AbortNotebookDrag();CloseGlobalSearch();cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
+        if(kind is "open" or "replace"){CancelOverviewEntry();AbortNotebookDrag();CloseGlobalSearch();cachedEditor?.Dispose();cachedEditor=null;sharedEditor=null;EditorWarmHost.Children.Clear();editorRequest++;WarmEditor();}
         if (kind == "open")
         { AuthHost.Content = null; AuthHost.Visibility = Visibility.Collapsed; Shell.Visibility = Visibility.Visible; Ui.Theme(VM.State!.Preferences); RefreshShell(); var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) }; timer.Tick += async (_, _) => { timer.Stop(); if (VM.IsUnlocked) await CheckUpdates(false); }; timer.Start(); return; }
         if (kind == "edit") { Ui.Theme(VM.State!.Preferences);var byId=VM.State!.Notes.ToDictionary(n=>n.Id);foreach(var row in noteRows)if(byId.TryGetValue(row.Note.Id,out var n)&&!ReferenceEquals(row.Note,n))row.Replace(n); UpdateStats();if(cachedEditor!=null)_ = cachedEditor.RefreshAppearance();return; }
@@ -77,7 +78,7 @@ public partial class MainWindow : Window
         RefreshShell();
     }
     public void Navigate(string view, string? selected = null, bool editCredential = false)
-    { AbortNotebookDrag();CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);inOverview=selected==null && view is not ("home" or "trash");editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
+    { CancelOverviewEntry();AbortNotebookDrag();CloseGlobalSearch();if(selectingRecords)SetRecordSelection(false);inOverview=selected==null && view is not ("home" or "trash");editingCredentialId = editCredential ? selected ?? "" : ""; VM.View = view; VM.Search = ""; VM.SelectedId = selected ?? ""; renderedId = ""; focusMode = false; Shell.ColumnDefinitions[0].Width = new GridLength(270); RefreshShell(); }
     public void RefreshShell()
     {
         if (VM.State == null) return; Ui.Theme(VM.State.Preferences); UpdateStats();

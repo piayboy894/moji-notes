@@ -71,19 +71,13 @@ public partial class MainWindow
     internal void OpenOverviewRecord(string id)
     {
         if (VM.State?.LiveNotes.Any(n => n.Id == id) != true) return;
-        inOverview = false; VM.SelectedId = id; RenderWorkspace(); AnimateRecordEntry();
+        BeginOverviewEntry(id);
     }
     internal void ReturnToOverview()
     {
+        CancelOverviewEntry();
+        if(focusMode){focusMode=false;Shell.ColumnDefinitions[0].Width=new GridLength(270);}
         if (selectingRecords) SetRecordSelection(false); inOverview = true; VM.SelectedId = ""; RenderOverview();
-    }
-    private void AnimateRecordEntry()
-    {
-        if (!SystemParameters.ClientAreaAnimation || workspaceRoot?.Children[0] is not FrameworkElement panel) return;
-        var move = new TranslateTransform(-10, 0); panel.RenderTransform = move;
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut }; var duration = TimeSpan.FromMilliseconds(170);
-        move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, duration) { EasingFunction = easing });
-        panel.BeginAnimation(OpacityProperty, new DoubleAnimation(.35, 1, duration) { EasingFunction = easing });
     }
     private Button OverviewBackButton(TextBlock label)
     {
