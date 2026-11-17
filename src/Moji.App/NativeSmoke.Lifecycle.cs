@@ -18,9 +18,9 @@ internal static partial class NativeSmoke
         window.Navigate(book.Id,note.Id);editor=await window.ReadyEditor();checks.Add("received document edits persist locally even when the editor flush fails");
         await editor.Browser.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.setWebLifecycleState","{\"state\":\"frozen\"}").WaitAsync(TimeSpan.FromSeconds(5));
         window.WindowState=WindowState.Minimized;var oldCount=vm.State!.Notes.Count;var ticks=0;var pulse=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromMilliseconds(50)};pulse.Tick+=(_,_)=>ticks++;pulse.Start();
-        window.AddNote();var created=vm.SelectedId;
+        window.AddNote();var created=vm.SelectedId;var newTitle=FindNamed<TextBox>(window,"RecordTitle")??throw new Exception("New title is not available during renderer recovery");newTitle.Text="恢复时立即输入的标题";
         try{editor=await window.ReadyEditor().WaitAsync(TimeSpan.FromSeconds(35));}finally{pulse.Stop();window.WindowState=WindowState.Normal;window.Activate();}
-        if(vm.State.Notes.Count!=oldCount+1||vm.SelectedId!=created||ticks<3||vm.State.Notes.First(n=>n.Id==note.Id).Content!="收到后立即保存的内容")throw new Exception("Background renderer recovery blocked UI or corrupted the original document");
+        if(vm.State.Notes.Count!=oldCount+1||vm.SelectedId!=created||ticks<3||vm.State.Notes.First(n=>n.Id==created).Title!="恢复时立即输入的标题"||vm.State.Notes.First(n=>n.Id==note.Id).Content!="收到后立即保存的内容")throw new Exception("Background renderer recovery blocked UI or corrupted the original document");
         await Script(editor,"window.MojiEditor.editor.commands.insertContent('恢复后继续编辑')");await editor.Flush();await vm.SaveAsync();
         if(!vm.State.Notes.First(n=>n.Id==created).Content.Contains("恢复后继续编辑"))throw new Exception("Recovered renderer cannot continue saving");
         Capture(window,Path.Combine(output,"idle-recovery.png"));checks.Add("a frozen background renderer recovers while creating a record, keeps dispatcher input alive, and saves both old and new documents");

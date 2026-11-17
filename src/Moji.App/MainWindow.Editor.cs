@@ -81,14 +81,21 @@ public partial class MainWindow
     {
         if(editorHost==null)return;
         var request=++editorRequest;var previous=sharedEditor;
-        if(previous!=null){editorRelease=previous.Flush();try{await editorRelease;}catch{Toast("编辑内容暂时未能保存，请重试");return;}}
+        var targetBook=VM.State!.Notebooks.First(b=>b.Id==note.NotebookId);
+        // Native input belongs to the new record immediately, even while the
+        // previous renderer is being recovered. Never focus the old title box.
+        if(VM.View!="trash"){
+            if(targetBook.Mode==NoteMode.Password){previous?.Deactivate();sharedEditor=null;ParkEditor();RenderCredentialRecord(note,targetBook);}
+            else{EnsureRecordSurface();titleBox=recordTitle;recordContext=note.Id;recordEpoch=VM.WorkspaceEpoch;renderedId=note.Id;UpdateRecordChrome(note,targetBook);editorHost.Content=recordSurface;}
+        }
+        if(previous!=null&&!previous.IsCurrent(note)){previous.Deactivate();editorRelease=previous.Flush();try{await editorRelease;}catch{if(request==editorRequest)Toast("编辑内容暂时未能保存，请重试");return;}}
         if(request!=editorRequest)return;note=VM.State!.Notes.FirstOrDefault(n=>n.Id==note.Id)??note;
         var book=VM.State.Notebooks.First(b=>b.Id==note.NotebookId);
         if(VM.View=="trash"){
             sharedEditor?.Deactivate();sharedEditor=null;ParkEditor();recordContext="";titleBox=null;renderedId=note.Id;
             var panel=new StackPanel{Margin=new Thickness(36,45,36,30),MaxWidth=650,HorizontalAlignment=HorizontalAlignment.Left};panel.Children.Add(new NativeIcon{Kind="Trash",Width=32,Height=32,Foreground=Ui.Resource("Sub"),HorizontalAlignment=HorizontalAlignment.Left});panel.Children.Add(Ui.Spaced(Ui.Text(note.Title,25,null,true),new Thickness(0,22,0,12)));panel.Children.Add(Ui.Text("删除于 "+DateTimeOffset.FromUnixTimeMilliseconds(note.DeletedAt!.Value).LocalDateTime.ToString("yyyy-MM-dd HH:mm"),12));var purge=Ui.Button("永久删除",()=>Purge([note.Id]));purge.Style=(Style)FindResource("QuietDangerButton");panel.Children.Add(Ui.Spaced(Ui.Row(Ui.Button("恢复记录",()=>RestoreNotes([note.Id]),true),Ui.Spaced(purge,new Thickness(10,0,0,0))),new Thickness(0,24,0,0)));editorHost.Content=new Border{Background=Ui.Resource("Panel"),Child=panel};return;
         }
-        if(book.Mode==NoteMode.Password){sharedEditor?.Deactivate();sharedEditor=null;ParkEditor();RenderCredentialRecord(note,book);return;}
+        if(book.Mode==NoteMode.Password)return;
         EnsureRecordSurface();titleBox=recordTitle;recordContext=note.Id;recordEpoch=VM.WorkspaceEpoch;renderedId=note.Id;UpdateRecordChrome(note,book);editorHost.Content=recordSurface;
         if(cachedEditor==null)WarmEditor();var editor=cachedEditor!;sharedEditor=editor;editor.SelectionChanged=value=>convertVariable!.IsEnabled=value;
         var attached=ReferenceEquals(editor.Parent,recordBody);

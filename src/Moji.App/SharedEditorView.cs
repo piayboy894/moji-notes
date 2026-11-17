@@ -196,8 +196,10 @@ internal sealed class SharedEditorView : Grid, IDisposable
         async Task Run() { try { await WithRecovery(() => Task.CompletedTask); } catch (Exception error) { if (!disposed) ShowFailure(error); } finally { recoveryQueued = false; } }
     }
     internal Task ResumeAsync() => WithRecovery(async () => { await Send("ping", timeout: TimeSpan.FromSeconds(3)); });
+    internal bool IsCurrent(Note note)=>!needsRecovery&&epoch==vm.WorkspaceEpoch&&noteId==note.Id&&lastContent==note.Content&&ready.Task.IsCompletedSuccessfully;
     public async Task Show(Note note)
     {
+        if(IsCurrent(note)&&active&&lastAppearance==Configuration())return;
         var version = ++request; requestedId = note.Id; var completion = NewCompletion(); ready.TrySetCanceled(); ready = completion;
         ClearSelectionAvailability(); ApplyBackground();
         try
