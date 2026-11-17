@@ -57,12 +57,15 @@ class AdaptiveUiTest {
             compose.mainClock.autoAdvance=false
             compose.onNodeWithTag("record-card-${target.id}").performClick()
             compose.mainClock.advanceTimeBy(80);compose.waitForIdle()
-            val start=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             screenshot("44-editor-pane-entry-early")
+            val start=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             compose.mainClock.advanceTimeBy(100);compose.waitForIdle()
-            val middle=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             screenshot("45-editor-pane-entry-middle")
+            val middle=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             compose.mainClock.advanceTimeBy(220);compose.waitForIdle()
+            // Compose's clock advances the draw state; SurfaceFlinger presents
+            // it asynchronously. Sample the same presented frame we archive.
+            screenshot("46-editor-pane-entry-settled")
             val finish=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             // Overlay drawing moves independently of semantics layout bounds.
             // Inspect its actual opaque background edge on the device instead.
@@ -327,6 +330,9 @@ class AdaptiveUiTest {
         compose.onNodeWithTag("note-title").performTextReplacement("Title hop")
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_ENTER)
         compose.waitUntil(5000){js("document.activeElement===window.MojiEditor.editor.view.dom")=="true"}
+        // DOM focus precedes the native IME handoff. Let that handoff settle
+        // before injecting a full hardware-key string, as tapWeb does.
+        compose.waitForIdle();InstrumentationRegistry.getInstrumentation().waitForIdleSync();Thread.sleep(350)
         InstrumentationRegistry.getInstrumentation().sendStringSync("First content")
         compose.waitUntil(5000){jsText().contains("First content")};assertEquals("Title hop",compose.activity.vm.selectedNote()!!.title)
         compose.onNodeWithTag("note-title").performClick();InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_TAB)
