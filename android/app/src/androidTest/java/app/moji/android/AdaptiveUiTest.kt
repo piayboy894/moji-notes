@@ -69,8 +69,10 @@ class AdaptiveUiTest {
             val finish=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
             // Overlay drawing moves independently of semantics layout bounds.
             // Inspect its actual opaque background edge on the device instead.
-            val y=finish.height-100;val panel=finish.getPixel(finish.width-8,y)
-            fun edge(bitmap:android.graphics.Bitmap):Int {var x=bitmap.width-1;while(x>=0){val c=bitmap.getPixel(x,y);if(kotlin.math.abs(android.graphics.Color.red(c)-android.graphics.Color.red(panel))>3||kotlin.math.abs(android.graphics.Color.green(c)-android.graphics.Color.green(panel))>3||kotlin.math.abs(android.graphics.Color.blue(c)-android.graphics.Color.blue(panel))>3)break;x--};return x+1}
+            // The settled WebView paints a scrollbar at the outer edge. Scan
+            // from the same blank inset used to sample the panel background.
+            val y=finish.height-100;val sampleX=finish.width-16;val panel=finish.getPixel(sampleX,y)
+            fun edge(bitmap:android.graphics.Bitmap):Int {var x=sampleX;while(x>=0){val c=bitmap.getPixel(x,y);if(kotlin.math.abs(android.graphics.Color.red(c)-android.graphics.Color.red(panel))>3||kotlin.math.abs(android.graphics.Color.green(c)-android.graphics.Color.green(panel))>3||kotlin.math.abs(android.graphics.Color.blue(c)-android.graphics.Color.blue(panel))>3)break;x--};return x+1}
             val startEdge=edge(start);val middleEdge=edge(middle);val finalEdge=edge(finish)
             start.recycle();middle.recycle();finish.recycle()
             assertTrue("Whole opaque pane must move: $startEdge > $middleEdge > $finalEdge",startEdge>middleEdge&&middleEdge>finalEdge)
