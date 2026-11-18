@@ -76,7 +76,7 @@ import app.moji.android.data.*
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, overview:Boolean=false, sharedMotion:RecordSharedMotion?=null) {
+@Composable fun NoteList(vm: MojiViewModel, s: AppState, modifier: Modifier = Modifier, editBook: (Notebook) -> Unit, overview:Boolean=false) {
     val w = s.workspace ?: return; val notes = vm.filtered()
     val recordListFocus=remember{FocusRequester()}
     var selected by remember(s.view,s.selectedId) { RecordCommandState(emptySet<String>()){vm.recordSelection=it} }; var selecting by remember(s.view,s.selectedId){RecordCommandState(false){vm.recordSelectionMode=it}}; var sortMenu by remember { mutableStateOf(false) }; var purge by remember { mutableStateOf(false) }
@@ -122,7 +122,7 @@ import app.moji.android.data.*
                 val gestures=if(selecting&&note.id in selected)Modifier.recordDragSource(vm,selected,clickCard){note.id in selected}else Modifier.combinedClickable(onClick=clickCard,onLongClick={recordListFocus.requestFocus();vm.recordKeyboardScope=true;selecting=true;selected=selected+note.id})
                 val mode = w.notebooks.first { it.id == note.notebookId }.mode;val chosen=if(selecting)note.id in selected else s.selectedId==note.id
                 val preview=remember(note.content,note.variables,note.username,mode){if(mode==NoteMode.Password)note.username else Records.plain(PromptVariables.display(note)).take(100)}
-                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().recordSharedCard("card-${note.id}",sharedMotion,enabled=overview||note.id==s.selectedId,z=if(note.id==s.selectedId)3f else 1f).then(if(overview)Modifier.height(190.dp)else Modifier).testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
+                Surface(shape = RoundedCornerShape(13.dp), color = if (chosen) color(LocalMojiPalette.current.colors.getValue("RecordSelected")) else MaterialTheme.colorScheme.surface, contentColor=if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelectedInk"))else MaterialTheme.colorScheme.onSurface,border=androidx.compose.foundation.BorderStroke(1.dp,if(chosen)color(LocalMojiPalette.current.colors.getValue("RecordSelected"))else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().then(if(overview)Modifier.height(190.dp)else Modifier).testTag("record-card-${note.id}").recordContextTrigger{contextMenu=true;recordListFocus.requestFocus();vm.recordKeyboardScope=true}.then(gestures)) {
                     DropdownMenu(contextMenu,{contextMenu=false}){
                         val ids=if(selecting&&note.id in selected)selected else setOf(note.id)
                         DropdownMenuItem(text={Text("复制记录")},onClick={vm.copyRecords(ids,false);contextMenu=false})

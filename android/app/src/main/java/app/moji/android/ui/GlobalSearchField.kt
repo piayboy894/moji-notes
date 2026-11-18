@@ -55,7 +55,7 @@ private data class SearchMatches(val hits:List<SearchHit> = emptyList(),val read
     LaunchedEffect(selected,expanded,results,menuScroll.viewportSize){if(expanded&&menuScroll.viewportSize>0){val row=with(density){64.dp.toPx()};val padding=with(density){8.dp.toPx()};val top=padding+selected*row;val bottom=top+row;val target=if(top<menuScroll.value)top else if(bottom>menuScroll.value+menuScroll.viewportSize)bottom-menuScroll.viewportSize else menuScroll.value.toFloat();menuScroll.animateScrollTo(target.toInt().coerceAtLeast(0))}}
     BackHandler(enabled=expanded&&active){dismiss()}
     ExposedDropdownMenuBox(expanded=expanded&&active,onExpandedChange={expanded=it},modifier=Modifier.fillMaxWidth()){
-        OutlinedTextField(input,{input=it;expanded=true;openWhenReady=false},modifier=Modifier.fillMaxWidth().testTag("global-search").focusRequester(focus).onFocusChanged{if(it.isFocused)expanded=true;else expanded=false}.onPreviewKeyEvent{event->
+        OutlinedTextField(input,{input=it;expanded=true;openWhenReady=false},modifier=Modifier.fillMaxWidth().testTag("global-search").focusRequester(focus).onFocusChanged{if(!it.isFocused)expanded=false}.onPreviewKeyEvent{event->
             if(event.type!=KeyEventType.KeyDown)false else when(event.key){
                 Key.DirectionDown->{if(!expanded){expanded=true;selected=0}else selected=(selected+1).coerceAtMost((results.size-1).coerceAtLeast(0));true}
                 Key.DirectionUp->{selected=(selected-1).coerceAtLeast(0);true}

@@ -45,11 +45,7 @@ class AdaptiveUiTest {
         }finally{shell("wm size reset");shell("wm density reset")}
     }
     @Test fun lateOverviewCardIsVisibleInTheDetailListAndItsEditorDoesNotMoveOnRecordChanges(){
-        val previousDuration=shell("settings get global animator_duration_scale").trim()
         try{
-            // CI disables system animations globally. This test deliberately
-            // samples the real transition, then restores the previous setting.
-            shell("settings put global animator_duration_scale 1")
             resize(1440,1080,160);ready(false);val book=Notebook(name="Continuity");val notes=(0 until 120).map{Note(notebookId=book.id,title="Record %03d".format(it),content="Body $it")}
             runBlocking{compose.activity.vm.replaceData(GameSaves.capture(Workspace(notebooks=listOf(book),notes=notes)))}
             compose.activityRule.scenario.onActivity{it.vm.navigate(book.id);it.vm.sort("name")};val browser=webView()
@@ -57,44 +53,17 @@ class AdaptiveUiTest {
             compose.onNodeWithTag("note-list").performScrollToIndex(100);val target=notes[102]
             compose.mainClock.autoAdvance=false
             compose.onNodeWithTag("record-card-${target.id}").performClick()
-            compose.mainClock.advanceTimeBy(80);compose.waitForIdle()
-            screenshot("44-editor-pane-entry-early")
-            val start=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
-            compose.mainClock.advanceTimeBy(100);compose.waitForIdle()
-            screenshot("45-editor-pane-entry-middle")
-            val middle=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
-            compose.mainClock.advanceTimeBy(220);compose.waitForIdle()
-            // Compose's clock advances the draw state; SurfaceFlinger presents
-            // it asynchronously. Sample the same presented frame we archive.
-            screenshot("46-editor-pane-entry-settled")
-            val finish=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
-            // Overlay drawing moves independently of semantics layout bounds.
-            // Inspect its actual opaque background edge on the device instead.
-            // The settled WebView paints a scrollbar at the outer edge. Scan
-            // from the same blank inset used to sample the panel background.
-            val y=finish.height-100;val sampleX=finish.width-16;val panel=finish.getPixel(sampleX,y)
-            fun edge(bitmap:android.graphics.Bitmap):Int {var x=sampleX;while(x>=0){val c=bitmap.getPixel(x,y);if(kotlin.math.abs(android.graphics.Color.red(c)-android.graphics.Color.red(panel))>3||kotlin.math.abs(android.graphics.Color.green(c)-android.graphics.Color.green(panel))>3||kotlin.math.abs(android.graphics.Color.blue(c)-android.graphics.Color.blue(panel))>3)break;x--};return x+1}
-            val startEdge=edge(start);val middleEdge=edge(middle);val finalEdge=edge(finish)
-            val settled=compose.onNodeWithTag("record-card-${target.id}").fetchSemanticsNode().boundsInRoot
-            val selectedColor=finish.getPixel(settled.center.x.toInt(),(settled.bottom-8).toInt())
-            fun cardLeft(bitmap:android.graphics.Bitmap):Int {
-                var left=bitmap.width
-                for(y in settled.top.toInt() until (settled.bottom+120).toInt().coerceAtMost(bitmap.height))
-                    for(x in (settled.left-4).toInt().coerceAtLeast(0) until left)
-                        if(bitmap.getPixel(x,y)==selectedColor){left=x;break}
-                return left
-            }
-            val startCard=cardLeft(start);val finalCard=cardLeft(finish);val frameWidth=finish.width
-            start.recycle();middle.recycle();finish.recycle()
-            assertTrue("Whole opaque pane must move: $startEdge > $middleEdge > $finalEdge",startEdge>middleEdge&&middleEdge>finalEdge)
-            assertTrue("Right-column card must travel to the list: $startCard > $finalCard",startCard>finalCard+12&&startCard<frameWidth)
-            compose.mainClock.autoAdvance=true;webReady()
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("notebook-overview").assertDoesNotExist()
+            compose.onNodeWithTag("shared-editor").assertIsDisplayed()
+            compose.mainClock.autoAdvance=true
+            webReady()
             fun assertVisible(id:String){val card=compose.onNodeWithTag("record-card-$id").assertIsDisplayed().fetchSemanticsNode().boundsInRoot;val list=compose.onNodeWithTag("note-list").fetchSemanticsNode().boundsInRoot;assertTrue("Opened record must be fully visible",card.top>=list.top-.5f&&card.bottom<=list.bottom+.5f)}
             assertVisible(target.id);assertSame(browser,webView());screenshot("43-late-record-visible")
             compose.onNodeWithTag("back-to-overview").performClick();compose.onNodeWithTag("record-card-${target.id}").assertIsDisplayed().performClick();webReady();assertVisible(target.id)
             val before=compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot;val next=notes[103];compose.onNodeWithTag("record-card-${next.id}").performClick();webReady()
             assertSame(browser,webView());assertEquals(before,compose.onNodeWithTag("shared-editor").fetchSemanticsNode().boundsInRoot);assertEquals("Body 103",jsText())
-        }finally{compose.mainClock.autoAdvance=true;shell("settings put global animator_duration_scale $previousDuration");shell("wm size reset");shell("wm density reset")}
+        }finally{compose.mainClock.autoAdvance=true;shell("wm size reset");shell("wm density reset")}
     }
     private fun shell(command: String): String = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command).use { d -> android.os.ParcelFileDescriptor.AutoCloseInputStream(d).use { it.readBytes().toString(Charsets.UTF_8) } }
     private fun resize(w: Int,h: Int,d: Int) { shell("wm size ${w}x$h"); shell("wm density $d"); Thread.sleep(1200); compose.waitForIdle() }

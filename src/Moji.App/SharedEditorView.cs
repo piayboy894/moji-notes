@@ -145,7 +145,7 @@ internal sealed class SharedEditorView : Grid, IDisposable
     {
         var config = Json.Deserialize<Dictionary<string, JsonElement>>(Configuration());
         var documentSession=Guid.NewGuid().ToString("N");var documentEpoch=vm.WorkspaceEpoch;
-        var payload = new Dictionary<string, object?> { ["id"] = note.Id, ["session"] = documentSession, ["content"] = note.Content, ["variables"] = note.Variables };
+        var payload = new Dictionary<string, object?> { ["id"] = note.Id, ["session"] = documentSession, ["content"] = note.Content, ["variables"] = note.Variables, ["prompt"] = vm.State?.Notebooks.FirstOrDefault(b => b.Id == note.NotebookId)?.Mode == NoteMode.Prompt };
         foreach (var (key, value) in config) payload[key] = value;
         await Send("load", payload, TimeSpan.FromSeconds(25),()=>{noteId=note.Id;epoch=documentEpoch;session=documentSession;lastContent=note.Content;});lastAppearance = Configuration();
         if (!active) await Send("deactivate");

@@ -54,7 +54,6 @@ public partial class MainWindow
     private async void OpenSearchHit(SearchHit hit){CloseGlobalSearch();Navigate(hit.Archived?"archive":hit.NotebookId,hit.Id);try{await editorTransition;if(VM.SelectedId!=hit.Id)return;if(sharedEditor!=null)await sharedEditor.Command("focus");else titleBox?.Focus();}catch(OperationCanceledException){}}
     private void CloseGlobalSearch(){openSearchWhenReady=false;searchBusy=false;searchCancellation?.Cancel();if(globalSearchPopup!=null)globalSearchPopup.IsOpen=false;}
     private void GlobalSearchChanged(object sender,TextChangedEventArgs e){if(suppressGlobalSearch||GlobalSearchInput==null||GlobalSearchClear==null)return;GlobalSearchClear.Visibility=GlobalSearchInput.Text.Length>0?Visibility.Visible:Visibility.Collapsed;if(GlobalSearchInput.IsKeyboardFocusWithin)RefreshGlobalSearch();}
-    private void GlobalSearchFocused(object sender,RoutedEventArgs e)=>RefreshGlobalSearch();
     private void GlobalSearchMouseUp(object sender,MouseButtonEventArgs e){if(!SearchDropdownOpen&&GlobalSearchInput.IsKeyboardFocusWithin)RefreshGlobalSearch();}
     private void GlobalSearchCleared(object sender,RoutedEventArgs e){suppressGlobalSearch=true;GlobalSearchInput.Clear();suppressGlobalSearch=false;GlobalSearchClear.Visibility=Visibility.Collapsed;CloseGlobalSearch();GlobalSearchInput.Focus();}
     private void GlobalSearchKeyDown(object sender,KeyEventArgs e)

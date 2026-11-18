@@ -136,7 +136,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     }}
     fun attach(key:String):EditorWebView {owner=key;visible=true;(web.parent as? android.view.ViewGroup)?.removeView(web);return web}
     fun hide(key:String){if(owner!=key)return;visible=false;needsActivation=true;canConvert=false;chooseFile=null;web.cover(true);scope.launch{flush();if(owner!=key||visible)return@launch;web.evaluateJavascript("window.MojiEditor?.deactivate()",null);park()}}
-    fun show(note:Note,dark:Boolean,obscured:Boolean,prefs:Preferences){
+    fun show(note:Note,mode:NoteMode,dark:Boolean,obscured:Boolean,prefs:Preferences){
         visible=true;web.cover(obscured)
         val palette=ThemeCatalog.resolve(prefs,dark)
         web.setBackgroundColor(android.graphics.Color.parseColor(palette.colors.getValue("Panel")))
@@ -152,7 +152,7 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
                 fileResult?.onReceiveValue(null);fileResult=null
                 val latest=vm.state.value.workspace?.notes?.firstOrNull{it.id==note.id}?:return@launch
                 activeId=latest.id;epoch=vm.workspaceEpoch;generation=vm.state.value.editorGeneration;token=uid();loadingToken=token
-                val payload=buildJsonObject{put("id",activeId);put("session",token);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,it.third)}})}
+                val payload=buildJsonObject{put("id",activeId);put("session",token);put("prompt",mode==NoteMode.Prompt);put("content",latest.content);put("variables",json.encodeToJsonElement(latest.variables));put("theme",if(dark)"dark"else"light");put("palette",palette.id);put("fontSize",prefs.fontSize);put("fontFamily",InstalledFonts.resolve(prefs.fontFamily).id.takeUnless{it.startsWith("file:")}?:"");put("fontUrl",InstalledFonts.url(prefs.fontFamily));put("contentInset",23);put("shortcuts",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,Shortcuts.binding(prefs,it.first))}});put("defaults",buildJsonObject{Shortcuts.actions.filterNot{it.first.startsWith("record")}.forEach{put(it.first,it.third)}})}
                 web.evaluateJavascript("window.MojiEditor.load($payload)",null)
             }finally{gate.unlock()}
         }
@@ -171,6 +171,6 @@ class SharedEditorSession(private val activity:MainActivity,private val vm:MojiV
     Column(modifier.background(MaterialTheme.colorScheme.surface)){
         if(mode==NoteMode.Prompt)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp)){TextButton(onClick={session.command("convertVariable")},enabled=session.canConvert){Text("转化为变量")}}
         if(session.failure)Text("编辑器未能加载，请重新打开记录",Modifier.padding(24.dp))
-        AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,dark,obscured,prefs)},onReset=null,onRelease={session.hide(owner)})
+        AndroidView(factory={session.attach(owner)},modifier=Modifier.weight(1f).fillMaxWidth().testTag("shared-editor"),update={session.chooseFile={picker.launch(it)};session.show(note,mode,dark,obscured,prefs)},onReset=null,onRelease={session.hide(owner)})
     }
 }

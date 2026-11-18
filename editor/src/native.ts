@@ -1,20 +1,58 @@
-import {type Editor} from '@tiptap/core'
+import {Editor} from '@tiptap/core'
+import {type Node as DocumentNode} from '@tiptap/pm/model'
+import {editorOptions} from './editor-options'
 import palettes from '../../assets/themes.json'
-import {MojiVariable,convertVariable,selectedVariableName,selectedRange} from './prompt-field'
+import {convertVariable,selectedVariableName,selectedRange} from './prompt-field'
 export {MojiVariable} from './prompt-field'
 import {EditorState} from '@tiptap/pm/state'
-import {closeHistory} from '@tiptap/pm/history'
 export const PREFIX='<!--moji:tiptap:2-->'
 type Variable={id:string,name:string}
-type Payload={id:string,session?:string,content:string,variables:Variable[],theme:string,fontSize:number,fontFamily?:string,fontUrl?:string,contentInset?:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean,palette?:string}
-let editor:Editor|null=null
+type Payload={id:string,session?:string,content:string,prompt?:boolean,variables:Variable[],theme:string,fontSize:number,fontFamily?:string,fontUrl?:string,contentInset?:number,shortcuts:Record<string,string>,defaults:Record<string,string>,readOnly?:boolean,palette?:string}
+let primary: Editor | null = null
+let editor: Editor | null = null
+let pages: Editor[] = []
+export type PageState = { pages: Editor[], active: Editor | null, prompt: boolean, editable: boolean, session?: string }
+let pageState: PageState = { pages, active: null, prompt: false, editable: false }
+const listeners = new Set<() => void>()
+export const getPageState = () => pageState
+export function subscribePages(listener: () => void) {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
+}
+function publishPages() {
+  pageState = { pages, active: editor, prompt: !!current?.prompt, editable: !!editor?.isEditable, session: currentDocument() }
+  listeners.forEach(listener => listener())
+}
+
 let current:Payload|null=null
 let dirty=false
 const native=(message:object)=>{message={id:current?.id,session:current?.session,...message};const text=JSON.stringify(message);const w=window as any;if(w.chrome?.webview)w.chrome.webview.postMessage(message);else w.MojiNative?.postMessage(text)}
 export const currentDocument=()=>current?.session||current?.id
 export const reportImageError=()=>native({type:'action',id:current?.id,action:'image-error'})
 export const openExternal=(url:string)=>{if(/^https?:\/\//i.test(url))native({type:'openLink',id:current?.id,url})}
-function snapshot(){const variables:Variable[]=[];editor?.state.doc.descendants(node=>{if(node.type.name==='mojiVariable'&&/^[a-f0-9]{32}$/.test(node.attrs.id)&&!variables.some(v=>v.id===node.attrs.id))variables.push({id:node.attrs.id,name:node.attrs.name})});return {content:PREFIX+(editor?.getHTML()||'<p></p>'),variables,text:editor?.getText()||''}}
+const pageCache = new WeakMap<Editor, { doc: DocumentNode, html: string, variables: Variable[], text: string }>()
+function pageSnapshot(page: Editor) {
+  const doc = page.state.doc
+  const cached = pageCache.get(page)
+  if (cached?.doc === doc) return cached
+  const variables: Variable[] = []
+  doc.descendants(node => {
+    if (node.type.name === 'mojiVariable' && /^[a-f0-9]{32}$/.test(node.attrs.id))
+      variables.push({ id: node.attrs.id, name: node.attrs.name })
+  })
+  const value = { doc, html: page.getHTML(), variables, text: page.getText() }
+  pageCache.set(page, value)
+  return value
+}
+function snapshot() {
+  const parts = pages.map(pageSnapshot)
+  const html = parts.length > 1
+    ? parts.map(p => '<section data-moji-version="true">' + p.html + '</section>').join('')
+    : parts[0]?.html || '<p></p>'
+  const variables = new Map<string, Variable>()
+  for (const page of parts) for (const v of page.variables) variables.set(v.id, v)
+  return { content: PREFIX + html, variables: [...variables.values()], text: parts.map(p => p.text).join('\n\n') }
+}
 function emit(){if(!editor||!current||!dirty)return;native({type:'change',id:current.id,session:current.session,...snapshot()});dirty=false}
 function literal(content:string,variables:Variable[]){const box=document.createElement('div');const pattern=/!\[[^\]]*\]\(moji-variable:([a-f0-9]{32})\)/g
  for(const line of content.split('\n')){const p=document.createElement('p');let at=0;for(const m of line.matchAll(pattern)){const v=variables.find(v=>v.id===m[1]);if(!v)continue;p.append(document.createTextNode(line.slice(at,m.index)));const span=document.createElement('span');span.dataset.mojiVariable=v.id;span.dataset.name=v.name;span.dataset.mojiField='true';p.append(span);at=m.index!+m[0].length}p.append(document.createTextNode(line.slice(at)));box.append(p)}return box.innerHTML}
@@ -41,11 +79,87 @@ function theme(payload:Partial<Payload>){
  root.style.backgroundColor=c.Panel
 }
 
-function load(payload:Payload){current=payload;theme(payload);if(!editor)return;dirty=false;editor.commands.setContent(/^<!--moji:tiptap:[12]-->/.test(payload.content)?payload.content.slice(PREFIX.length):literal(payload.content,payload.variables||[]),{emitUpdate:false,parseOptions:{preserveWhitespace:'full'}});editor.view.updateState(EditorState.create({schema:editor.schema,doc:editor.state.doc,plugins:editor.state.plugins}));editor.setEditable(!payload.readOnly,false);editor.view.dispatch(editor.state.tr);dirty=false;if((payload.variables||[]).length&&payload.content!==snapshot().content){dirty=true;emit()};document.querySelector('.simple-editor-wrapper')?.scrollTo(0,0);window.dispatchEvent(new Event('moji-document'));queueMicrotask(()=>{if(current?.session===payload.session&&current?.id===payload.id){native({type:'loaded',id:payload.id,session:payload.session});selection()}})}
-document.addEventListener('focusin',()=>selection());
+function pageContents(payload: Payload): string[] {
+  if (!/^<!--moji:tiptap:[12]-->/.test(payload.content)) return [literal(payload.content, payload.variables || [])]
+  const html = payload.content.slice(PREFIX.length)
+  if (!payload.prompt || !html.startsWith('<section data-moji-version=')) return [html]
+  const template = document.createElement('template')
+  template.innerHTML = html
+  const sections = Array.from(template.content.children)
+  return sections.length && sections.every(el => el.matches('section[data-moji-version]'))
+    ? sections.map(el => el.innerHTML) : [html]
+}
+function watch(page: Editor) {
+  page.on('update', () => { dirty = true; emit(); selection() })
+  page.on('selectionUpdate', () => { if (page === editor) selection() })
+  page.on('focus', () => activatePage(page))
+}
+function activatePage(page: Editor) {
+  if (!pages.includes(page)) return
+  if (editor !== page) { editor = page; publishPages() }
+  selection()
+}
+function newPage(html: string, editable: boolean) {
+  const page = new Editor({ ...editorOptions(), content: html, editable, parseOptions: { preserveWhitespace: 'full' } })
+  watch(page)
+  return page
+}
+export function addVersion() {
+  if (!current?.prompt || !editor?.isEditable) return
+  const page = newPage('<p></p>', true)
+  pages = [...pages, page]
+  editor = page
+  dirty = true
+  emit()
+  publishPages()
+  return page
+}
+export function jumpToVersion(page: Editor) {
+  if (!pages.includes(page)) return
+  activatePage(page)
+  page.commands.setTextSelection(0)
+  page.view.focus()
+  page.view.dom.closest('.moji-version-sheet')?.scrollIntoView({ block: 'start' })
+}
+function load(payload: Payload) {
+  current = payload
+  theme(payload)
+  if (!primary) return
+  dirty = false
+  for (const page of pages.slice(1)) page.destroy()
+  const [first, ...rest] = pageContents(payload)
+  editor = primary
+  editor.commands.setContent(first, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
+  editor.view.updateState(EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.state.plugins }))
+  editor.setEditable(!payload.readOnly, false)
+  editor.view.dispatch(editor.state.tr)
+  pages = [primary, ...rest.map(html => newPage(html, !payload.readOnly))]
+  publishPages()
+  dirty = false
+  if (payload.variables?.length && payload.content !== snapshot().content) { dirty = true; emit() }
+  document.querySelector('.simple-editor-wrapper')?.scrollTo(0, 0)
+  window.dispatchEvent(new Event('moji-document'))
+  queueMicrotask(() => {
+    if (current === payload) { native({ type: 'loaded', id: payload.id, session: payload.session }); selection() }
+  })
+}
+document.addEventListener('focusin', event => {
+  // Inline variable fields have their own editing host.
+  const page = pages.find(p => p.view.dom.contains(event.target as Node))
+  if (page) activatePage(page)
+  else selection()
+})
 function selection(){if(editor&&current){const name=selectedVariableName(editor);native({type:'selection',id:current.id,session:current.session,canConvert:!!name,selection:name?{...selectedRange(editor),name}:null})}}
-function activate(){if(editor){editor.setEditable(true,false);editor.view.dispatch(editor.state.tr)}}
-function deactivate(){if(editor?.view.dom.contains(document.activeElement)) (document.activeElement as HTMLElement)?.blur();editor?.commands.blur();if(editor){editor.setEditable(false,false);editor.view.dispatch(editor.state.tr)}}
+function setEditable(editable: boolean) {
+  for (const page of pages) { page.setEditable(editable, false); page.view.dispatch(page.state.tr) }
+  publishPages()
+}
+function activate() { setEditable(!current?.readOnly) }
+function deactivate() {
+  if (editor?.view.dom.contains(document.activeElement)) (document.activeElement as HTMLElement)?.blur()
+  editor?.commands.blur()
+  setEditable(false)
+}
 function configure(payload:Partial<Payload>){if(current){for(const key of ['theme','palette','fontSize','fontFamily','fontUrl','contentInset','shortcuts','defaults'] as const)if(payload[key]!==undefined)(current as any)[key]=payload[key]}theme(current||payload);selection()}
 function action(name:string,value?:any){
  if(!editor||editor.isDestroyed)return false
@@ -59,11 +173,19 @@ function action(name:string,value?:any){
   default:return false
  }
 }
-const bound=new WeakSet<Editor>(),mounted=new WeakSet<Editor>()
-export function bindEditor(instance:Editor){editor=instance;if(bound.has(instance))return;bound.add(instance);editor.on('update',()=>{dirty=true;emit();selection()});editor.on('selectionUpdate',selection);editor.on('focus',selection);if(current)load(current);else if((window as any).__mojiLoad)load((window as any).__mojiLoad)}
+const mounted = new WeakSet<Editor>()
+export function bindEditor(instance: Editor) {
+  if (primary === instance) return
+  primary = editor = instance
+  pages = [instance]
+  watch(instance)
+  const pending = current || (window as any).__mojiLoad
+  if (pending) load(pending)
+  else publishPages()
+}
 // The parent effect runs after child menus and their plugins are mounted. A core
 // onCreate callback alone is too early for a native host that loads immediately.
-export function editorMounted(instance:Editor){bindEditor(instance);if(mounted.has(instance))return;mounted.add(instance);queueMicrotask(()=>{if(editor===instance&&!instance.isDestroyed)native({type:'ready'})})}
+export function editorMounted(instance:Editor){bindEditor(instance);if(mounted.has(instance))return;mounted.add(instance);queueMicrotask(()=>{if(primary===instance&&!instance.isDestroyed)native({type:'ready'})})}
 ;(window as any).MojiEditor={load,theme,configure,activate,deactivate,action,flush:(token?:string)=>{emit();native({type:'flushed',id:current?.id,session:current?.session,token})},snapshot,get recordId(){return current?.id},get editor(){return editor}}
 document.addEventListener('keydown',event=>{if(!current||event.isComposing)return;const chord=(event.ctrlKey?'Ctrl+':'')+(event.altKey?'Alt+':'')+(event.shiftKey?'Shift+':'')+event.key.toUpperCase();const item=Object.entries(current.shortcuts||{}).find(([,binding])=>binding&&binding===chord)
  if(item){event.preventDefault();event.stopImmediatePropagation();if(!action(item[0]))native({type:'action',id:current.id,action:item[0]})}

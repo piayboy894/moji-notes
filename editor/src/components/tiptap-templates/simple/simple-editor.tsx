@@ -1,18 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
+import { EditorContext, useEditor } from "@tiptap/react"
 
-// --- Tiptap Core Extensions ---
-import { StarterKit } from "@tiptap/starter-kit"
-import { MojiImage, ImageBackgroundMenu } from "@/image-background"
-import { TaskItem, TaskList } from "@tiptap/extension-list"
-import { TextAlign } from "@tiptap/extension-text-align"
-import { Typography } from "@tiptap/extension-typography"
-import { Highlight } from "@tiptap/extension-highlight"
-import { Subscript } from "@tiptap/extension-subscript"
-import { Superscript } from "@tiptap/extension-superscript"
-import { Selection } from "@tiptap/extensions"
+import { ImageBackgroundMenu } from "@/image-background"
+import { editorOptions } from "@/editor-options"
+import { VersionNavigation, VersionSheets } from "@/version-sheets"
 
 // --- UI Primitives ---
 import { Button } from "@/components/tiptap-ui-primitive/button"
@@ -24,8 +17,6 @@ import {
 } from "@/components/tiptap-ui-primitive/toolbar"
 
 // --- Tiptap Node ---
-import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
-import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
@@ -65,11 +56,7 @@ import { useWindowSize } from "@/hooks/use-window-size"
 import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Components ---
-import { MojiVariable, bindEditor, editorMounted, reportImageError } from "@/native"
-import { LegacyAndroidInput } from "@/legacy-android-input"
-
-// --- Lib ---
-import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
+import { bindEditor, editorMounted, getPageState, subscribePages } from "@/native"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -81,11 +68,13 @@ const MainToolbarContent = ({
   onLinkClick,
   isMobile,
   editingField,
+  navigation,
 }: {
   onHighlighterClick: () => void
   onLinkClick: () => void
   isMobile: boolean
   editingField:boolean
+  navigation: React.ReactNode
 }) => {
   const inactive=editingField?{disabled:true}:{}
   return (
@@ -145,6 +134,7 @@ const MainToolbarContent = ({
 
       <ToolbarGroup>
         <ImageUploadButton {...inactive} text="图片" />
+        {navigation}
       </ToolbarGroup>
 
       <Spacer />
@@ -194,53 +184,14 @@ export function SimpleEditor() {
   React.useEffect(()=>{const reset=()=>setMobileView("main");window.addEventListener("moji-document",reset);return()=>window.removeEventListener("moji-document",reset)},[])
   const toolbarRef = React.useRef<HTMLDivElement>(null)
 
-  const editor = useEditor({
+  const primary = useEditor({
+    ...editorOptions(),
     immediatelyRender: false,
-    editable: false,
     shouldRerenderOnTransaction: false,
-    editorProps: {
-      attributes: {
-        autocomplete: "off",
-        autocorrect: "off",
-        autocapitalize: "off",
-        "aria-label": "笔记正文",
-        role:"textbox",
-        "aria-multiline":"true",
-        class: "simple-editor",
-      },
-    },
-    extensions: [
-      StarterKit.configure({
-        horizontalRule: false,
-        link: {
-          openOnClick: false,
-          enableClickSelection: true,
-        },
-      }),
-      HorizontalRule,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      TaskList,
-      TaskItem.configure({ nested: true, a11y:{checkboxLabel:node=>"待办事项："+(node.textContent||"未填写")} }),
-      Highlight.configure({ multicolor: true }),
-      MojiImage.configure({allowBase64:true}),
-      MojiVariable,
-      LegacyAndroidInput,
-      Typography,
-      Superscript,
-      Subscript,
-      Selection,
-      ImageUploadNode.configure({
-        accept: "image/*",
-        maxSize: MAX_FILE_SIZE,
-        limit: 3,
-        upload: handleImageUpload,
-        onError: (error) => { if(error.message!=="已取消")reportImageError() },
-      }),
-    ],
-    content: "",
     onCreate: ({ editor }) => bindEditor(editor),
   })
-
+  const state = React.useSyncExternalStore(subscribePages, getPageState)
+  const editor = state.active || primary
   const rect = useCursorVisibility({
     editor,
     overlayHeight: toolbarRef.current?.getBoundingClientRect().height ?? 0,
@@ -253,7 +204,7 @@ export function SimpleEditor() {
   }, [isMobile, mobileView])
 
   return (
-    <div className="simple-editor-wrapper">
+    <div className={state.prompt ? "simple-editor-wrapper moji-prompt-editor" : "simple-editor-wrapper"}>
       <EditorContext.Provider value={{ editor }}>
         <Toolbar
           ref={toolbarRef}
@@ -271,6 +222,7 @@ export function SimpleEditor() {
               onLinkClick={() => setMobileView("link")}
               isMobile={isMobile}
               editingField={editingField}
+              navigation={state.prompt && <VersionNavigation key={state.session} state={state} />}
             />
           ) : (
             <MobileToolbarContent
@@ -280,12 +232,9 @@ export function SimpleEditor() {
           )}
         </Toolbar>
 
-        {editor && <ImageBackgroundMenu editor={editor} onReady={()=>editorMounted(editor)} />}
-        <EditorContent
-          editor={editor}
-          role="presentation"
-          className="simple-editor-content"
-        />
+        {primary && <ImageBackgroundMenu editor={primary} onReady={() => editorMounted(primary)} />}
+        {state.pages.slice(1).map(page => <ImageBackgroundMenu key={page.instanceId} editor={page} />)}
+        <VersionSheets state={state} primary={primary} />
       </EditorContext.Provider>
     </div>
   )
