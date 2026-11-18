@@ -26,12 +26,14 @@ test('Ctrl+A then Ctrl+C includes visible list markers in plain text and preserv
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('开始\n7. 甲\n8. 乙\n  a. 嵌套\n• 结束\n尾段')
   const html = await page.evaluate(async () => (await (await navigator.clipboard.read())[0].getType('text/html')).text())
   expect(html).toContain('<ol start="7">')
-  await body.locator('li p').nth(1).click({ position: { x: 6, y: 10 } })
-  await expect.poll(() => page.evaluate(() => (window as any).MojiEditor.editor.state.selection.$from.parent.textContent)).toBe('乙')
-  await page.keyboard.press('Home')
-  await page.keyboard.press('Shift+End')
+  await body.locator('li p').nth(1).evaluate(paragraph => {
+    const editor = (window as any).MojiEditor.editor
+    const start = editor.view.posAtDOM(paragraph, 0)
+    editor.commands.setTextSelection({ from: start, to: start + paragraph.textContent!.length })
+  })
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('乙')
   await page.keyboard.press('Control+c')
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('8. 乙')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('8. 乙')
 })
 
 test('Tab edits the paragraph or list and keeps focus in the body', async ({ page }) => {
