@@ -6,12 +6,12 @@ import { EditorContext, useEditor } from "@tiptap/react"
 import { ImageBackgroundMenu } from "@/image-background"
 import { editorOptions } from "@/editor-options"
 import { VersionNavigation, VersionSheets } from "@/version-sheets"
+import { ScrollableToolbar } from "./scrollable-toolbar"
 
 // --- UI Primitives ---
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { Spacer } from "@/components/tiptap-ui-primitive/spacer"
 import {
-  Toolbar,
   ToolbarGroup,
   ToolbarSeparator,
 } from "@/components/tiptap-ui-primitive/toolbar"
@@ -52,8 +52,6 @@ import { LinkIcon } from "@/components/tiptap-icons/link-icon"
 
 // --- Hooks ---
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useWindowSize } from "@/hooks/use-window-size"
-import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Components ---
 import { bindEditor, editorMounted, getPageState, subscribePages } from "@/native"
@@ -89,10 +87,10 @@ const MainToolbarContent = ({
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <HeadingDropdownMenu {...inactive} levels={[1, 2, 3, 4]} portal={isMobile} />
+        <HeadingDropdownMenu {...inactive} levels={[1, 2, 3, 4]} portal />
         <ListDropdownMenu
           types={["bulletList", "orderedList", "taskList"]}
-          portal={isMobile}
+          portal
         />
         <BlockquoteButton {...inactive} />
         <CodeBlockButton {...inactive} />
@@ -177,12 +175,10 @@ export function SimpleEditor() {
   const isMobile = useIsMobile()
   const [editingField,setEditingField]=React.useState(false)
   React.useEffect(()=>{const update=()=>setEditingField(!!document.activeElement?.closest('.moji-variable-input'));document.addEventListener('focusin',update);document.addEventListener('focusout',update);window.addEventListener('moji-document',update);return()=>{document.removeEventListener('focusin',update);document.removeEventListener('focusout',update);window.removeEventListener('moji-document',update)}},[])
-  const { height } = useWindowSize()
   const [mobileView, setMobileView] = React.useState<
     "main" | "highlighter" | "link"
   >("main")
   React.useEffect(()=>{const reset=()=>setMobileView("main");window.addEventListener("moji-document",reset);return()=>window.removeEventListener("moji-document",reset)},[])
-  const toolbarRef = React.useRef<HTMLDivElement>(null)
 
   const primary = useEditor({
     ...editorOptions(),
@@ -192,10 +188,6 @@ export function SimpleEditor() {
   })
   const state = React.useSyncExternalStore(subscribePages, getPageState)
   const editor = state.active || primary
-  const rect = useCursorVisibility({
-    editor,
-    overlayHeight: toolbarRef.current?.getBoundingClientRect().height ?? 0,
-  })
 
   React.useEffect(() => {
     if (!isMobile && mobileView !== "main") {
@@ -204,18 +196,9 @@ export function SimpleEditor() {
   }, [isMobile, mobileView])
 
   return (
-    <div className={state.prompt ? "simple-editor-wrapper moji-prompt-editor" : "simple-editor-wrapper"}>
+    <div className="moji-editor-shell">
       <EditorContext.Provider value={{ editor }}>
-        <Toolbar
-          ref={toolbarRef}
-          style={{
-            ...(isMobile
-              ? {
-                  bottom: `calc(100% - ${height - rect.y}px)`,
-                }
-              : {}),
-          }}
-        >
+        <ScrollableToolbar view={mobileView}>
           {mobileView === "main" ? (
             <MainToolbarContent
               onHighlighterClick={() => setMobileView("highlighter")}
@@ -230,11 +213,13 @@ export function SimpleEditor() {
               onBack={() => setMobileView("main")}
             />
           )}
-        </Toolbar>
+        </ScrollableToolbar>
 
         {primary && <ImageBackgroundMenu editor={primary} onReady={() => editorMounted(primary)} />}
         {state.pages.slice(1).map(page => <ImageBackgroundMenu key={page.instanceId} editor={page} />)}
-        <VersionSheets state={state} primary={primary} />
+        <div className={state.prompt ? "simple-editor-wrapper moji-prompt-editor" : "simple-editor-wrapper"}>
+          <VersionSheets state={state} primary={primary} />
+        </div>
       </EditorContext.Provider>
     </div>
   )

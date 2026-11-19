@@ -278,15 +278,25 @@ class AdaptiveUiTest {
     @Test fun drawerDismissesEditorHandlesAndFeedbackUsesTheForegroundWindow() {
         try {
             ready(); compose.activityRule.scenario.onActivity { a -> a.vm.navigate(a.vm.state.value.workspace!!.liveBooks.first { it.mode==NoteMode.Text }.id); a.vm.addNote() }
-            webReady(); js("window.MojiEditor.editor.commands.insertContent('Selection remains editable after navigation')")
+            webReady()
+            js("window.MojiEditor.editor.commands.setContent('<p>滚动正文</p>'.repeat(100));document.querySelector('.simple-editor-wrapper').scrollTop=0")
+            val web = webView()
+            val origin = IntArray(2)
+            compose.activityRule.scenario.onActivity { web.getLocationOnScreen(origin) }
+            val x = origin[0] + web.width / 3
+            val y = origin[1] + web.height * 4 / 5
+            repeat(2) {
+                val before = js("Math.round(document.querySelector('.simple-editor-wrapper').scrollTop)").toInt()
+                shell("input swipe $x $y ${x + web.width / 5} ${y - web.height / 3} 380")
+                compose.waitUntil(5000) { js("Math.round(document.querySelector('.simple-editor-wrapper').scrollTop)").toInt() > before + 20 }
+            }
+            js("window.MojiEditor.editor.commands.setContent('<p>Selection remains editable after navigation</p>')")
             tapWeb(".tiptap")
             tapWeb(".tiptap p",longPress=true)
             compose.waitUntil(5000) { js("Boolean(window.getSelection()?.toString().length)")=="true" }
             val body=jsText()
             screenshot("14-editor-selection")
-            compose.onNodeWithTag("adaptive-layout").performTouchInput {
-                swipe(start=androidx.compose.ui.geometry.Offset(1f,height*.55f),end=androidx.compose.ui.geometry.Offset(width*.85f,height*.55f),durationMillis=650)
-            }
+            compose.onNodeWithContentDescription("打开导航").performClick()
             compose.onNodeWithContentDescription("偏好设置").assertIsDisplayed()
             compose.waitUntil(5000) { !webView().hasFocus() }
             compose.activityRule.scenario.onActivity { it.vm.message("侧栏消息可见") }

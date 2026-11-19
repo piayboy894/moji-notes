@@ -37,7 +37,7 @@ import app.moji.android.data.*
 import app.moji.android.security.Crypto
 import kotlinx.coroutines.delay
 
-@Composable fun EditorScreen(vm: MojiViewModel, s: AppState, note: Note, activity: MainActivity, export: (Note) -> Unit, modifier: Modifier = Modifier, showBack: Boolean = false, back: () -> Unit = {}) {
+@Composable fun EditorScreen(vm: MojiViewModel, s: AppState, note: Note, activity: MainActivity, export: (Note) -> Unit, modifier: Modifier = Modifier, showBack: Boolean = false, back: () -> Unit = {}, openNavigation: (() -> Unit)? = null) {
     val workspace=s.workspace?:return;val book=workspace.notebooks.first{it.id==note.notebookId};val editing=s.editingCredentialId==note.id
     var more by remember(note.id){mutableStateOf(false)};var history by remember(note.id){mutableStateOf(false)};var move by remember(note.id){mutableStateOf(false)};var purge by remember(note.id){mutableStateOf(false)}
     val credentialFocus=remember { androidx.compose.ui.focus.FocusRequester() }
@@ -45,6 +45,7 @@ import kotlinx.coroutines.delay
     fun focusContent(){if(vm.workspaceEpoch!=titleEpoch||vm.state.value.selectedId!=note.id)return;if(book.mode==NoteMode.Password)credentialFocus.requestFocus() else activity.editorSession.command("focus")}
     Column(modifier.fillMaxSize().onFocusChanged{if(it.hasFocus)vm.recordKeyboardScope=false}.focusGroup().background(MaterialTheme.colorScheme.surface)){
         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+            if(openNavigation != null) Tool(MojiIcons.Menu, "打开导航", action = openNavigation)
             if(showBack)Tool(MojiIcons.ArrowBack,"返回记录",action=back)
             if(!showBack)TextButton(onClick=vm::clearSelection,modifier=Modifier.weight(1f).testTag("back-to-overview")){Icon(MojiIcons.ArrowBack,"返回卡片网格",Modifier.size(18.dp));Spacer(Modifier.width(6.dp));Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))}else Text(book.name,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=color(book.color))
             if(note.deletedAt==null){

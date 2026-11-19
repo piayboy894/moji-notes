@@ -4,8 +4,8 @@ Windows 和 Android 的个人文本管理软件。三个记事本类型：普通
 
 ## 下载
 
-- [Windows 2.6.4](https://github.com/piayboy894/moji-notes/releases/tag/v2.6.4)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
-- [Android 2.6.4](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.6.4)：固定发行密钥签名的 APK。
+- [Windows 2.6.5](https://github.com/piayboy894/moji-notes/releases/tag/v2.6.5)：x64 / ARM64 轻量独立 EXE 与便携 ZIP。
+- [Android 2.6.5](https://github.com/piayboy894/moji-notes/releases/tag/android-v2.6.5)：固定发行密钥签名的 APK。
 
 ## 编辑器
 

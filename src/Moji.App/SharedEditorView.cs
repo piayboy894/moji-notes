@@ -51,7 +51,9 @@ internal sealed class SharedEditorView : Grid, IDisposable
             var folder = await Task.Run(EditorFiles.Extract); var runtime = await EditorFiles.Runtime();
             if (disposed || generation != ownGeneration) return;
             Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF" + Ui.Palette(vm.State?.Preferences ?? new()).Colors["Panel"][1..]);
-            var environment = await CoreWebView2Environment.CreateAsync(runtime, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes.WebView")).WaitAsync(TimeSpan.FromSeconds(25));
+            // Match the immediate wheel response of the WPF record list.
+            var options = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--disable-smooth-scrolling" };
+            var environment = await CoreWebView2Environment.CreateAsync(runtime, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MojiNotes.WebView"), options).WaitAsync(TimeSpan.FromSeconds(25));
             if (disposed || generation != ownGeneration) return;
             await browser.EnsureCoreWebView2Async(environment).WaitAsync(TimeSpan.FromSeconds(25));
             if(disposed||generation!=ownGeneration)return;var core = browser.CoreWebView2;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { EditorContent, type Editor } from '@tiptap/react'
 import {
@@ -6,7 +6,7 @@ import {
   useClick, useDismiss, useFloating, useHover, useInteractions,
 } from '@floating-ui/react'
 import { Button } from '@/components/tiptap-ui-primitive/button'
-import { addVersion, jumpToVersion, type PageState } from './native'
+import { addVersion, jumpToVersion, renameVersion, versionLabel, type PageState } from './native'
 
 export function VersionNavigation({ state }: { state: PageState }) {
   const [open, setOpen] = useState(false)
@@ -33,10 +33,42 @@ export function VersionNavigation({ state }: { state: PageState }) {
         ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()}>
         {state.pages.map((page, index) => <button type="button" key={page.instanceId}
           aria-current={page === state.active ? 'page' : undefined}
-          onClick={() => { setOpen(false); jumpToVersion(page) }}>版本 {index + 1}</button>)}
+          onClick={() => { setOpen(false); jumpToVersion(page) }}>{versionLabel(page, index)}</button>)}
       </nav>
     </FloatingPortal>}
   </>
+}
+
+function VersionHeading({ page, index, editable }: { page: Editor, index: number, editable: boolean }) {
+  const label = versionLabel(page, index)
+  const [draft, setDraft] = useState<string | null>(null)
+  const original = useRef(label)
+  const input = useRef<HTMLInputElement>(null)
+  const lastTap = useRef(-Infinity)
+  const editing = editable && draft !== null
+  useEffect(() => { if (editing) { input.current?.focus(); input.current?.select() } }, [editing])
+  useEffect(() => { if (!editable) setDraft(null) }, [editable])
+  function start() { original.current = label; setDraft(label) }
+  function save(value: string) { renameVersion(page, value.trim() === '版本 ' + (index + 1) ? '' : value) }
+  return <h2 id={'version-heading-' + index}>
+    {editing ? <input ref={input} aria-label="版本名称" value={draft} onChange={event => {
+      setDraft(event.target.value)
+      save(event.target.value)
+    }} onBlur={() => setDraft(null)} onKeyDown={event => {
+      if (event.nativeEvent.isComposing || event.keyCode === 229) return
+      if (event.key === 'Escape') save(original.current)
+      if (event.key === 'Enter' || event.key === 'Escape') {
+        event.preventDefault()
+        setDraft(null)
+      }
+    }} /> : editable ? <button type="button" className="moji-version-name" title="双击修改版本名称"
+      onDoubleClick={start} onClick={event => { if (event.detail === 0) start() }}
+      onPointerUp={event => {
+        if (event.pointerType !== 'touch') return
+        if (event.timeStamp - lastTap.current < 350) start()
+        lastTap.current = event.timeStamp
+      }}>{label}</button> : label}
+  </h2>
 }
 
 export function VersionSheets({ state, primary }: { state: PageState, primary: Editor | null }) {
@@ -49,7 +81,7 @@ export function VersionSheets({ state, primary }: { state: PageState, primary: E
   return <div className={state.prompt ? 'moji-version-stack' : 'moji-plain-body'}>
     {pages.map((page, index) => <section className={state.prompt ? 'moji-version-sheet' : 'moji-plain-body'} key={page.instanceId}
       aria-labelledby={state.prompt ? 'version-heading-' + index : undefined}>
-      {state.prompt && <h2 id={'version-heading-' + index}>版本 {index + 1}</h2>}
+      {state.prompt && <VersionHeading key={state.session} page={page} index={index} editable={state.editable} />}
       <EditorContent editor={page} role="presentation" className="simple-editor-content" />
     </section>)}
     {state.prompt && state.editable && <button type="button" className="moji-add-version" onClick={append}>

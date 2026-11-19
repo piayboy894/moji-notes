@@ -29,36 +29,36 @@ body,.simple-editor-wrapper,.simple-editor-content .tiptap.ProseMirror.simple-ed
 ::selection{background:var(--moji-selection,#ACCCE3)!important;color:var(--moji-ink,#24272F)!important}
 
 .moji-plain-body { display: contents; }
-.moji-prompt-editor .tiptap-toolbar[data-variant="fixed"] {
-  position: sticky;
-  top: 0;
-  border-top: 0;
-  border-bottom: 1px solid var(--moji-line);
+.moji-prompt-editor {
+  background: var(--moji-soft);
 }
 .moji-version-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   gap: 14px;
   --sheet-margin: clamp(6px, 1.5vw, 14px);
   --sheet-inset: calc(var(--moji-content-inset, 28px) - var(--sheet-margin) - 1px);
   padding: 12px var(--sheet-margin) 24px;
-  background: var(--moji-soft);
 }
 .moji-version-sheet {
   background: var(--moji-panel);
   border: 1px solid var(--moji-line);
   border-radius: 8px;
-  scroll-margin-top: calc(var(--tt-toolbar-height) + 10px);
+  scroll-margin-top: 8px;
 
   > h2 {
     margin: 14px var(--sheet-inset) 0;
     font-size: .8rem;
     font-weight: 600;
     color: var(--moji-sub);
+    overflow-wrap: anywhere;
+    .moji-version-name { text-align: start; touch-action: manipulation; user-select: none; }
+    input { width: 100%; color: var(--moji-ink); background: var(--moji-panel); outline: 1px solid var(--moji-accent); border-radius: 3px; }
   }
-  .simple-editor-content { height: auto; }
+  .simple-editor-content { min-height: 0; }
   .simple-editor-content .tiptap.ProseMirror.simple-editor {
-    min-height: 45vh;
-    padding: 12px var(--sheet-inset) 24px;
+    padding: 10px var(--sheet-inset) 16px;
   }
 }
 .moji-add-version {
@@ -85,7 +85,7 @@ body,.simple-editor-wrapper,.simple-editor-content .tiptap.ProseMirror.simple-ed
   color: var(--moji-ink);
   box-shadow: 0 4px 16px #0002;
 
-  button { display: block; width: 100%; padding: .5rem .75rem; text-align: left; border-radius: 4px; }
+  button { display: block; width: 100%; padding: .5rem .75rem; text-align: left; overflow-wrap: anywhere; border-radius: 4px; }
   button[aria-current] { background: var(--moji-accentlight); color: var(--moji-onselected); }
   button:hover { background: var(--moji-hover); }
 }

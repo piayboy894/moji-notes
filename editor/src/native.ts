@@ -11,6 +11,19 @@ type Payload={id:string,session?:string,content:string,prompt?:boolean,variables
 let primary: Editor | null = null
 let editor: Editor | null = null
 let pages: Editor[] = []
+const versionNames = new WeakMap<Editor, string>()
+export function versionLabel(page: Editor, index: number) {
+  return versionNames.get(page) || '版本 ' + (index + 1)
+}
+export function renameVersion(page: Editor, name: string) {
+  if (!current?.prompt || !page.isEditable || !pages.includes(page)) return
+  const title = name.trim()
+  if (title === (versionNames.get(page) || '')) return
+  versionNames.set(page, title)
+  dirty = true
+  emit()
+  publishPages()
+}
 export type PageState = { pages: Editor[], active: Editor | null, prompt: boolean, editable: boolean, session?: string }
 let pageState: PageState = { pages, active: null, prompt: false, editable: false }
 const listeners = new Set<() => void>()
@@ -46,8 +59,12 @@ function pageSnapshot(page: Editor) {
 }
 function snapshot() {
   const parts = pages.map(pageSnapshot)
-  const html = parts.length > 1
-    ? parts.map(p => '<section data-moji-version="true">' + p.html + '</section>').join('')
+  const html = parts.length > 1 || (pages[0] && versionNames.get(pages[0]))
+    ? parts.map((p, index) => {
+      const name = versionNames.get(pages[index])
+      const attribute = name ? ' data-moji-title="' + name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '"' : ''
+      return '<section data-moji-version="true"' + attribute + '>' + p.html + '</section>'
+    }).join('')
     : parts[0]?.html || '<p></p>'
   const variables = new Map<string, Variable>()
   for (const page of parts) for (const v of page.variables) variables.set(v.id, v)
@@ -79,15 +96,15 @@ function theme(payload:Partial<Payload>){
  root.style.backgroundColor=c.Panel
 }
 
-function pageContents(payload: Payload): string[] {
-  if (!/^<!--moji:tiptap:[12]-->/.test(payload.content)) return [literal(payload.content, payload.variables || [])]
+function pageContents(payload: Payload): { html: string, name?: string }[] {
+  if (!/^<!--moji:tiptap:[12]-->/.test(payload.content)) return [{ html: literal(payload.content, payload.variables || []) }]
   const html = payload.content.slice(PREFIX.length)
-  if (!payload.prompt || !html.startsWith('<section data-moji-version=')) return [html]
+  if (!payload.prompt || !html.startsWith('<section data-moji-version=')) return [{ html }]
   const template = document.createElement('template')
   template.innerHTML = html
   const sections = Array.from(template.content.children)
   return sections.length && sections.every(el => el.matches('section[data-moji-version]'))
-    ? sections.map(el => el.innerHTML) : [html]
+    ? sections.map(el => ({ html: el.innerHTML, name: el.getAttribute('data-moji-title') || '' })) : [{ html }]
 }
 function watch(page: Editor) {
   page.on('update', () => { dirty = true; emit(); selection() })
@@ -129,11 +146,16 @@ function load(payload: Payload) {
   for (const page of pages.slice(1)) page.destroy()
   const [first, ...rest] = pageContents(payload)
   editor = primary
-  editor.commands.setContent(first, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
+  versionNames.set(primary, first.name || '')
+  editor.commands.setContent(first.html, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
   editor.view.updateState(EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.state.plugins }))
   editor.setEditable(!payload.readOnly, false)
   editor.view.dispatch(editor.state.tr)
-  pages = [primary, ...rest.map(html => newPage(html, !payload.readOnly))]
+  pages = [primary, ...rest.map(({ html, name }) => {
+    const page = newPage(html, !payload.readOnly)
+    versionNames.set(page, name || '')
+    return page
+  })]
   publishPages()
   dirty = false
   if (payload.variables?.length && payload.content !== snapshot().content) { dirty = true; emit() }

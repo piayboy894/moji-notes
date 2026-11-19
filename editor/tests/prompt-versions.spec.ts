@@ -105,3 +105,86 @@ test('prompt sheets grow, navigate and reopen together with formatting, fields a
   await expect(sheets.last().getByRole('textbox')).toHaveText('')
   expect(errors).toEqual([])
 })
+
+test('short sheets fit their text and the workspace covers the area under the add button', async ({ page }) => {
+  await load(page, '一行', true)
+  const sheet = page.locator('.moji-version-sheet').first()
+  const body = sheet.getByRole('textbox')
+  const compactHeight = (await sheet.boundingBox())!.height
+  expect(compactHeight).toBeLessThan(110)
+  const background = await page.evaluate(() => {
+    const workspace = document.querySelector('.moji-prompt-editor')!
+    const bottom = document.elementFromPoint(innerWidth / 2, innerHeight - 2)!
+    return {
+      covered: workspace === bottom || workspace.contains(bottom),
+      color: getComputedStyle(bottom).backgroundColor,
+      soft: getComputedStyle(workspace).getPropertyValue('--moji-soft').trim(),
+    }
+  })
+  expect(background.covered).toBe(true)
+  expect(background.color).toBe('rgb(' + background.soft.slice(1).match(/../g)!.map(x => parseInt(x, 16)).join(', ') + ')')
+  await body.focus()
+  await page.keyboard.insertText('长段落'.repeat(650))
+  await expect.poll(async () => (await sheet.boundingBox())!.height).toBeGreaterThan(compactHeight * 2)
+  await body.press('Control+a')
+  await page.keyboard.insertText('短')
+  await expect.poll(async () => (await sheet.boundingBox())!.height).toBe(compactHeight)
+})
+
+test('rename one or several versions, reopen, navigate and cancel an edit', async ({ page, isMobile }) => {
+  await load(page, '初稿正文', true)
+  const headings = page.locator('.moji-version-sheet h2')
+  const title = headings.first().getByRole('button')
+  if (isMobile) { await title.tap(); await title.tap() } else await title.dblclick()
+  const input = page.getByRole('textbox', { name: '版本名称' })
+  const name = '审校 & <最终> "稿"'
+  await input.fill(name)
+  await input.press('Enter')
+  const saved = () => page.evaluate(() => (window as any).messages.filter((m: any) => m.type === 'change').at(-1).content)
+  const single = await saved()
+  await load(page, '另一条提示词', true)
+  await expect(headings.first()).toHaveText('版本 1')
+  await load(page, single, true)
+  await expect(headings.first()).toHaveText(name)
+  await page.getByRole('button', { name: '添加版本' }).click()
+  const second = headings.nth(1).getByRole('button')
+  await second.focus()
+  await second.press('Enter')
+  await input.fill('精简稿')
+  await input.press('Tab')
+  const both = await saved()
+  await load(page, both, true)
+  await expect(second).toHaveText('精简稿')
+  await second.dblclick()
+  await input.fill('取消改名')
+  await input.press('Escape')
+  await expect(second).toHaveText('精简稿')
+  await page.getByRole('button', { name: '版本导航' }).click()
+  const menu = page.getByRole('navigation', { name: '版本导航' })
+  await expect(menu.getByRole('button', { name })).toBeVisible()
+  await menu.getByRole('button', { name: '精简稿' }).click()
+  await expect(page.getByRole('textbox', { name: '笔记正文' }).nth(1)).toBeFocused()
+})
+
+test('narrow toolbars page through every control and restore full width on resize', async ({ page }) => {
+  await load(page, '正文', true)
+  await page.setViewportSize({ width: 320, height: 360 })
+  const next = page.getByRole('button', { name: '显示右侧工具' })
+  const prev = page.getByRole('button', { name: '显示左侧工具' })
+  const nav = page.getByRole('button', { name: '版本导航' })
+  await expect(prev).toBeDisabled()
+  const viewport = page.locator('.moji-toolbar-viewport')
+  const steps = await viewport.evaluate(el => Math.ceil((el.scrollWidth - el.clientWidth) / (el.clientWidth - 40)))
+  for (let i = 0; i < steps; ++i) await next.click()
+  await expect(next).toBeDisabled()
+  await expect(nav).toBeInViewport({ ratio: 1 })
+  await nav.click()
+  await page.getByRole('navigation').getByRole('button', { name: '版本 1' }).click()
+  const backSteps = await viewport.evaluate(el => Math.ceil(el.scrollLeft / (el.clientWidth - 40)))
+  for (let i = 0; i < backSteps; ++i) await prev.click()
+  await expect(prev).toBeDisabled()
+  await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeInViewport({ ratio: 1 })
+  await page.setViewportSize({ width: 1200, height: 640 })
+  await expect(next).toHaveCount(0)
+  await expect(nav).toBeInViewport({ ratio: 1 })
+})

@@ -17,7 +17,7 @@ import app.moji.android.data.*
 @Composable fun RecordWorkspace(
     vm: MojiViewModel, s: AppState, active: Note?, activity: MainActivity,
     twoPane: Boolean, posture: WindowPosture, overviewStates: SaveableStateHolder,
-    editBook: (Notebook) -> Unit, export: (Note) -> Unit
+    editBook: (Notebook) -> Unit, export: (Note) -> Unit, openNavigation: (() -> Unit)?
 ) {
     var contentX by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
@@ -37,7 +37,7 @@ import app.moji.android.data.*
                     EditorScreen(vm, s, active, activity, export, Modifier.weight(1f))
                 }
             } else {
-                EditorScreen(vm, s, active, activity, export, showBack = true, back = vm::clearSelection)
+                EditorScreen(vm, s, active, activity, export, showBack = true, back = vm::clearSelection, openNavigation = openNavigation)
             }
         }
     }
