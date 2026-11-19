@@ -6,7 +6,8 @@ import {
   useClick, useDismiss, useFloating, useHover, useInteractions,
 } from '@floating-ui/react'
 import { Button } from '@/components/tiptap-ui-primitive/button'
-import { addVersion, jumpToVersion, renameVersion, versionLabel, type PageState } from './native'
+import { TrashIcon } from '@/components/tiptap-icons/trash-icon'
+import { addVersion, deleteVersion, jumpToVersion, renameVersion, versionLabel, type PageState } from './native'
 
 export function VersionNavigation({ state }: { state: PageState }) {
   const [open, setOpen] = useState(false)
@@ -71,6 +72,27 @@ function VersionHeading({ page, index, editable }: { page: Editor, index: number
   </h2>
 }
 
+function DeleteVersionButton({ page, label }: { page: Editor, label: string }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  function remove() {
+    dialog.current?.close()
+    let next: Editor | undefined
+    flushSync(() => { next = deleteVersion(page) })
+    if (next) jumpToVersion(next)
+  }
+  return <>
+    <button type="button" className="moji-delete-version" aria-label={'删除版本：' + label}
+      title="删除版本" onClick={() => dialog.current?.showModal()}><TrashIcon aria-hidden="true" /></button>
+    <dialog className="moji-delete-dialog" ref={dialog} aria-label={'删除“' + label + '”？'}>
+      <p>删除“{label}”？</p>
+      <div>
+        <button type="button" onClick={() => dialog.current?.close()}>取消</button>
+        <button type="button" className="confirm" onClick={remove}>删除</button>
+      </div>
+    </dialog>
+  </>
+}
+
 export function VersionSheets({ state, primary }: { state: PageState, primary: Editor | null }) {
   const pages = state.pages.length ? state.pages : primary ? [primary] : []
   function append() {
@@ -81,7 +103,10 @@ export function VersionSheets({ state, primary }: { state: PageState, primary: E
   return <div className={state.prompt ? 'moji-version-stack' : 'moji-plain-body'}>
     {pages.map((page, index) => <section className={state.prompt ? 'moji-version-sheet' : 'moji-plain-body'} key={page.instanceId}
       aria-labelledby={state.prompt ? 'version-heading-' + index : undefined}>
-      {state.prompt && <VersionHeading key={state.session} page={page} index={index} editable={state.editable} />}
+      {state.prompt && <header key={state.session} className="moji-sheet-header">
+        <VersionHeading page={page} index={index} editable={state.editable} />
+        {state.editable && pages.length > 1 && <DeleteVersionButton page={page} label={versionLabel(page, index)} />}
+      </header>}
       <EditorContent editor={page} role="presentation" className="simple-editor-content" />
     </section>)}
     {state.prompt && state.editable && <button type="button" className="moji-add-version" onClick={append}>

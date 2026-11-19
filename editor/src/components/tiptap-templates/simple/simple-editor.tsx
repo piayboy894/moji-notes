@@ -216,7 +216,7 @@ export function SimpleEditor() {
         </ScrollableToolbar>
 
         {primary && <ImageBackgroundMenu editor={primary} onReady={() => editorMounted(primary)} />}
-        {state.pages.slice(1).map(page => <ImageBackgroundMenu key={page.instanceId} editor={page} />)}
+        {state.pages.filter(page => page !== primary).map(page => <ImageBackgroundMenu key={page.instanceId} editor={page} />)}
         <div className={state.prompt ? "simple-editor-wrapper moji-prompt-editor" : "simple-editor-wrapper"}>
           <VersionSheets state={state} primary={primary} />
         </div>

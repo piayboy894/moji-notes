@@ -107,7 +107,7 @@ function pageContents(payload: Payload): { html: string, name?: string }[] {
     ? sections.map(el => ({ html: el.innerHTML, name: el.getAttribute('data-moji-title') || '' })) : [{ html }]
 }
 function watch(page: Editor) {
-  page.on('update', () => { dirty = true; emit(); selection() })
+  page.on('update', () => { if (pages.includes(page)) { dirty = true; emit(); selection() } })
   page.on('selectionUpdate', () => { if (page === editor) selection() })
   page.on('focus', () => activatePage(page))
 }
@@ -131,6 +131,28 @@ export function addVersion() {
   publishPages()
   return page
 }
+function resetPage(page: Editor, html: string, editable: boolean) {
+  page.commands.setContent(html, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
+  page.view.updateState(EditorState.create({ schema: page.schema, doc: page.state.doc, plugins: page.state.plugins }))
+  page.setEditable(editable, false)
+  page.view.dispatch(page.state.tr)
+}
+export function deleteVersion(page: Editor) {
+  const index = pages.indexOf(page)
+  if (!current?.prompt || !page.isEditable || index < 0 || pages.length <= 1) return
+  pages = pages.filter(item => item !== page)
+  const next = pages[Math.min(index, pages.length - 1)]
+  if (editor === page) editor = next
+  versionNames.delete(page)
+  // The React-owned editor is reused when the next record loads.
+  if (page === primary) resetPage(page, '<p></p>', false)
+  else page.destroy()
+  dirty = true
+  emit()
+  publishPages()
+  selection()
+  return next
+}
 export function jumpToVersion(page: Editor) {
   if (!pages.includes(page)) return
   activatePage(page)
@@ -143,14 +165,11 @@ function load(payload: Payload) {
   theme(payload)
   if (!primary) return
   dirty = false
-  for (const page of pages.slice(1)) page.destroy()
+  for (const page of pages) if (page !== primary) page.destroy()
   const [first, ...rest] = pageContents(payload)
   editor = primary
   versionNames.set(primary, first.name || '')
-  editor.commands.setContent(first.html, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
-  editor.view.updateState(EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.state.plugins }))
-  editor.setEditable(!payload.readOnly, false)
-  editor.view.dispatch(editor.state.tr)
+  resetPage(editor, first.html, !payload.readOnly)
   pages = [primary, ...rest.map(({ html, name }) => {
     const page = newPage(html, !payload.readOnly)
     versionNames.set(page, name || '')
